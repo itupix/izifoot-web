@@ -1,10 +1,46 @@
 // src/pages/Home.tsx
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 import '../index.css';
+import { API_BASE } from '../api';
 
 export default function Home() {
   const { me } = useAuth();
+
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [message, setMessage] = useState<string>("");
+
+  function validateEmail(v: string) {
+    return /[^@ \t\r\n]+@[^@ \t\r\n]+\.[^@ \t\r\n]+/.test(v);
+  }
+
+  async function handleWaitlistSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validateEmail(email)) {
+      setStatus("error");
+      setMessage("Adresse e‑mail invalide");
+      return;
+    }
+    setStatus("loading");
+    setMessage("");
+    try {
+      // Remplace `/api/waitlist` par ton endpoint (Netlify/Cloudflare/Next API/etc.)
+      const res = await fetch(`${API_BASE}/api/waitlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error('Bad status ' + res.status);
+      setStatus("success");
+      setMessage("Merci ! On te prévient dès que l'app est dispo ✉️");
+      setEmail("");
+    } catch (err) {
+      setStatus("error");
+      setMessage("Oups, une erreur est survenue. Réessaie dans un instant.");
+    }
+  }
 
   const wrapper: React.CSSProperties = {
     minHeight: 'calc(100dvh - 56px)',
@@ -121,13 +157,48 @@ export default function Home() {
     fontSize: 12,
   };
 
+  const waitlistWrap: React.CSSProperties = {
+    marginTop: 18,
+    width: '100%',
+    maxWidth: 560,
+  };
+
+  const formRow: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '1fr auto',
+    gap: 10,
+    alignItems: 'center',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '12px 14px',
+    borderRadius: 12,
+    border: '1px solid #cbd5e1',
+    fontSize: 16,
+    outline: 'none',
+  };
+
+  const helperText: React.CSSProperties = {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 8,
+  };
+
+  const noteStyle: React.CSSProperties = {
+    fontSize: 12,
+    color: status === 'error' ? '#b91c1c' : '#065f46',
+    marginTop: 8,
+    textAlign: 'left',
+  };
+
   return (
     <div style={wrapper}>
       {/* HERO */}
       <section style={hero}>
         <span style={badge}>
           <span style={{ width: 8, height: 8, borderRadius: 999, background: '#10b981', display: 'inline-block' }} />
-          Planifie tes plateaux en 2 minutes
+          Bientôt disponible
         </span>
         <h1 style={title}>izifoot</h1>
         <p style={subtitle}>Génère, partage et gère les plannings de tes plateaux. Anti matchs intra-club, multi-terrains, pauses, export, partage par lien et QR code… tout y est.</p>
@@ -144,86 +215,33 @@ export default function Home() {
             </>
           )}
         </div>
-      </section>
-
-      {/* FEATURES */}
-      <section id="features" style={{ paddingBottom: 28 }}>
-        <div style={features}>
-          <div style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={iconCircle('linear-gradient(180deg,#22c55e,#16a34a)')}>✓</div>
-              <h3 style={{ margin: 0 }}>Génération intelligente</h3>
+        <div style={waitlistWrap}>
+          <form onSubmit={handleWaitlistSubmit} style={formRow}>
+            <label htmlFor="waitlist-email" className="sr-only">Adresse e‑mail</label>
+            <input
+              id="waitlist-email"
+              type="email"
+              placeholder="Ton e‑mail pour être averti"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              style={inputStyle}
+              disabled={status === 'loading'}
+            />
+            <button
+              type="submit"
+              style={primaryBtn}
+              disabled={status === 'loading'}
+            >
+              {status === 'loading' ? 'Envoi…' : 'Préviens‑moi'}
+            </button>
+          </form>
+          <div style={helperText}>Aucune pub, aucun spam. Juste un e‑mail au lancement.</div>
+          {message && (
+            <div style={noteStyle} role={status === 'error' ? 'alert' : undefined}>
+              {message}
             </div>
-            <p style={{ margin: 0, color: '#475569' }}>Évite les rencontres intra‑club, équilibre les terrains et respecte les pauses. Planning reproductible et partageable.</p>
-          </div>
-
-          <div style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={iconCircle('linear-gradient(180deg,#3b82f6,#2563eb)')}>↻</div>
-              <h3 style={{ margin: 0 }}>Exports & partage</h3>
-            </div>
-            <p style={{ margin: 0, color: '#475569' }}>Export CSV / Impression, lien public, QR code et envoi par email pour diffuser ton plateau en un clic.</p>
-          </div>
-
-          <div style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <div style={iconCircle('linear-gradient(180deg,#f97316,#ea580c)')}>★</div>
-              <h3 style={{ margin: 0 }}>Gratuit puis Premium</h3>
-            </div>
-            <p style={{ margin: 0, color: '#475569' }}>Crée un planning gratuit pour ta prochaine date. Passe en Premium pour en gérer plusieurs toute la saison.</p>
-          </div>
-        </div>
-      </section>
-
-      {/* MOCKUP / ILLUSTRATION */}
-      <section style={{ padding: '0 16px 24px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{
-            border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden', background: 'white',
-            boxShadow: '0 30px 60px rgba(2,6,23,0.08)'
-          }}>
-            <div style={{ display: 'flex', gap: 0 }}>
-              <div style={{ flex: 1, padding: 18 }}>
-                <h4 style={{ marginTop: 0, marginBottom: 8 }}>Aperçu planning</h4>
-                <p style={{ marginTop: 0, color: '#64748b' }}>Heures, terrains, équipes, pauses… exactement comme vos feuilles de match.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10 }}>
-                      <div style={{ fontSize: 12, color: '#64748b' }}>10:{String(10 + i).padStart(2, '0')}</div>
-                      <div style={{ fontWeight: 700, marginTop: 4 }}>Terrain {((i % 3) + 1)}</div>
-                      <div style={{ fontSize: 12, marginTop: 6, display: 'grid', gap: 4 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: 999, background: '#22c55e', display: 'inline-block' }} />
-                          US Flinois 1
-                        </div>
-                        <div style={{ opacity: 0.6, textAlign: 'center' }}>vs</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: 999, background: '#3b82f6', display: 'inline-block' }} />
-                          RC Lens 1
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ width: 320, padding: 18, borderLeft: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                <h4 style={{ marginTop: 0, marginBottom: 8 }}>Créer un planning</h4>
-                <ul style={{ margin: 0, paddingLeft: 18, color: '#475569' }}>
-                  <li>Coller la liste des équipes</li>
-                  <li>Renseigner terrains & horaires</li>
-                  <li>Générer le planning</li>
-                  <li>Partager le lien ou le QR</li>
-                </ul>
-                <div style={{ marginTop: 12 }}>
-                  {me ? (
-                    <Link to="/plannings/new" style={primaryBtn}>Nouveau planning</Link>
-                  ) : (
-                    <Link to="/auth" style={secondaryBtn}>Commencer</Link>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </section>
 
