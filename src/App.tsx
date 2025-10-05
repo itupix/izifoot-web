@@ -11,6 +11,9 @@ import { useAuth } from './useAuth';
 import style from './App.module.css'
 import TrainingsPage from './pages/TrainingsPage';
 import DrillsPage from './pages/Drills';
+import PlayersPage from './pages/PlayersPage';
+import DiagramEditor from './pages/DiagramEditor';
+import StatsPage from './pages/Stats';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { me, loading } = useAuth();
@@ -28,7 +31,9 @@ export default function App() {
         <nav style={{ display: 'flex', gap: 12 }}>
           <Link to="/entrainements">Entrainements</Link>
           <Link to="/exercices">Exercices</Link>
+          <Link to="/effectif">Effectif</Link>
           <Link to="/plannings">Plateaux</Link>
+          <Link to="/stats">Stats</Link>
           {me ? <Link to="/account">Mon compte</Link> : <Link to="/auth">Login / Register</Link>}
         </nav>
         <div style={{ marginLeft: 'auto' }}>
@@ -45,9 +50,13 @@ export default function App() {
           <Route path="/account" element={<Protected><AccountPage /></Protected>} />
           <Route path="/entrainements" element={<Protected><TrainingsPage /></Protected>} />
           <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
+          <Route path="/exercices/:id" element={<Protected><DrillsPage /></Protected>} />
+          <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
+          <Route path="/effectif" element={<Protected><PlayersPage /></Protected>} />
           <Route path="/plannings" element={<Protected><PlanningsListPage /></Protected>} />
           <Route path="/plannings/new" element={<Protected><CreatePlanningPage /></Protected>} />
           <Route path="/plannings/:id" element={<Protected><PlanningDetailPage /></Protected>} />
+          <Route path="/stats" element={<Protected><StatsPage /></Protected>} />
         </Routes>
       </main>
     </>
