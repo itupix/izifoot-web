@@ -14,6 +14,7 @@ import DrillsPage from './pages/Drills';
 import PlayersPage from './pages/PlayersPage';
 import DiagramEditor from './pages/DiagramEditor';
 import StatsPage from './pages/Stats';
+import MatchDay from './pages/MatchDay';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { me, loading } = useAuth();
@@ -27,14 +28,12 @@ export default function App() {
   return (
     <>
       <header style={{ display: 'flex', gap: 16, padding: 12, borderBottom: '1px solid #ddd' }}>
-        <Link to="/" className={style.logo} style={{ textDecoration: 'none', fontWeight: 700 }}>izifoot</Link>
+        <Link to="/planning" className={style.logo} style={{ textDecoration: 'none', fontWeight: 700 }}>izifoot</Link>
         <nav style={{ display: 'flex', gap: 12 }}>
-          <Link to="/entrainements">Entrainements</Link>
+          <Link to="/planning">Planning</Link>
           <Link to="/exercices">Exercices</Link>
           <Link to="/effectif">Effectif</Link>
-          <Link to="/plannings">Plateaux</Link>
           <Link to="/stats">Stats</Link>
-          {me ? <Link to="/account">Mon compte</Link> : <Link to="/auth">Login / Register</Link>}
         </nav>
         <div style={{ marginLeft: 'auto' }}>
           {me ? (
@@ -48,7 +47,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/account" element={<Protected><AccountPage /></Protected>} />
-          <Route path="/entrainements" element={<Protected><TrainingsPage /></Protected>} />
+          <Route path="/planning" element={<Protected><TrainingsPage /></Protected>} />
           <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
           <Route path="/exercices/:id" element={<Protected><DrillsPage /></Protected>} />
           <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
@@ -57,6 +56,7 @@ export default function App() {
           <Route path="/plannings/new" element={<Protected><CreatePlanningPage /></Protected>} />
           <Route path="/plannings/:id" element={<Protected><PlanningDetailPage /></Protected>} />
           <Route path="/stats" element={<Protected><StatsPage /></Protected>} />
+          <Route path="/match-day/:id" element={<Protected><MatchDay /></Protected>} />
         </Routes>
       </main>
     </>

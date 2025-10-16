@@ -3,7 +3,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
 // -------- API helpers (same style as TrainingsPage) --------
-const API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_URL) || ''
+const API_BASE = (() => {
+  const env = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_URL)
+  if (env) return env
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:4000'
+  }
+  return window.location.origin
+})()
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
 function bust(url: string) {
   const u = new URL(url, window.location.origin)
@@ -62,12 +69,34 @@ interface Player {
   name: string
   primary_position: string
   secondary_position?: string | null
+  email?: string | null
+  phone?: string | null
+  invitePresentUrl?: string
+  inviteAbsentUrl?: string
 }
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
 
 // -------- UI --------
 export default function PlayersPage() {
+  // Invite player helper, now with setPlayers access
+  async function invitePlayer(playerId: string, email?: string) {
+    const plateauId = window.prompt('ID du plateau pour ces liens RSVP ?') || ''
+    if (!plateauId) return
+    const body: any = { plateauId }
+    if (email) body.email = email
+    const res = await apiPost<{ ok: boolean; presentUrl: string; absentUrl: string }>(
+      `/api/players/${playerId}/invite`,
+      body
+    )
+    setPlayers(prev =>
+      prev.map(p =>
+        p.id === playerId
+          ? { ...p, invitePresentUrl: res.presentUrl, inviteAbsentUrl: res.absentUrl }
+          : p
+      )
+    )
+  }
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,6 +105,8 @@ export default function PlayersPage() {
   const [name, setName] = useState('')
   const [primary, setPrimary] = useState<typeof POSITIONS[number]>('MILIEU')
   const [secondary, setSecondary] = useState<string>('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
 
   // filters/search
   const [q, setQ] = useState('')
@@ -111,15 +142,19 @@ export default function PlayersPage() {
   async function createPlayer(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const p = await apiPost<Player>('/api/players', {
+      const body: any = {
         name: name.trim(),
         primary_position: primary,
         secondary_position: secondary.trim() || undefined,
-      })
+      }
+      if (email.trim()) body.email = email.trim()
+      if (phone.trim()) body.phone = phone.trim()
+      const p = await apiPost<Player>('/api/players', body)
       setPlayers(prev => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
       setName('')
       setPrimary('MILIEU')
       setSecondary('')
+      setEmail(''); setPhone('')
     } catch (e: any) {
       alert(`Erreur création joueur: ${e.message || e}`)
     }
@@ -174,6 +209,19 @@ export default function PlayersPage() {
             <datalist id="positions">
               {POSITIONS.map(p => <option key={p} value={p} />)}
             </datalist>
+            <input
+              placeholder="Email (optionnel)"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+            />
+            <input
+              placeholder="Téléphone (optionnel)"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+            />
             <button type="submit" style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6' }}>Ajouter</button>
           </div>
         </form>
@@ -208,6 +256,9 @@ export default function PlayersPage() {
                 <th style={th}>Nom</th>
                 <th style={th}>Poste principal</th>
                 <th style={th}>Poste secondaire</th>
+                <th style={th}>Email</th>
+                <th style={th}>Téléphone</th>
+                <th style={th}>Invitation</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
@@ -235,12 +286,66 @@ export default function PlayersPage() {
                     />
                   </td>
                   <td style={td}>
+                    <InlineEdit
+                      value={p.email || ''}
+                      onSave={(v) => v !== (p.email || '') && updatePlayer(p.id, { email: v || null as any })}
+                    />
+                  </td>
+                  <td style={td}>
+                    <InlineEdit
+                      value={p.phone || ''}
+                      onSave={(v) => v !== (p.phone || '') && updatePlayer(p.id, { phone: v || null as any })}
+                    />
+                  </td>
+                  <td style={td}>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          value={p.invitePresentUrl || ''}
+                          readOnly
+                          placeholder="URL Présence"
+                          style={{ flex: 1, padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                        />
+                        <button
+                          disabled={!p.invitePresentUrl}
+                          onClick={() => p.invitePresentUrl && navigator.clipboard.writeText(p.invitePresentUrl)}
+                          style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+                        >
+                          Copier
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          value={p.inviteAbsentUrl || ''}
+                          readOnly
+                          placeholder="URL Absence"
+                          style={{ flex: 1, padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                        />
+                        <button
+                          disabled={!p.inviteAbsentUrl}
+                          onClick={() => p.inviteAbsentUrl && navigator.clipboard.writeText(p.inviteAbsentUrl)}
+                          style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+                        >
+                          Copier
+                        </button>
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => invitePlayer(p.id, p.email || undefined)}
+                          style={{ border: '1px solid #10b981', color: '#10b981', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+                        >
+                          Générer…
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={td}>
                     <button onClick={() => removePlayer(p.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>Supprimer</button>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td style={{ ...td, textAlign: 'center' }} colSpan={4}>Aucun joueur</td></tr>
+                <tr><td style={{ ...td, textAlign: 'center' }} colSpan={7}>Aucun joueur</td></tr>
               )}
             </tbody>
           </table>
@@ -285,3 +390,6 @@ function SelectInline({ value, options, onChange }: { value: string; options: st
     </select>
   )
 }
+
+// --- Invite player helper (now inside PlayersPage) ---
+// Moved inside PlayersPage for access to setPlayers

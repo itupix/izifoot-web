@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 interface Drill {
   id: string
@@ -578,7 +579,7 @@ export default function TrainingsPage() {
                         border: '1px solid #d1d5db', background: selectedTrainingId === t.id ? '#e0f2fe' : '#f9fafb'
                       }}
                     >
-                      {t.status === 'CANCELLED' ? '❌ Entraînement (annulé)' : '🏃 Entraînement'}
+                      {t.status === 'CANCELLED' ? '❌ Entraînement' : '⚽️ Entraînement'}
                     </button>
                   ))}
                   {dayPlateaus.map((p) => (
@@ -590,15 +591,13 @@ export default function TrainingsPage() {
                         border: '1px solid #d1d5db', background: selectedPlateauId === p.id ? '#fee2e2' : '#fff7ed'
                       }}
                     >
-                      📍 Plateau — {p.lieu}
+                      📍 Plateau
                     </button>
                   ))}
                 </div>
-                <div style={{ position: 'absolute', bottom: 6, right: 6 }}>
-                  {(dayTrainings.length + dayPlateaus.length) > 0 ? (
-                    <span style={dotStyle} title={`${dayTrainings.length} entraînement(s), ${dayPlateaus.length} plateau(x)`} />
-                  ) : (
-                    <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ position: 'absolute', bottom: 6, right: 6, left: 6 }}>
+                  {(!dayTrainings.length && !dayPlateaus.length) && (
+                    <div style={{ display: 'flex', gap: 6, flexDirection: 'column' }}>
                       <button onClick={() => createTrainingForDay(d)} style={{ fontSize: 11, border: '1px dashed #cbd5e1', borderRadius: 6, padding: '2px 6px', background: '#fff' }}>+ Entraînement</button>
                       <button onClick={() => createPlateauForDay(d)} style={{ fontSize: 11, border: '1px dashed #cbd5e1', borderRadius: 6, padding: '2px 6px', background: '#fff' }}>+ Plateau</button>
                     </div>
@@ -611,12 +610,11 @@ export default function TrainingsPage() {
       </div>
 
       <aside>
-        <h3 style={{ marginTop: 0 }}>Détail</h3>
         {loading && <p>Chargement…</p>}
         {error && <p style={{ color: 'crimson' }}>{error}</p>}
         {!selectedTraining && !selectedPlateauId && <p>Sélectionne une case du calendrier pour voir/créer un entraînement ou un plateau.</p>}
         {selectedTraining && (
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+          <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
             <div>
               <strong>🏃 Entraînement</strong>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -692,51 +690,54 @@ export default function TrainingsPage() {
 
               {/* Liste des exercices de la séance */}
               <div style={{ display: 'grid', gap: 8 }}>
-                {drills.map((d, idx) => (
-                  <div key={d.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#fff' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <strong>{d.meta?.title ?? d.drillId}</strong>
-                      <small style={{ color: '#6b7280' }}>
-                        {d.meta?.category ?? '—'} • ⏱ {d.duration ?? d.meta?.duration ?? '—'}′
-                      </small>
-                    </div>
-                    {d.meta?.tags?.length ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
-                        {d.meta.tags.map(t => <span key={t} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 9999, border: '1px solid #d1d5db' }}>{t}</span>)}
+                {drills.map((d, idx) => {
+                  const meta = d.meta || catalog.find(c => c.id === d.drillId) || null
+                  return (
+                    <div key={d.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <strong>{meta?.title ?? d.drillId}</strong>
+                        <small style={{ color: '#6b7280' }}>
+                          {meta?.category ?? '—'} • ⏱ {d.duration ?? meta?.duration ?? '—'}′
+                        </small>
                       </div>
-                    ) : null}
-                    <div style={{ fontSize: 12, color: '#374151', margin: '6px 0' }}>
-                      {d.meta?.description}
-                    </div>
+                      {meta?.tags?.length ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
+                          {meta.tags.map(t => <span key={t} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 9999, border: '1px solid #d1d5db' }}>{t}</span>)}
+                        </div>
+                      ) : null}
+                      <div style={{ fontSize: 12, color: '#374151', margin: '6px 0' }}>
+                        {meta?.description}
+                      </div>
 
-                    {/* Edit inline: durée & notes */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr auto', gap: 8 }}>
-                      <input
-                        type="number"
-                        min={1}
-                        value={d.duration ?? ''}
-                        onChange={e => updateDrill(d.id, { duration: e.target.value === '' ? null : Number(e.target.value) })}
-                        placeholder="Durée (min)"
-                        style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                      />
-                      <input
-                        value={d.notes ?? ''}
-                        onChange={e => updateDrill(d.id, { notes: e.target.value === '' ? null : e.target.value })}
-                        placeholder="Notes"
-                        style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                      />
-                      <button onClick={() => removeDrill(d.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, background: '#fff' }}>
-                        Supprimer
-                      </button>
+                      {/* Edit inline: durée & notes */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr auto', gap: 8 }}>
+                        <input
+                          type="number"
+                          min={1}
+                          value={d.duration ?? ''}
+                          onChange={e => updateDrill(d.id, { duration: e.target.value === '' ? null : Number(e.target.value) })}
+                          placeholder="Durée (min)"
+                          style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                        />
+                        <input
+                          value={d.notes ?? ''}
+                          onChange={e => updateDrill(d.id, { notes: e.target.value === '' ? null : e.target.value })}
+                          placeholder="Notes"
+                          style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                        />
+                        <button onClick={() => removeDrill(d.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, background: '#fff' }}>
+                          Supprimer
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>
         )}
         {selectedPlateauId && !selectedTraining && (
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+          <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
             {(() => {
               const p = plateaus.find(x => x.id === selectedPlateauId)
               if (!p) return null
@@ -745,6 +746,7 @@ export default function TrainingsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <strong>📍 Plateau</strong>
+                      <Link to={`/match-day/${selectedPlateauId}`}>Lien</Link>
                       <span>{new Date(p.date).toLocaleDateString()}</span>
                     </div>
                     <button onClick={deletePlateau} style={{ border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, background: '#fff', padding: '4px 8px' }}>Supprimer</button>

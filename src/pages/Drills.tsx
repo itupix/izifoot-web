@@ -37,6 +37,18 @@ async function apiGet<T>(url: string): Promise<T> {
   return res.json()
 }
 
+async function apiPost<T>(url: string, body: any): Promise<T> {
+  const res = await fetch(bust(full(url)), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    credentials: 'include',
+    cache: 'no-store',
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
 // Types
 interface Drill {
   id: string
@@ -120,6 +132,16 @@ export default function DrillsPage() {
   const [diagramsByDrill, setDiagramsByDrill] = useState<Record<string, DiagramMeta[]>>({})
   const [loadingDiagramsFor, setLoadingDiagramsFor] = useState<string | null>(null)
 
+  // creation form state
+  const [newTitle, setNewTitle] = useState('')
+  const [newCategory, setNewCategory] = useState('')
+  const [newDuration, setNewDuration] = useState<number | ''>('')
+  const [newPlayers, setNewPlayers] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+  const [newTags, setNewTags] = useState('') // comma-separated
+  const [creating, setCreating] = useState(false)
+  const [createErr, setCreateErr] = useState<string | null>(null)
+
   const params = useParams();
 
   useEffect(() => {
@@ -193,6 +215,37 @@ export default function DrillsPage() {
     setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
   }
 
+  async function createDrill(e: React.FormEvent) {
+    e.preventDefault()
+    setCreateErr(null)
+    if (!newTitle || !newCategory || !newDuration || !newPlayers || !newDescription) {
+      setCreateErr('Remplis tous les champs obligatoires.')
+      return
+    }
+    try {
+      setCreating(true)
+      const payload = {
+        title: newTitle.trim(),
+        category: newCategory.trim(),
+        duration: Number(newDuration),
+        players: newPlayers.trim(),
+        description: newDescription.trim(),
+        tags: newTags.split(',').map(s => s.trim()).filter(Boolean)
+      }
+      const created = await apiPost<Drill>('/api/drills', payload)
+      // refresh list
+      const res = await apiGet<DrillsResponse>('/api/drills')
+      setData(res)
+      setExpanded(created.id)
+      // reset form
+      setNewTitle(''); setNewCategory(''); setNewDuration(''); setNewPlayers(''); setNewDescription(''); setNewTags('')
+    } catch (err: any) {
+      setCreateErr(err?.message || String(err))
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24 }}>
       {/* Sidebar filters */}
@@ -225,6 +278,54 @@ export default function DrillsPage() {
             ))}
           </div>
         </div>
+        <hr style={{ margin: '16px 0', border: 0, borderTop: '1px solid #e5e7eb' }} />
+        <h3 style={{ margin: '8px 0' }}>Nouvel exercice</h3>
+        {createErr && <div style={{ color: 'crimson', fontSize: 12, marginBottom: 8 }}>{createErr}</div>}
+        <form onSubmit={createDrill}>
+          <input
+            placeholder="Titre *"
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+          />
+          <input
+            placeholder="Catégorie *"
+            value={newCategory}
+            onChange={e => setNewCategory(e.target.value)}
+            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+          />
+          <input
+            placeholder="Durée (min) *"
+            type="number"
+            min={1}
+            max={180}
+            value={newDuration}
+            onChange={e => setNewDuration(e.target.value ? Number(e.target.value) : '')}
+            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+          />
+          <input
+            placeholder="Joueurs (ex: 6–12) *"
+            value={newPlayers}
+            onChange={e => setNewPlayers(e.target.value)}
+            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+          />
+          <textarea
+            placeholder="Description *"
+            rows={4}
+            value={newDescription}
+            onChange={e => setNewDescription(e.target.value)}
+            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8, resize: 'vertical' }}
+          />
+          <input
+            placeholder="Tags (séparés par des virgules)"
+            value={newTags}
+            onChange={e => setNewTags(e.target.value)}
+            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+          />
+          <button type="submit" disabled={creating} style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #d1d5db', background: '#f9fafb', cursor: 'pointer' }}>
+            {creating ? 'Création…' : 'Ajouter'}
+          </button>
+        </form>
       </aside>
 
       {/* Main list */}
