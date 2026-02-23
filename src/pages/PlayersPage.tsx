@@ -17,13 +17,16 @@ function bust(url: string) {
   u.searchParams.set('_', Date.now().toString())
   return u.pathname + u.search
 }
-function getAuthHeaders() {
+function getAuthHeaders(): Record<string, string> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
+function buildHeaders(): Record<string, string> {
+  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
+}
 async function apiGet<T>(url: string): Promise<T> {
   const res = await fetch(bust(full(url)), {
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     credentials: 'include',
     cache: 'no-store'
   })
@@ -33,7 +36,7 @@ async function apiGet<T>(url: string): Promise<T> {
 async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(full(url), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     body: JSON.stringify(body),
     credentials: 'include',
     cache: 'no-store'
@@ -44,7 +47,7 @@ async function apiPost<T>(url: string, body: unknown): Promise<T> {
 async function apiPut<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(full(url), {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     body: JSON.stringify(body),
     credentials: 'include',
     cache: 'no-store'
@@ -55,7 +58,7 @@ async function apiPut<T>(url: string, body: unknown): Promise<T> {
 async function apiDelete<T = unknown>(url: string): Promise<T> {
   const res = await fetch(full(url), {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     credentials: 'include',
     cache: 'no-store'
   })

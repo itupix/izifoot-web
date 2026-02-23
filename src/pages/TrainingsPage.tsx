@@ -21,10 +21,14 @@ interface TrainingDrill {
   meta?: Drill | null
 }
 
+function buildHeaders(): Record<string, string> {
+  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
+}
+
 async function apiDelete<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     credentials: 'include',
     cache: 'no-store'
   })
@@ -35,7 +39,7 @@ async function apiDelete<T = unknown>(url: string): Promise<T> {
 async function apiPut<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     body: JSON.stringify(body),
     credentials: 'include',
     cache: 'no-store'
@@ -87,7 +91,7 @@ interface MatchLite {
 }
 
 // ------- Helpers ---------
-function getAuthHeaders() {
+function getAuthHeaders(): Record<string, string> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
@@ -100,7 +104,7 @@ function bust(url: string) {
 
 async function apiGet<T>(url: string): Promise<T> {
   const res = await fetch(bust(url), {
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     credentials: 'include',
     cache: 'no-store'
   })
@@ -111,7 +115,7 @@ async function apiGet<T>(url: string): Promise<T> {
 async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    headers: buildHeaders(),
     body: JSON.stringify(body),
     credentials: 'include',
     cache: 'no-store'

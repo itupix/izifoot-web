@@ -5,10 +5,28 @@ import { useNavigate } from 'react-router-dom'
 const API_BASE = import.meta.env?.VITE_API_URL ?? ''
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
 function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.pathname + u.search }
-function getAuthHeaders() { const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null; return t ? { Authorization: `Bearer ${t}` } : {} }
-async function apiGet<T>(url: string): Promise<T> { const res = await fetch(bust(full(url)), { headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
-async function apiPost<T>(url: string, body: unknown): Promise<T> { const res = await fetch(full(url), { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(body), credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
-async function apiPut<T>(url: string, body: unknown): Promise<T> { const res = await fetch(full(url), { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(body), credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
+function getAuthHeaders(): Record<string, string> {
+  const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
+  return t ? { Authorization: `Bearer ${t}` } : {}
+}
+function buildHeaders(): Record<string, string> {
+  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
+}
+async function apiGet<T>(url: string): Promise<T> {
+  const res = await fetch(bust(full(url)), { headers: buildHeaders(), credentials: 'include', cache: 'no-store' })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+async function apiPost<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(full(url), { method: 'POST', headers: buildHeaders(), body: JSON.stringify(body), credentials: 'include', cache: 'no-store' })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+async function apiPut<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(full(url), { method: 'PUT', headers: buildHeaders(), body: JSON.stringify(body), credentials: 'include', cache: 'no-store' })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
 
 // --- Types ---
 type Tool = 'select' | 'player' | 'cone' | 'arrow'
