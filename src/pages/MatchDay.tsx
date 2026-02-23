@@ -9,10 +9,10 @@ function useQuery() {
 }
 
 // Normalize side/role helpers (handle casing)
-const normSide = (s: any): 'home' | 'away' => (String(s || '').toLowerCase() === 'away' ? 'away' : 'home')
-const isSub = (r: any) => String(r || '').toLowerCase() === 'sub'
+const normSide = (s: unknown): 'home' | 'away' => (String(s || '').toLowerCase() === 'away' ? 'away' : 'home')
+const isSub = (r: unknown) => String(r || '').toLowerCase() === 'sub'
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:4000'
+const API_BASE = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
 interface Player {
   id: string
@@ -32,13 +32,14 @@ interface Convocation {
 
 interface MatchTeamPlayer { playerId: string; role: 'starter' | 'sub'; player: Player }
 interface MatchTeam { id: string; side: string; score: number; players: MatchTeamPlayer[] }
-interface Scorer { id: string; playerId: string; side: string }
+interface Scorer { id: string; playerId: string; side: string; playerName?: string }
 
 interface Match {
   id: string
   opponentName?: string | null
   teams: MatchTeam[]
   scorers: Scorer[]
+  scorersDetailed?: Scorer[]
   createdAt: string
 }
 
@@ -83,8 +84,8 @@ export default function MatchDay() {
 
   async function genLinksFor(playerId: string, withEmail = true) {
     if (!id) return
-    const player = data?.playersById?.[playerId] as any
-    const body: any = { plateauId: id }
+    const player = data?.playersById?.[playerId]
+    const body: { plateauId: string; email?: string } = { plateauId: id }
     if (withEmail && player?.email) body.email = player.email
     const resp = await fetch(`${API_BASE}/api/players/${playerId}/invite`, {
       method: 'POST',
@@ -111,8 +112,8 @@ export default function MatchDay() {
   async function genLinksForMany(ids: string[], withEmail: boolean) {
     if (!id) return
     for (const pid of ids) {
-      const player = data?.convocations.find(c => c.player.id === pid)?.player as any
-      const body: any = { plateauId: id }
+      const player = data?.convocations.find(c => c.player.id === pid)?.player
+      const body: { plateauId: string; email?: string } = { plateauId: id }
       if (withEmail && player?.email) body.email = player.email
       const resp = await fetch(`${API_BASE}/api/players/${pid}/invite`, {
         method: 'POST',
@@ -154,8 +155,9 @@ export default function MatchDay() {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const json = await resp.json()
         setData(json)
-      } catch (e: any) {
-        if (e.name !== 'AbortError') setError(e?.message || 'Erreur inconnue')
+      } catch (err: unknown) {
+        const isAbort = err instanceof DOMException && err.name === 'AbortError'
+        if (!isAbort) setError(err instanceof Error ? err.message : 'Erreur inconnue')
       } finally {
         setLoading(false)
       }
@@ -356,7 +358,7 @@ export default function MatchDay() {
                   {(m.scorers && m.scorers.length > 0) && (
                     <div style={{ marginTop: 8, fontSize: 14 }}>
                       <em>Buteurs:</em>{' '}
-                      {('scorersDetailed' in m && (m as any).scorersDetailed?.length ? (m as any).scorersDetailed : m.scorers).map((s: any) => {
+                      {(m.scorersDetailed && m.scorersDetailed.length ? m.scorersDetailed : m.scorers).map((s) => {
                         const sSide = normSide(s.side)
                         const sideLabel = sSide === 'home' ? homeLabel : awayLabel
                         const nameFromDetailed = s.playerName as string | undefined

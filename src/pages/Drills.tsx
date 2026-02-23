@@ -4,19 +4,22 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 // Thumbnail helpers
-type DiagramData = { items?: any[] }
-function normalizeDiagramData(input: any): DiagramData {
+type DiagramData = { items?: unknown[] }
+function normalizeDiagramData(input: unknown): DiagramData {
   try {
     const obj = typeof input === 'string' ? JSON.parse(input) : input
-    const items = Array.isArray(obj?.items) ? obj.items : []
-    return { items }
+    if (obj && typeof obj === 'object' && 'items' in obj) {
+      const items = (obj as { items?: unknown }).items
+      return { items: Array.isArray(items) ? items : [] }
+    }
+    return { items: [] }
   } catch {
     return { items: [] }
   }
 }
 
 // API helpers (same pattern as TrainingsPage)
-const API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_URL) || ''
+const API_BASE = import.meta.env?.VITE_API_URL ?? ''
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
 function bust(url: string) {
   const u = new URL(url, window.location.origin)
@@ -37,7 +40,7 @@ async function apiGet<T>(url: string): Promise<T> {
   return res.json()
 }
 
-async function apiPost<T>(url: string, body: any): Promise<T> {
+async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(bust(full(url)), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -69,7 +72,7 @@ interface DrillsResponse {
 interface DiagramMeta {
   id: string
   title: string
-  data: any
+  data: unknown
   drillId?: string | null
   trainingDrillId?: string | null
   updatedAt: string
@@ -79,7 +82,7 @@ async function apiGetDiagramsForDrill(drillId: string): Promise<DiagramMeta[]> {
   return apiGet<DiagramMeta[]>(`/api/drills/${encodeURIComponent(drillId)}/diagrams`)
 }
 
-function DiagramThumb({ data, width = 220 }: { data: any; width?: number }) {
+function DiagramThumb({ data, width = 220 }: { data: unknown; width?: number }) {
   const parsed = normalizeDiagramData(data)
   const W = 600, H = 380
   const w = width, h = Math.round(width * (H / W))
@@ -89,29 +92,30 @@ function DiagramThumb({ data, width = 220 }: { data: any; width?: number }) {
       <rect x={5} y={5} width={W - 10} height={H - 10} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
       <line x1={W / 2} y1={5} x2={W / 2} y2={H - 5} stroke="#c7e2c7" strokeDasharray="4 4" />
       {parsed.items?.map((it, idx) => {
-        if (it?.type === 'arrow' && it.from && it.to) {
+        const item = it as { type?: string; id?: string; from?: { x: number; y: number }; to?: { x: number; y: number }; x?: number; y?: number; side?: string; label?: string }
+        if (item?.type === 'arrow' && item.from && item.to) {
           return (
-            <g key={it.id || idx}>
+            <g key={item.id || idx}>
               <defs>
                 <marker id={`m-${idx}`} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
                   <path d="M0,0 L0,6 L6,3 Z" fill="#111827" />
                 </marker>
               </defs>
-              <line x1={it.from.x} y1={it.from.y} x2={it.to.x} y2={it.to.y} stroke="#111827" strokeWidth={2} markerEnd={`url(#m-${idx})`} />
+              <line x1={item.from.x} y1={item.from.y} x2={item.to.x} y2={item.to.y} stroke="#111827" strokeWidth={2} markerEnd={`url(#m-${idx})`} />
             </g>
           )
         }
-        if (it?.type === 'cone') {
-          const x = it.x ?? 0, y = it.y ?? 0
-          return <polygon key={it.id || idx} points={`${x},${y - 10} ${x - 10},${y + 10} ${x + 10},${y + 10}`} fill="#f97316" stroke="#7c2d12" />
+        if (item?.type === 'cone') {
+          const x = item.x ?? 0, y = item.y ?? 0
+          return <polygon key={item.id || idx} points={`${x},${y - 10} ${x - 10},${y + 10} ${x + 10},${y + 10}`} fill="#f97316" stroke="#7c2d12" />
         }
-        if (it?.type === 'player') {
-          const x = it.x ?? 0, y = it.y ?? 0
-          const fill = (it.side === 'away') ? '#f87171' : '#60a5fa'
+        if (item?.type === 'player') {
+          const x = item.x ?? 0, y = item.y ?? 0
+          const fill = (item.side === 'away') ? '#f87171' : '#60a5fa'
           return (
-            <g key={it.id || idx}>
+            <g key={item.id || idx}>
               <circle cx={x} cy={y} r={14} fill={fill} stroke="#111827" />
-              {it.label ? <text x={x} y={y + 4} textAnchor="middle" fontSize="12" fill="white" fontWeight={700}>{it.label}</text> : null}
+              {item.label ? <text x={x} y={y + 4} textAnchor="middle" fontSize="12" fill="white" fontWeight={700}>{item.label}</text> : null}
             </g>
           )
         }
@@ -180,8 +184,8 @@ export default function DrillsPage() {
       try {
         const res = await apiGet<DrillsResponse>('/api/drills')
         if (!cancelled) setData(res)
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || String(e))
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -239,8 +243,8 @@ export default function DrillsPage() {
       setExpanded(created.id)
       // reset form
       setNewTitle(''); setNewCategory(''); setNewDuration(''); setNewPlayers(''); setNewDescription(''); setNewTags('')
-    } catch (err: any) {
-      setCreateErr(err?.message || String(err))
+    } catch (err: unknown) {
+      setCreateErr(err instanceof Error ? err.message : String(err))
     } finally {
       setCreating(false)
     }

@@ -2,13 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 // --- API helpers identiques au reste ---
-const API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_URL) || ''
+const API_BASE = import.meta.env?.VITE_API_URL ?? ''
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
 function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.pathname + u.search }
 function getAuthHeaders() { const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null; return t ? { Authorization: `Bearer ${t}` } : {} }
 async function apiGet<T>(url: string): Promise<T> { const res = await fetch(bust(full(url)), { headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
-async function apiPost<T>(url: string, body: any): Promise<T> { const res = await fetch(full(url), { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(body), credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
-async function apiPut<T>(url: string, body: any): Promise<T> { const res = await fetch(full(url), { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(body), credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
+async function apiPost<T>(url: string, body: unknown): Promise<T> { const res = await fetch(full(url), { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(body), credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
+async function apiPut<T>(url: string, body: unknown): Promise<T> { const res = await fetch(full(url), { method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(body), credentials: 'include', cache: 'no-store' }); if (!res.ok) throw new Error(await res.text()); return res.json() }
 
 // --- Types ---
 type Tool = 'select' | 'player' | 'cone' | 'arrow'
@@ -23,11 +23,14 @@ type Item = PlayerNode | ConeNode | Arrow
 interface DiagramData { items: Item[] }
 interface Diagram { id: string; title: string; data: DiagramData; drillId?: string | null; trainingDrillId?: string | null }
 
-function normalizeData(input: any): DiagramData {
+function normalizeData(input: unknown): DiagramData {
   try {
     const obj = typeof input === 'string' ? JSON.parse(input) : input
-    const items = Array.isArray(obj?.items) ? obj.items : []
-    return { items }
+    if (obj && typeof obj === 'object' && 'items' in obj) {
+      const items = (obj as { items?: unknown }).items
+      return { items: Array.isArray(items) ? (items as Item[]) : [] }
+    }
+    return { items: [] }
   } catch {
     return { items: [] }
   }
@@ -62,8 +65,9 @@ export default function DiagramEditor() {
           setTitle(d.title || 'Diagramme')
           setData(normalizeData(d.data))
         }
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || String(e))
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (!cancelled) setError(message)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -166,8 +170,8 @@ export default function DiagramEditor() {
       if (!diagramId) {
         navigate(`/diagram-editor?id=${saved.id}`)
       }
-    } catch (e: any) {
-      setError(e.message || String(e))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }

@@ -1,5 +1,5 @@
 // src/pages/PlanningDetailPage.tsx
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, type Planning } from '../api';
 import { useNavigate, useParams } from 'react-router-dom';
 import PlanningEditor, { type PlanningData } from '../components/PlanningEditor';
@@ -11,7 +11,7 @@ export default function PlanningDetailPage() {
   const [dataObj, setDataObj] = useState<PlanningData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     try {
       setError(null);
@@ -19,12 +19,12 @@ export default function PlanningDetailPage() {
       setPlanning(p);
       // le backend renvoie déjà data en objet -> on le cast
       setDataObj(p.data as PlanningData);
-    } catch (e: any) {
-      setError(e.message || 'Erreur');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur');
     }
-  };
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const save = async () => {
     if (!id || !dataObj) return;
@@ -32,8 +32,8 @@ export default function PlanningDetailPage() {
       const p = await api.updatePlanning(id, dataObj);
       setPlanning(p);
       alert('Enregistré');
-    } catch (e: any) {
-      alert(e.message || 'Erreur');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erreur');
     }
   };
 
@@ -43,8 +43,8 @@ export default function PlanningDetailPage() {
     try {
       await api.deletePlanning(id);
       nav('/plannings');
-    } catch (e: any) {
-      alert(e.message || 'Erreur');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erreur');
     }
   };
 

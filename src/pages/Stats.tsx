@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
 // ---- Minimal API helpers (same style as other pages) ----
-const API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_URL) || ''
+const API_BASE = import.meta.env?.VITE_API_URL ?? ''
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
 function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.pathname + u.search }
 function getAuthHeaders() { const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null; return t ? { Authorization: `Bearer ${t}` } : {} }
@@ -16,7 +16,7 @@ async function apiGet<T>(url: string): Promise<T> {
 // ---- Types (subset of backend) ----
 interface MatchTeam { id: string; side: 'home' | 'away'; score: number }
 interface Scorer { playerId: string; side: 'home' | 'away' }
-interface MatchLite { id: string; createdAt: string; type: 'ENTRAINEMENT' | 'PLATEAU'; teams: MatchTeam[]; scorers?: Scorer[] }
+interface MatchLite { id: string; createdAt: string; type: 'ENTRAINEMENT' | 'PLATEAU'; plateauId?: string | null; teams: MatchTeam[]; scorers?: Scorer[] }
 interface Player { id: string; name: string }
 interface Plateau { id: string; date: string; lieu: string }
 interface AttendanceRow { session_type: 'TRAINING' | 'PLATEAU'; session_id: string; playerId: string }
@@ -64,8 +64,8 @@ export default function StatsPage() {
           apiGet<AttendanceRow[]>('/api/attendance')
         ])
         if (!cancelled) { setMatches(rows); setPlayers(plist); setPlateaus(plats); setAttendance(attends) }
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || String(e))
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -82,7 +82,7 @@ export default function StatsPage() {
     const byId = new Map<string, { id: string; createdAt: number; matches: MatchLite[]; label: string }>()
     for (const m of ordered) {
       if (m.type !== 'PLATEAU') continue
-      const pid = (m as any).plateauId as string | undefined
+      const pid = m.plateauId ?? undefined
       const key = pid || `__no_plateau__:${m.id}`
       const label = pid ? (plateauById.get(pid)?.lieu || 'Plateau') : 'Plateau'
       const rec = byId.get(key) || { id: key, createdAt: new Date(m.createdAt).getTime(), matches: [], label }

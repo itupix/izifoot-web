@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 
 // -------- API helpers (same style as TrainingsPage) --------
 const API_BASE = (() => {
-  const env = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_API_URL)
+  const env = import.meta.env?.VITE_API_URL
   if (env) return env
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:4000'
@@ -30,7 +30,7 @@ async function apiGet<T>(url: string): Promise<T> {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
-async function apiPost<T>(url: string, body: any): Promise<T> {
+async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(full(url), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -41,7 +41,7 @@ async function apiPost<T>(url: string, body: any): Promise<T> {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
-async function apiPut<T>(url: string, body: any): Promise<T> {
+async function apiPut<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(full(url), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -52,7 +52,7 @@ async function apiPut<T>(url: string, body: any): Promise<T> {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
-async function apiDelete<T = any>(url: string): Promise<T> {
+async function apiDelete<T = unknown>(url: string): Promise<T> {
   const res = await fetch(full(url), {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -77,13 +77,17 @@ interface Player {
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
 
+function getErrorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err)
+}
+
 // -------- UI --------
 export default function PlayersPage() {
   // Invite player helper, now with setPlayers access
   async function invitePlayer(playerId: string, email?: string) {
     const plateauId = window.prompt('ID du plateau pour ces liens RSVP ?') || ''
     if (!plateauId) return
-    const body: any = { plateauId }
+    const body: { plateauId: string; email?: string } = { plateauId }
     if (email) body.email = email
     const res = await apiPost<{ ok: boolean; presentUrl: string; absentUrl: string }>(
       `/api/players/${playerId}/invite`,
@@ -119,8 +123,8 @@ export default function PlayersPage() {
       try {
         const list = await apiGet<Player[]>('/api/players')
         if (!cancelled) setPlayers(list)
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || String(e))
+      } catch (err: unknown) {
+        if (!cancelled) setError(getErrorMessage(err))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -142,7 +146,13 @@ export default function PlayersPage() {
   async function createPlayer(e: React.FormEvent) {
     e.preventDefault()
     try {
-      const body: any = {
+      const body: {
+        name: string
+        primary_position: string
+        secondary_position?: string
+        email?: string
+        phone?: string
+      } = {
         name: name.trim(),
         primary_position: primary,
         secondary_position: secondary.trim() || undefined,
@@ -155,8 +165,8 @@ export default function PlayersPage() {
       setPrimary('MILIEU')
       setSecondary('')
       setEmail(''); setPhone('')
-    } catch (e: any) {
-      alert(`Erreur création joueur: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur création joueur: ${getErrorMessage(err)}`)
     }
   }
 
@@ -164,8 +174,8 @@ export default function PlayersPage() {
     try {
       const p = await apiPut<Player>(`/api/players/${id}`, patch)
       setPlayers(prev => prev.map(x => x.id === id ? p : x))
-    } catch (e: any) {
-      alert(`Erreur mise à jour: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur mise à jour: ${getErrorMessage(err)}`)
     }
   }
 
@@ -174,8 +184,8 @@ export default function PlayersPage() {
     try {
       await apiDelete(`/api/players/${id}`)
       setPlayers(prev => prev.filter(p => p.id !== id))
-    } catch (e: any) {
-      alert(`Erreur suppression: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur suppression: ${getErrorMessage(err)}`)
     }
   }
 
@@ -196,7 +206,7 @@ export default function PlayersPage() {
               style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
             />
             <label style={{ fontSize: 12, color: '#6b7280' }}>Poste principal</label>
-            <select value={primary} onChange={e => setPrimary(e.target.value as any)} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
+            <select value={primary} onChange={e => setPrimary(e.target.value as typeof POSITIONS[number])} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
               {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <input
@@ -282,19 +292,19 @@ export default function PlayersPage() {
                     <SelectInline
                       value={p.secondary_position || ''}
                       options={['', ...POSITIONS]}
-                      onChange={(v) => (v || null) !== (p.secondary_position || null) && updatePlayer(p.id, { secondary_position: v || null as any })}
+                      onChange={(v) => (v || null) !== (p.secondary_position || null) && updatePlayer(p.id, { secondary_position: v || null })}
                     />
                   </td>
                   <td style={td}>
                     <InlineEdit
                       value={p.email || ''}
-                      onSave={(v) => v !== (p.email || '') && updatePlayer(p.id, { email: v || null as any })}
+                      onSave={(v) => v !== (p.email || '') && updatePlayer(p.id, { email: v || null })}
                     />
                   </td>
                   <td style={td}>
                     <InlineEdit
                       value={p.phone || ''}
-                      onSave={(v) => v !== (p.phone || '') && updatePlayer(p.id, { phone: v || null as any })}
+                      onSave={(v) => v !== (p.phone || '') && updatePlayer(p.id, { phone: v || null })}
                     />
                   </td>
                   <td style={td}>

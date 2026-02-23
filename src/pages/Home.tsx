@@ -80,7 +80,7 @@ export default function Home() {
     WebkitBackgroundClip: 'text',
     backgroundClip: 'text',
     color: 'transparent',
-  } as any;
+  };
 
   const subtitle: React.CSSProperties = {
     color: '#334155',

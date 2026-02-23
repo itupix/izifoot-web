@@ -21,7 +21,7 @@ interface TrainingDrill {
   meta?: Drill | null
 }
 
-async function apiDelete<T = any>(url: string): Promise<T> {
+async function apiDelete<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -32,7 +32,7 @@ async function apiDelete<T = any>(url: string): Promise<T> {
   return res.json()
 }
 
-async function apiPut<T>(url: string, body: any): Promise<T> {
+async function apiPut<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -44,11 +44,7 @@ async function apiPut<T>(url: string, body: any): Promise<T> {
   return res.json()
 }
 
-const API_BASE =
-  (typeof import.meta !== 'undefined' &&
-    (import.meta as any).env &&
-    (import.meta as any).env.VITE_API_URL) ||
-  ''
+const API_BASE = import.meta.env?.VITE_API_URL ?? ''
 
 function full(url: string) {
   return API_BASE ? `${API_BASE}${url}` : url
@@ -112,7 +108,7 @@ async function apiGet<T>(url: string): Promise<T> {
   return res.json()
 }
 
-async function apiPost<T>(url: string, body: any): Promise<T> {
+async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -138,6 +134,10 @@ function sameDay(a: Date, b: Date) {
 function toDateOnly(dateISO: string) {
   const d = new Date(dateISO)
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+function getErrorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err)
 }
 
 // ------- UI -------
@@ -205,15 +205,15 @@ export default function TrainingsPage() {
           })
           setSelectedTrainingId(prev => prev ?? candidate?.id ?? null)
         }
-      } catch (e: any) {
-        setError(e.message || String(e))
+      } catch (err: unknown) {
+        setError(getErrorMessage(err))
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [monthCursor])
   // Load matches for selected plateau
   useEffect(() => {
     let cancelled = false
@@ -290,8 +290,8 @@ export default function TrainingsPage() {
       setAddDrillId('')
       setAddNotes('')
       setAddDuration('')
-    } catch (e: any) {
-      alert(`Erreur ajout exercice: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur ajout exercice: ${getErrorMessage(err)}`)
     }
   }
 
@@ -300,8 +300,8 @@ export default function TrainingsPage() {
     try {
       await apiDelete(full(`/api/trainings/${selectedTrainingId}/drills/${trainingDrillId}`))
       setDrills(prev => prev.filter(d => d.id !== trainingDrillId))
-    } catch (e: any) {
-      alert(`Erreur suppression: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur suppression: ${getErrorMessage(err)}`)
     }
   }
 
@@ -310,8 +310,8 @@ export default function TrainingsPage() {
     try {
       const updated = await apiPut<TrainingDrill>(full(`/api/trainings/${selectedTrainingId}/drills/${trainingDrillId}`), patch)
       setDrills(prev => prev.map(d => d.id === trainingDrillId ? updated : d))
-    } catch (e: any) {
-      alert(`Erreur mise à jour: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur mise à jour: ${getErrorMessage(err)}`)
     }
   }
 
@@ -368,8 +368,8 @@ export default function TrainingsPage() {
       const created = await apiPost<Plateau>(full('/api/plateaus'), { date: day.toISOString(), lieu: lieu.trim() })
       setPlateaus(prev => [created, ...prev])
       setSelectedPlateauId(created.id)
-    } catch (e: any) {
-      alert(`Erreur création plateau: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur création plateau: ${getErrorMessage(err)}`)
     }
   }
 
@@ -378,8 +378,8 @@ export default function TrainingsPage() {
     try {
       const updated = await apiPut<Training>(full(`/api/trainings/${selectedTraining.id}`), { status: cancelled ? 'CANCELLED' : 'PLANNED' })
       setTrainings(prev => prev.map(t => t.id === updated.id ? updated : t))
-    } catch (e: any) {
-      alert(`Erreur mise à jour statut: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur mise à jour statut: ${getErrorMessage(err)}`)
     }
   }
 
@@ -390,8 +390,8 @@ export default function TrainingsPage() {
       await apiDelete(full(`/api/trainings/${selectedTraining.id}`))
       setTrainings(prev => prev.filter(t => t.id !== selectedTraining.id))
       setSelectedTrainingId(null)
-    } catch (e: any) {
-      alert(`Erreur suppression: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur suppression: ${getErrorMessage(err)}`)
     }
   }
 
@@ -406,8 +406,8 @@ export default function TrainingsPage() {
         opponentName: e.opponentName || undefined
       })
       setPlateauMatches(prev => prev.map(m => m.id === id ? updated : m))
-    } catch (err: any) {
-      alert(`Erreur mise à jour du match: ${err.message || err}`)
+    } catch (err: unknown) {
+      alert(`Erreur mise à jour du match: ${getErrorMessage(err)}`)
     }
   }
 
@@ -419,7 +419,7 @@ export default function TrainingsPage() {
         if (!next[m.id]) {
           const home = m.teams.find(t => t.side === 'home')?.score ?? 0
           const away = m.teams.find(t => t.side === 'away')?.score ?? 0
-          next[m.id] = { home, away, opponentName: (m as any).opponentName || '' }
+          next[m.id] = { home, away, opponentName: m.opponentName || '' }
         }
       }
       return next
@@ -432,8 +432,8 @@ export default function TrainingsPage() {
       await apiDelete(full(`/api/matches/${id}`))
       setPlateauMatches(prev => prev.filter(m => m.id !== id))
       setMatchEdits(prev => { const n = { ...prev }; delete n[id]; return n })
-    } catch (err: any) {
-      alert(`Erreur suppression du match: ${err.message || err}`)
+    } catch (err: unknown) {
+      alert(`Erreur suppression du match: ${getErrorMessage(err)}`)
     }
   }
 
@@ -445,8 +445,8 @@ export default function TrainingsPage() {
       setPlateaus(prev => prev.filter(p => p.id !== selectedPlateauId))
       setSelectedPlateauId(null)
       setPlateauMatches([])
-    } catch (e: any) {
-      alert(`Erreur suppression plateau: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur suppression plateau: ${getErrorMessage(err)}`)
     }
   }
 
@@ -455,8 +455,8 @@ export default function TrainingsPage() {
       const created = await apiPost<Training>(full('/api/trainings'), { date: day.toISOString() })
       setTrainings(prev => [created, ...prev])
       setSelectedTrainingId(created.id)
-    } catch (e: any) {
-      alert(`Erreur création entraînement: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur création entraînement: ${getErrorMessage(err)}`)
     }
   }
 
@@ -474,8 +474,8 @@ export default function TrainingsPage() {
         if (present) next.add(playerId); else next.delete(playerId)
         return next
       })
-    } catch (e: any) {
-      alert(`Erreur présence: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur présence: ${getErrorMessage(err)}`)
     }
   }
 
@@ -493,8 +493,8 @@ export default function TrainingsPage() {
         if (present) next.add(playerId); else next.delete(playerId)
         return next
       })
-    } catch (e: any) {
-      alert(`Erreur présence (plateau): ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur présence (plateau): ${getErrorMessage(err)}`)
     }
   }
 
@@ -530,8 +530,8 @@ export default function TrainingsPage() {
       setPlateauMatches(prev => [created, ...prev])
       // reset form
       setHomeStarters([]); setAwayStarters([]); setHomeScore(0); setAwayScore(0); setScorers([]); setNewScorerPlayerId(''); setNewScorerSide('home'); setOpponentName('')
-    } catch (e: any) {
-      alert(`Erreur création match: ${e.message || e}`)
+    } catch (err: unknown) {
+      alert(`Erreur création match: ${getErrorMessage(err)}`)
     }
   }
 
@@ -682,7 +682,7 @@ export default function TrainingsPage() {
 
               {/* Liste des exercices de la séance */}
               <div style={{ display: 'grid', gap: 8 }}>
-                {drills.map((d, idx) => {
+                {drills.map((d) => {
                   const meta = d.meta || catalog.find(c => c.id === d.drillId) || null
                   return (
                     <div key={d.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#fff' }}>
@@ -871,7 +871,7 @@ export default function TrainingsPage() {
                               onChange={e => setMatchEdits(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { home: 0, away: 0, opponentName: '' }), away: Number(e.target.value) } }))}
                             />
                             <input placeholder="Adversaire" style={{ flex: 1, padding: 4, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                              value={(matchEdits[m.id]?.opponentName ?? (m as any).opponentName ?? '')}
+                              value={(matchEdits[m.id]?.opponentName ?? m.opponentName ?? '')}
                               onChange={e => setMatchEdits(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { home: 0, away: 0, opponentName: '' }), opponentName: e.target.value } }))}
                             />
                             <button onClick={() => saveMatchEdits(m.id)} style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}>Enregistrer</button>

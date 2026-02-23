@@ -19,8 +19,9 @@ export default function AuthPage() {
         await register(email, password);
       }
       nav('/planning');
-    } catch (e: any) {
-      alert(e.message || 'Erreur');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur';
+      alert(message);
     }
   };
 

@@ -21,8 +21,8 @@ export default function CreatePlanningPage() {
       const dateISO = new Date(date).toISOString();
       const p = await api.createPlanning(dateISO, dataObj);
       nav(`/plannings/${p.id}`);
-    } catch (e: any) {
-      setError(e.message || 'Erreur');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur');
     } finally {
       setSaving(false);
     }

@@ -13,8 +13,8 @@ export default function PlanningsListPage() {
       setError(null);
       const res = await api.listPlannings();
       setItems(res);
-    } catch (e: any) {
-      setError(e.message || 'Erreur');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur');
     }
   };
 

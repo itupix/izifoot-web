@@ -10,6 +10,19 @@ export type PlanningData = {
   slots: { time: string; games: { pitch: number; A: string; B: string }[] }[];
 };
 
+type Team = {
+  id: number;
+  label: string;
+  club: string;
+  teamNumber: number | null;
+};
+
+type Match = {
+  id: string;
+  a: Team;
+  b: Team;
+};
+
 type Props = {
   value?: PlanningData | null;               // planning existant à éditer (facultatif)
   onChange?: (data: PlanningData) => void;   // renvoyé à chaque modification (pour sauvegarde)
@@ -49,7 +62,7 @@ function extractClubAndTeam(line: string) {
   }
   return { club: original, teamNumber: null as number | null, label: original }
 }
-function parseTeams(text: string) {
+function parseTeams(text: string): Team[] {
   const lines = (text || '')
     .split(/\r?\n/)
     .map((l) => normalizeName(l))
@@ -76,11 +89,11 @@ function downloadCSV(filename: string, rows: Array<Array<string>>) {
   URL.revokeObjectURL(url)
 }
 function generateAllMatches(
-  teams: Array<{ id: number; label: string; club: string; teamNumber: number | null }>,
+  teams: Team[],
   forbidIntraClub = true,
   only12 = false
 ) {
-  const matches: Array<{ id: string; a: any; b: any }> = []
+  const matches: Match[] = []
   for (let i = 0; i < teams.length; i++) {
     for (let j = i + 1; j < teams.length; j++) {
       const A = teams[i]; const B = teams[j]
@@ -125,8 +138,8 @@ function teamColor(label: string) { const hue = hashStringHue(label); return `hs
 
 /** ==== Limites & packing (inchangés) ==== */
 function limitMatchesPerTeam(
-  allMatches: Array<{ id: string; a: { id: number; label?: string }; b: { id: number; label?: string } }>,
-  teams: Array<{ id: number; label?: string }>,
+  allMatches: Match[],
+  teams: Team[],
   perTeam: number,
   allowRematches: boolean,
   seed: number
@@ -134,7 +147,7 @@ function limitMatchesPerTeam(
   if (perTeam <= 0) return [] as typeof allMatches
   const rnd = mulberry32((seed || 1) >>> 0)
   const counts = new Map<number, number>()
-  const teamById = new Map<number, { id: number; label?: string }>()
+  const teamById = new Map<number, Team>()
   for (const t of teams) { counts.set(t.id, 0); teamById.set(t.id, t) }
   const remaining = [...allMatches]
   const picked: typeof allMatches = []
@@ -189,22 +202,22 @@ function limitMatchesPerTeam(
       if (bestOpp == null) break
       const key = pairKey(tA, bestOpp); const n = (pairUsed.get(key) ?? 0) + 1; pairUsed.set(key, n)
       const A = teamById.get(tA)!; const B = teamById.get(bestOpp)!
-      picked.push({ id: `${key}#${n}`, a: A, b: B } as any)
+      picked.push({ id: `${key}#${n}`, a: A, b: B })
       counts.set(tA, (counts.get(tA) ?? 0) + 1); counts.set(bestOpp, (counts.get(bestOpp) ?? 0) + 1)
     }
   }
   return picked
 }
 
-function packSchedule(matches: any[], teams: any[], pitches: number, restEveryX: number) {
+function packSchedule(matches: Match[], pitches: number, restEveryX: number) {
   const remaining = [...matches]
-  const agenda: Array<{ timeIndex: number; games: Array<{ pitch: number; match: any }> }> = []
+  const agenda: Array<{ timeIndex: number; games: Array<{ pitch: number; match: Match }> }> = []
   const lastPlayedAt = new Map<number, number>()
   const consec = new Map<number, number>()
   let timeIndex = 0
   while (remaining.length > 0) {
     const usedTeams = new Set<number>()
-    const slotGames: any[] = []
+    const slotGames: Match[] = []
     remaining.sort((m1, m2) => {
       const r1 = Math.min(lastPlayedAt.get(m1.a.id) ?? -999, lastPlayedAt.get(m1.b.id) ?? -999)
       const r2 = Math.min(lastPlayedAt.get(m2.a.id) ?? -999, lastPlayedAt.get(m2.b.id) ?? -999)
@@ -234,7 +247,7 @@ function packSchedule(matches: any[], teams: any[], pitches: number, restEveryX:
 }
 
 function toRowsForCSV(
-  agenda: Array<{ timeIndex: number; games: Array<{ pitch: number; match: any }> }>,
+  agenda: Array<{ timeIndex: number; games: Array<{ pitch: number; match: Match }> }>,
   start: { hh: number; mm: number },
   slotMinutes: number
 ) {
@@ -249,10 +262,10 @@ function toRowsForCSV(
 /** ==== Hook de persistance locale (facultatif) ==== */
 function useLocalStorageState<T>(key: string, initialValue: T) {
   const [state, setState] = useState<T>(() => {
-    try { const raw = localStorage.getItem(key); if (raw != null) return JSON.parse(raw) as T } catch { }
+    try { const raw = localStorage.getItem(key); if (raw != null) return JSON.parse(raw) as T } catch { /* ignore */ }
     return initialValue
   })
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)) } catch { } }, [key, state])
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)) } catch { /* ignore */ } }, [key, state])
   return [state, setState] as const
 }
 
@@ -295,8 +308,8 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   )
   const shuffledMatches = useMemo(() => seededShuffle(limitedMatches, regenKey || 1), [limitedMatches, regenKey])
   const agenda = useMemo(
-    () => packSchedule(shuffledMatches, teams, Math.max(1, pitches), Math.max(1, restEveryX)),
-    [shuffledMatches, teams, pitches, restEveryX]
+    () => packSchedule(shuffledMatches, Math.max(1, pitches), Math.max(1, restEveryX)),
+    [shuffledMatches, pitches, restEveryX]
   )
 
   // 3) Remonter le JSON (pour sauvegarde côté parent)
@@ -431,7 +444,7 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
                 agenda.map((slot) => {
                   const slotStart = addMinutes(parsedStart!, slot.timeIndex * slotMinutes)
                   const time = fmtTime(slotStart)
-                  const byPitch = new Map(slot.games.map((g: any) => [g.pitch, g.match]))
+                  const byPitch = new Map(slot.games.map((g) => [g.pitch, g.match] as const))
                   return (
                     <tr key={slot.timeIndex}>
                       <td style={{ padding: '6px 8px', fontWeight: 600, whiteSpace: 'nowrap' }}>{time}</td>
