@@ -47,6 +47,33 @@ main {
 
 }
 
+/* Home layout */
+.home-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  align-items: center;
+  justify-items: center;
+  text-align: center;
+  padding: 40px 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.home-col {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .home-hero {
+    grid-template-columns: 1fr 1fr;
+    text-align: left;
+  }
+}
+
 h1,
 h2,
 h3,

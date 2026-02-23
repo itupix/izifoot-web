@@ -1,7 +1,6 @@
 // src/App.tsx
 import React from 'react';
-import { Link, Navigate, Route, Routes } from 'react-router-dom';
-import AuthPage from './pages/AuthPage'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import AccountPage from './pages/AccountPage';
 import PlanningsListPage from './pages/PlanningsListPage';
 import PlanningDetailPage from './pages/PlanningDetailsPage';
@@ -19,34 +18,42 @@ import MatchDay from './pages/MatchDay';
 function Protected({ children }: { children: React.ReactNode }) {
   const { me, loading } = useAuth();
   if (loading) return <div style={{ padding: 16 }}>Chargement…</div>;
-  if (!me) return <Navigate to="/auth" replace />;
+  if (!me) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
   const { me, logout } = useAuth();
+  const location = useLocation();
+  const isHome = location.pathname === '/';
+  const navigate = useNavigate();
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
   return (
     <>
-      <header style={{ display: 'flex', gap: 16, padding: 12, borderBottom: '1px solid #ddd' }}>
-        <Link to="/planning" className={style.logo} style={{ textDecoration: 'none', fontWeight: 700 }}>izifoot</Link>
-        <nav style={{ display: 'flex', gap: 12 }}>
-          <Link to="/planning">Planning</Link>
-          <Link to="/exercices">Exercices</Link>
-          <Link to="/effectif">Effectif</Link>
-          <Link to="/stats">Stats</Link>
-          <Link to="/plateau">Plateau</Link>
-        </nav>
-        <div style={{ marginLeft: 'auto' }}>
-          {me ? (
-            <button onClick={logout}>Se déconnecter</button>
-          ) : null}
-        </div>
-      </header>
+      {!isHome && (
+        <header style={{ display: 'flex', gap: 16, padding: 12, borderBottom: '1px solid #ddd' }}>
+          <Link to="/planning" className={style.logo} style={{ textDecoration: 'none', fontWeight: 700 }}>izifoot</Link>
+          <nav style={{ display: 'flex', gap: 12 }}>
+            <Link to="/planning">Planning</Link>
+            <Link to="/exercices">Exercices</Link>
+            <Link to="/effectif">Effectif</Link>
+            <Link to="/stats">Stats</Link>
+          </nav>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Link to="/plannings/new" style={{ fontWeight: 600, textDecoration: 'none' }}>Organiser un plateau</Link>
+            {me ? (
+              <button onClick={handleLogout}>Se déconnecter</button>
+            ) : null}
+          </div>
+        </header>
+      )}
 
-      <main>
+      <main style={isHome ? { padding: 0 } : undefined}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/auth" element={<AuthPage />} />
           <Route path="/account" element={<Protected><AccountPage /></Protected>} />
           <Route path="/planning" element={<Protected><TrainingsPage /></Protected>} />
           <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
