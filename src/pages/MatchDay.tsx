@@ -142,7 +142,7 @@ export default function MatchDay() {
   }
 
   useEffect(() => {
-    let abort = new AbortController()
+    const abort = new AbortController()
     async function run() {
       try {
         setLoading(true)

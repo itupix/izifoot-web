@@ -34,6 +34,7 @@ export default function App() {
           <Link to="/exercices">Exercices</Link>
           <Link to="/effectif">Effectif</Link>
           <Link to="/stats">Stats</Link>
+          <Link to="/plateau">Plateau</Link>
         </nav>
         <div style={{ marginLeft: 'auto' }}>
           {me ? (

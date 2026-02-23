@@ -36,7 +36,7 @@ export default function Home() {
       setStatus("success");
       setMessage("Merci ! On te prévient dès que l'app est dispo ✉️");
       setEmail("");
-    } catch (err) {
+    } catch {
       setStatus("error");
       setMessage("Oups, une erreur est survenue. Réessaie dans un instant.");
     }
@@ -119,36 +119,6 @@ export default function Home() {
     color: '#0f172a',
     fontWeight: 700,
   };
-
-  const features: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0,1fr))',
-    gap: 16,
-    padding: '28px 16px',
-    maxWidth: 1100,
-    margin: '0 auto',
-  };
-
-  const card: React.CSSProperties = {
-    border: '1px solid #e2e8f0',
-    borderRadius: 16,
-    padding: 16,
-    background: 'rgba(255,255,255,0.8)',
-    backdropFilter: 'blur(8px)',
-  };
-
-  const iconCircle = (bg: string) => ({
-    width: 36,
-    height: 36,
-    borderRadius: 999,
-    background: bg,
-    display: 'grid',
-    placeItems: 'center',
-    color: 'white',
-    fontWeight: 800,
-    fontSize: 18,
-    boxShadow: '0 6px 16px rgba(0,0,0,0.08)'
-  } as React.CSSProperties);
 
   const footer: React.CSSProperties = {
     padding: '32px 16px',

@@ -147,14 +147,6 @@ const cellStyle: React.CSSProperties = {
   padding: 6,
 }
 
-const dotStyle: React.CSSProperties = {
-  display: 'inline-block',
-  width: 8,
-  height: 8,
-  borderRadius: 9999,
-  background: '#10b981',
-}
-
 export default function TrainingsPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [trainings, setTrainings] = useState<Training[]>([])
@@ -230,7 +222,7 @@ export default function TrainingsPage() {
       try {
         const rows = await apiGet<MatchLite[]>(full(`/api/matches?plateauId=${encodeURIComponent(selectedPlateauId)}`))
         if (!cancelled) setPlateauMatches(rows)
-      } catch (e) {
+      } catch {
         if (!cancelled) setPlateauMatches([])
       }
     }
@@ -245,7 +237,7 @@ export default function TrainingsPage() {
       try {
         const rows = await apiGet<TrainingDrill[]>(full(`/api/trainings/${selectedTrainingId}/drills`))
         if (!cancelled) setDrills(rows)
-      } catch (e) {
+      } catch {
         if (!cancelled) setDrills([])
       }
     }
@@ -261,7 +253,7 @@ export default function TrainingsPage() {
       try {
         const rows = await apiGet<AttendanceRow[]>(full(`/api/attendance?session_type=TRAINING&session_id=${encodeURIComponent(selectedTrainingId)}`))
         if (!cancelled) setAttendance(new Set(rows.map(r => r.playerId)))
-      } catch (e) {
+      } catch {
         // ignore — show empty attendance
         if (!cancelled) setAttendance(new Set())
       }
@@ -278,7 +270,7 @@ export default function TrainingsPage() {
       try {
         const rows = await apiGet<AttendanceRow[]>(full(`/api/attendance?session_type=PLATEAU&session_id=${encodeURIComponent(selectedPlateauId)}`))
         if (!cancelled) setPlateauAttendance(new Set(rows.map(r => r.playerId)))
-      } catch (e) {
+      } catch {
         if (!cancelled) setPlateauAttendance(new Set())
       }
     }

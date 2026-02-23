@@ -133,7 +133,6 @@ function limitMatchesPerTeam(
 ) {
   if (perTeam <= 0) return [] as typeof allMatches
   const rnd = mulberry32((seed || 1) >>> 0)
-  function pickRandom<T>(arr: T[]): T | null { if (!arr.length) return null; return arr[Math.floor(rnd() * arr.length)] }
   const counts = new Map<number, number>()
   const teamById = new Map<number, { id: number; label?: string }>()
   for (const t of teams) { counts.set(t.id, 0); teamById.set(t.id, t) }
@@ -288,8 +287,8 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   // 2) Génération
   const parsedStart = useMemo(() => parseHHMM(startHHMM) || { hh: 10, mm: 0 }, [startHHMM])
   const slotMinutes = matchMin + breakMin
-  const teams = useMemo(() => parseTeams(teamsText), [teamsText, regenKey])
-  const matches = useMemo(() => generateAllMatches(teams, forbidIntraClub, only12), [teams, forbidIntraClub, only12, regenKey])
+  const teams = useMemo(() => parseTeams(teamsText), [teamsText])
+  const matches = useMemo(() => generateAllMatches(teams, forbidIntraClub, only12), [teams, forbidIntraClub, only12])
   const limitedMatches = useMemo(
     () => limitMatchesPerTeam(matches, teams, Math.max(1, matchesPerTeam), allowRematches, regenKey || 1),
     [matches, teams, matchesPerTeam, allowRematches, regenKey]
@@ -346,7 +345,11 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <label>Terrains
               <input type="number" min={1} value={pitches}
-                onChange={(e) => { const v = parseInt(e.target.value || '1', 10); (Number.isNaN(v) ? setPitches(1) : setPitches(v)) }} />
+                onChange={(e) => {
+                  const v = parseInt(e.target.value || '1', 10)
+                  if (Number.isNaN(v)) setPitches(1)
+                  else setPitches(v)
+                }} />
             </label>
             <label>Début (HH:MM)
               <input value={startHHMM} onChange={(e) => setStartHHMM(e.target.value)} placeholder="10:00" />
@@ -356,22 +359,38 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <label>Durée d'un match (min)
               <input type="number" min={1} value={matchMin}
-                onChange={(e) => { const v = parseInt(e.target.value || '10', 10); (Number.isNaN(v) ? setMatchMin(10) : setMatchMin(v)) }} />
+                onChange={(e) => {
+                  const v = parseInt(e.target.value || '10', 10)
+                  if (Number.isNaN(v)) setMatchMin(10)
+                  else setMatchMin(v)
+                }} />
             </label>
             <label>Pause entre matchs (min)
               <input type="number" min={0} value={breakMin}
-                onChange={(e) => { const v = parseInt(e.target.value || '0', 10); (Number.isNaN(v) ? setBreakMin(0) : setBreakMin(v)) }} />
+                onChange={(e) => {
+                  const v = parseInt(e.target.value || '0', 10)
+                  if (Number.isNaN(v)) setBreakMin(0)
+                  else setBreakMin(v)
+                }} />
             </label>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <label>Nombre de matchs par équipe
               <input type="number" min={1} max={Math.max(1, teams.length - 1)} value={matchesPerTeam}
-                onChange={(e) => { const v = parseInt(e.target.value || '1', 10); (Number.isNaN(v) ? setMatchesPerTeam(1) : setMatchesPerTeam(v)) }} />
+                onChange={(e) => {
+                  const v = parseInt(e.target.value || '1', 10)
+                  if (Number.isNaN(v)) setMatchesPerTeam(1)
+                  else setMatchesPerTeam(v)
+                }} />
             </label>
             <label>Repos obligatoire (X consécutifs max)
               <input type="number" min={1} value={restEveryX}
-                onChange={(e) => { const v = parseInt(e.target.value || '1', 10); (Number.isNaN(v) ? setRestEveryX(1) : setRestEveryX(v)) }} />
+                onChange={(e) => {
+                  const v = parseInt(e.target.value || '1', 10)
+                  if (Number.isNaN(v)) setRestEveryX(1)
+                  else setRestEveryX(v)
+                }} />
             </label>
           </div>
 

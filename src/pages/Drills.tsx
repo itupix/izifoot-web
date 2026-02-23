@@ -163,7 +163,7 @@ export default function DrillsPage() {
         setLoadingDiagramsFor(id)
         const rows = await apiGetDiagramsForDrill(id)
         if (!cancelled) setDiagramsByDrill(prev => ({ ...prev, [id]: rows }))
-      } catch (e) {
+      } catch {
         // silencieux: pas bloquant pour la page
       } finally {
         if (!cancelled) setLoadingDiagramsFor(null)

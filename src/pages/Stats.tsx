@@ -47,7 +47,6 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
-  const [loadingPlayers, setLoadingPlayers] = useState(false)
   const [plateaus, setPlateaus] = useState<Plateau[]>([])
   const [attendance, setAttendance] = useState<AttendanceRow[]>([])
   const [viewMode, setViewMode] = useState<'match' | 'plateau'>('match')
@@ -377,7 +376,6 @@ function Chart({ title, series, bands }: { title: string; series: SeriesPoint[];
   const w = 720, h = 220, pad = 28
   const d = buildLinePath(series, w, h, pad)
   // axes limits and value stats for y-axis
-  const maxX = series.length > 0 ? series[series.length - 1].x : 1
   const values = series.map(p => p.y)
   const minY = values.length > 0 ? Math.min(...values) : 0
   const maxY = values.length > 0 ? Math.max(...values) : 1
