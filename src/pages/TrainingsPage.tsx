@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { API_BASE } from '../api'
+import { apiRoutes } from '../apiRoutes'
 
 function buildHeaders(): Record<string, string> {
   return { 'Content-Type': 'application/json', ...getAuthHeaders() }
@@ -90,8 +91,8 @@ export default function TrainingsPage() {
       setError(null)
       try {
         const [ts, pls] = await Promise.all([
-          apiGet<Training[]>(full('/trainings')),
-          apiGet<Plateau[]>(full('/plateaus')),
+          apiGet<Training[]>(full(apiRoutes.trainings.list)),
+          apiGet<Plateau[]>(full(apiRoutes.plateaus.list)),
         ])
         if (!cancelled) {
           // sort by date desc
@@ -123,7 +124,7 @@ export default function TrainingsPage() {
     const lieu = window.prompt('Lieu du plateau ?') || ''
     if (!lieu.trim()) return
     try {
-      const created = await apiPost<Plateau>(full('/plateaus'), { date: day.toISOString(), lieu: lieu.trim() })
+      const created = await apiPost<Plateau>(full(apiRoutes.plateaus.list), { date: day.toISOString(), lieu: lieu.trim() })
       setPlateaus(prev => [created, ...prev])
     } catch (err: unknown) {
       alert(`Erreur création plateau: ${getErrorMessage(err)}`)
@@ -134,7 +135,7 @@ export default function TrainingsPage() {
 
   async function createTrainingForDay(day: Date) {
     try {
-      const created = await apiPost<Training>(full('/trainings'), { date: day.toISOString() })
+      const created = await apiPost<Training>(full(apiRoutes.trainings.list), { date: day.toISOString() })
       setTrainings(prev => [created, ...prev])
     } catch (err: unknown) {
       alert(`Erreur création entraînement: ${getErrorMessage(err)}`)

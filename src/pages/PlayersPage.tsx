@@ -1,6 +1,7 @@
 
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { apiRoutes } from '../apiRoutes'
 
 // -------- API helpers (same style as TrainingsPage) --------
 const API_BASE = (() => {
@@ -108,7 +109,7 @@ export default function PlayersPage() {
     async function load() {
       setLoading(true); setError(null)
       try {
-        const list = await apiGet<Player[]>('/players')
+        const list = await apiGet<Player[]>(apiRoutes.players.list)
         if (!cancelled) setPlayers(list)
       } catch (err: unknown) {
         if (!cancelled) setError(getErrorMessage(err))
@@ -146,7 +147,7 @@ export default function PlayersPage() {
       }
       if (email.trim()) body.email = email.trim()
       if (phone.trim()) body.phone = phone.trim()
-      const p = await apiPost<Player>('/players', body)
+      const p = await apiPost<Player>(apiRoutes.players.list, body)
       setPlayers(prev => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
       setName('')
       setPrimary('MILIEU')
@@ -160,7 +161,7 @@ export default function PlayersPage() {
 
   async function updatePlayer(id: string, patch: Partial<Player>) {
     try {
-      const p = await apiPut<Player>(`/players/${id}`, patch)
+      const p = await apiPut<Player>(apiRoutes.players.byId(id), patch)
       setPlayers(prev => prev.map(x => x.id === id ? p : x))
     } catch (err: unknown) {
       alert(`Erreur mise à jour: ${getErrorMessage(err)}`)
@@ -170,7 +171,7 @@ export default function PlayersPage() {
   async function removePlayer(id: string) {
     if (!confirm('Supprimer ce joueur ?')) return
     try {
-      await apiDelete(`/players/${id}`)
+      await apiDelete(apiRoutes.players.byId(id))
       setPlayers(prev => prev.filter(p => p.id !== id))
       setDetailOpen(false)
       setSelectedPlayer(null)

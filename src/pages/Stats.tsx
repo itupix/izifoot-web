@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { API_BASE } from '../api'
+import { apiRoutes } from '../apiRoutes'
 
 // ---- Minimal API helpers (same style as other pages) ----
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
@@ -59,10 +60,10 @@ export default function StatsPage() {
       setLoading(true); setError(null)
       try {
         const [rows, plist, plats, attends] = await Promise.all([
-          apiGet<MatchLite[]>('/matches'),
-          apiGet<Player[]>('/players'),
-          apiGet<Plateau[]>('/plateaus'),
-          apiGet<AttendanceRow[]>('/attendance')
+          apiGet<MatchLite[]>(apiRoutes.matches.list),
+          apiGet<Player[]>(apiRoutes.players.list),
+          apiGet<Plateau[]>(apiRoutes.plateaus.list),
+          apiGet<AttendanceRow[]>(apiRoutes.attendance.list)
         ])
         if (!cancelled) { setMatches(rows); setPlayers(plist); setPlateaus(plats); setAttendance(attends) }
       } catch (err: unknown) {

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { API_BASE } from '../api'
+import { apiRoutes } from '../apiRoutes'
 
 // Thumbnail helpers
 type DiagramData = { items?: unknown[] }
@@ -82,7 +83,7 @@ interface DiagramMeta {
 }
 
 async function apiGetDiagramsForDrill(drillId: string): Promise<DiagramMeta[]> {
-  return apiGet<DiagramMeta[]>(`/drills/${encodeURIComponent(drillId)}/diagrams`)
+  return apiGet<DiagramMeta[]>(apiRoutes.drills.diagrams(drillId))
 }
 
 function DiagramThumb({ data, width = 220 }: { data: unknown; width?: number }) {
@@ -185,7 +186,7 @@ export default function DrillsPage() {
     async function load() {
       setLoading(true); setError(null)
       try {
-        const res = await apiGet<DrillsResponse>('/drills')
+        const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
         if (!cancelled) setData(res)
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err))
@@ -239,9 +240,9 @@ export default function DrillsPage() {
         description: newDescription.trim(),
         tags: newTags.split(',').map(s => s.trim()).filter(Boolean)
       }
-      const created = await apiPost<Drill>('/drills', payload)
+      const created = await apiPost<Drill>(apiRoutes.drills.list, payload)
       // refresh list
-      const res = await apiGet<DrillsResponse>('/drills')
+      const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
       setData(res)
       setExpanded(created.id)
       // reset form

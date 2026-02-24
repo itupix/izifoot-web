@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { API_BASE } from '../api'
+import { apiRoutes } from '../apiRoutes'
 function useQuery() {
   const { search } = useLocation()
   return useMemo(() => new URLSearchParams(search), [search])
@@ -86,7 +87,7 @@ export default function MatchDay() {
     const player = data?.playersById?.[playerId]
     const body: { plateauId: string; email?: string } = { plateauId: id }
     if (withEmail && player?.email) body.email = player.email
-    const resp = await fetch(`${API_BASE}/players/${playerId}/invite`, {
+    const resp = await fetch(`${API_BASE}${apiRoutes.players.invite(playerId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -114,7 +115,7 @@ export default function MatchDay() {
       const player = data?.convocations.find(c => c.player.id === pid)?.player
       const body: { plateauId: string; email?: string } = { plateauId: id }
       if (withEmail && player?.email) body.email = player.email
-      const resp = await fetch(`${API_BASE}/players/${pid}/invite`, {
+      const resp = await fetch(`${API_BASE}${apiRoutes.players.invite(pid)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -144,10 +145,11 @@ export default function MatchDay() {
   useEffect(() => {
     const abort = new AbortController()
     async function run() {
+      if (!id) return
       try {
         setLoading(true)
         setError(null)
-        const resp = await fetch(`${API_BASE}/plateaus/${id}/summary`, {
+        const resp = await fetch(`${API_BASE}${apiRoutes.plateaus.summary(id)}`, {
           credentials: 'include',
           signal: abort.signal
         })
@@ -161,7 +163,7 @@ export default function MatchDay() {
         setLoading(false)
       }
     }
-    if (id) run()
+    run()
     return () => abort.abort()
   }, [id])
 

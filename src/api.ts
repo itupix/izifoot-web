@@ -1,4 +1,6 @@
 // src/api.ts
+import { apiRoutes } from './apiRoutes'
+
 const rawApiBase =
   import.meta.env?.VITE_API_URL ??
   import.meta.env?.VITE_API_BASE ??
@@ -45,25 +47,25 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   // Auth
   register: (email: string, password: string) =>
-    request<Me>('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    request<Me>(apiRoutes.auth.register, { method: 'POST', body: JSON.stringify({ email, password }) }),
   login: (email: string, password: string) =>
-    request<Me>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }),
-  me: () => request<Me>('/me'),
+    request<Me>(apiRoutes.auth.login, { method: 'POST', body: JSON.stringify({ email, password }) }),
+  logout: () => request<{ ok: true }>(apiRoutes.auth.logout, { method: 'POST' }),
+  me: () => request<Me>(apiRoutes.me),
 
   // Plannings
-  listPlannings: () => request<Planning[]>('/plannings'),
-  getPlanning: (id: string) => request<Planning>(`/plannings/${id}`),
+  listPlannings: () => request<Planning[]>(apiRoutes.plannings.list),
+  getPlanning: (id: string) => request<Planning>(apiRoutes.plannings.byId(id)),
   createPlanning: (dateISO: string, data: unknown) =>
-    request<Planning>('/plannings', { method: 'POST', body: JSON.stringify({ date: dateISO, data }) }),
+    request<Planning>(apiRoutes.plannings.list, { method: 'POST', body: JSON.stringify({ date: dateISO, data }) }),
   updatePlanning: (id: string, data: unknown) =>
-    request<Planning>(`/plannings/${id}`, { method: 'PUT', body: JSON.stringify({ data }) }),
+    request<Planning>(apiRoutes.plannings.byId(id), { method: 'PUT', body: JSON.stringify({ data }) }),
   deletePlanning: (id: string) =>
-    request<{ ok: true }>(`/plannings/${id}`, { method: 'DELETE' }),
+    request<{ ok: true }>(apiRoutes.plannings.byId(id), { method: 'DELETE' }),
 
   // Share (si tu veux plus tard)
   sharePlanning: (id: string, email?: string, expiresInDays?: number) =>
-    request<{ token: string; url: string; expiresAt: string | null }>(`/plannings/${id}/share`, {
+    request<{ token: string; url: string; expiresAt: string | null }>(apiRoutes.plannings.share(id), {
       method: 'POST',
       body: JSON.stringify({ email, expiresInDays }),
     }),

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { API_BASE } from '../api'
+import { apiRoutes } from '../apiRoutes'
 
 // --- API helpers identiques au reste ---
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
@@ -78,7 +79,7 @@ export default function DiagramEditor() {
       if (!diagramId) return
       setLoading(true); setError(null)
       try {
-        const d = await apiGet<Diagram>(`/diagrams/${diagramId}`)
+        const d = await apiGet<Diagram>(apiRoutes.diagrams.byId(diagramId))
         if (!cancelled) {
           setTitle(d.title || 'Diagramme')
           setData(normalizeData(d.data))
@@ -175,11 +176,11 @@ export default function DiagramEditor() {
       const payload = { title: title.trim() || 'Diagramme', data }
       let saved: Diagram
       if (diagramId) {
-        saved = await apiPut<Diagram>(`/diagrams/${diagramId}`, payload)
+        saved = await apiPut<Diagram>(apiRoutes.diagrams.byId(diagramId), payload)
       } else if (trainingDrillId) {
-        saved = await apiPost<Diagram>(`/training-drills/${trainingDrillId}/diagrams`, payload)
+        saved = await apiPost<Diagram>(apiRoutes.trainingDrills.diagrams(trainingDrillId), payload)
       } else if (drillId) {
-        saved = await apiPost<Diagram>(`/drills/${drillId}/diagrams`, payload)
+        saved = await apiPost<Diagram>(apiRoutes.drills.diagrams(drillId), payload)
       } else {
         alert('Contexte manquant (drillId ou trainingDrillId)'); return
       }
