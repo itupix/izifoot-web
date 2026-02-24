@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/icons'
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SoccerBallIcon, TrophyIcon } from '../components/icons'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { uiAlert, uiPrompt } from '../ui'
@@ -118,12 +118,12 @@ export default function TrainingsPage() {
     display: 'block',
     width: '100%',
     padding: '11px 12px',
-    textAlign: 'left' as const,
     borderRadius: 10,
     border: '1px solid #d6deea',
     background: '#fff',
     color: '#0f172a',
     fontSize: 16,
+    textDecoration: 'none',
   }
 
   const ctaButtonStyle = {
@@ -171,7 +171,7 @@ export default function TrainingsPage() {
               aria-label="Jour précédent"
               style={navIconButtonStyle}
             >
-              <ChevronLeftIcon size={26} />
+              <ChevronLeftIcon size={24} />
             </button>
             <button
               type="button"
@@ -198,7 +198,7 @@ export default function TrainingsPage() {
               aria-label="Jour suivant"
               style={navIconButtonStyle}
             >
-              <ChevronRightIcon size={26} />
+              <ChevronRightIcon size={24} />
             </button>
             <button
               type="button"
@@ -209,7 +209,7 @@ export default function TrainingsPage() {
               aria-label="Choisir une date"
               style={{
                 border: '1px solid #d1d5db',
-                borderRadius: 8,
+                borderRadius: 999,
                 background: '#fff',
                 width: 44,
                 height: 44,
@@ -245,7 +245,7 @@ export default function TrainingsPage() {
                     aria-label="Mois précédent"
                     style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 36, height: 36, cursor: 'pointer', fontSize: 24 }}
                   >
-                    <ChevronLeftIcon size={22} />
+                    <ChevronLeftIcon size={24} />
                   </button>
                   <strong style={{ textTransform: 'capitalize', fontSize: 16 }}>{monthLabel}</strong>
                   <button
@@ -254,7 +254,7 @@ export default function TrainingsPage() {
                     aria-label="Mois suivant"
                     style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 36, height: 36, cursor: 'pointer', fontSize: 24 }}
                   >
-                    <ChevronRightIcon size={22} />
+                    <ChevronRightIcon size={24} />
                   </button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
@@ -306,7 +306,13 @@ export default function TrainingsPage() {
                 to={`/training/${t.id}`}
                 style={itemStyle}
               >
-                {t.status === 'CANCELLED' ? <span style={{ fontSize: 20 }}>❌</span> : <span style={{ fontSize: 20 }}>⚽️</span>} Entraînement
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    {t.status === 'CANCELLED' ? <span style={{ fontSize: 24 }}>❌</span> : <SoccerBallIcon size={24} />}
+                    Entraînement
+                  </span>
+                  <ChevronRightIcon size={24} style={{ color: '#64748b' }} />
+                </span>
               </Link>
             ))
           )}
@@ -326,7 +332,13 @@ export default function TrainingsPage() {
                 to={`/plateau/${p.id}`}
                 style={itemStyle}
               >
-                <span style={{ fontSize: 20 }}>📍</span> Plateau — {p.lieu}
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <TrophyIcon size={24} />
+                    Plateau — {p.lieu}
+                  </span>
+                  <ChevronRightIcon size={24} style={{ color: '#64748b' }} />
+                </span>
               </Link>
             ))
           )}
