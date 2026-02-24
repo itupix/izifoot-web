@@ -121,10 +121,10 @@ export default function PlateauDetailsPage() {
       setError(null)
       try {
         const [p, ps, matches, attends] = await Promise.all([
-          apiGet<Plateau>(`/api/plateaus/${id}`),
-          apiGet<Player[]>('/api/players'),
-          apiGet<MatchLite[]>(`/api/matches?plateauId=${encodeURIComponent(id)}`),
-          apiGet<AttendanceRow[]>(`/api/attendance?session_type=PLATEAU&session_id=${encodeURIComponent(id)}`),
+          apiGet<Plateau>(`/plateaus/${id}`),
+          apiGet<Player[]>('/players'),
+          apiGet<MatchLite[]>(`/matches?plateauId=${encodeURIComponent(id)}`),
+          apiGet<AttendanceRow[]>(`/attendance?session_type=PLATEAU&session_id=${encodeURIComponent(id)}`),
         ])
         if (!cancelled) {
           setPlateau(p)
@@ -164,7 +164,7 @@ export default function PlateauDetailsPage() {
   async function togglePlateauPresence(playerId: string, present: boolean) {
     if (!id) return
     try {
-      await apiPost('/api/attendance', {
+      await apiPost('/attendance', {
         session_type: 'PLATEAU',
         session_id: id,
         playerId,
@@ -184,7 +184,7 @@ export default function PlateauDetailsPage() {
     const e = matchEdits[matchId]
     if (!e) return
     try {
-      const updated = await apiPut<MatchLite>(`/api/matches/${matchId}`, {
+      const updated = await apiPut<MatchLite>(`/matches/${matchId}`, {
         score: { home: e.home, away: e.away },
         opponentName: e.opponentName || undefined
       })
@@ -197,7 +197,7 @@ export default function PlateauDetailsPage() {
   async function deleteMatch(matchId: string) {
     if (!confirm('Supprimer définitivement ce match ?')) return
     try {
-      await apiDelete(`/api/matches/${matchId}`)
+      await apiDelete(`/matches/${matchId}`)
       setPlateauMatches(prev => prev.filter(m => m.id !== matchId))
       setMatchEdits(prev => { const n = { ...prev }; delete n[matchId]; return n })
     } catch (err: unknown) {
@@ -209,7 +209,7 @@ export default function PlateauDetailsPage() {
     if (!id) return
     if (!confirm('Supprimer définitivement ce plateau (et tous ses matchs) ?')) return
     try {
-      await apiDelete(`/api/plateaus/${id}`)
+      await apiDelete(`/plateaus/${id}`)
       navigate('/planning')
     } catch (err: unknown) {
       alert(`Erreur suppression plateau: ${getErrorMessage(err)}`)
@@ -245,7 +245,7 @@ export default function PlateauDetailsPage() {
         buteurs: scorers,
         opponentName: opponentName || undefined,
       }
-      const created = await apiPost<MatchLite>('/api/matches', payload)
+      const created = await apiPost<MatchLite>('/matches', payload)
       setPlateauMatches(prev => [created, ...prev])
       setHomeStarters([]); setAwayStarters([]); setHomeScore(0); setAwayScore(0); setScorers([]); setNewScorerPlayerId(''); setNewScorerSide('home'); setOpponentName('')
     } catch (err: unknown) {

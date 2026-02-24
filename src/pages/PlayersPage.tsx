@@ -108,7 +108,7 @@ export default function PlayersPage() {
     async function load() {
       setLoading(true); setError(null)
       try {
-        const list = await apiGet<Player[]>('/api/players')
+        const list = await apiGet<Player[]>('/players')
         if (!cancelled) setPlayers(list)
       } catch (err: unknown) {
         if (!cancelled) setError(getErrorMessage(err))
@@ -146,7 +146,7 @@ export default function PlayersPage() {
       }
       if (email.trim()) body.email = email.trim()
       if (phone.trim()) body.phone = phone.trim()
-      const p = await apiPost<Player>('/api/players', body)
+      const p = await apiPost<Player>('/players', body)
       setPlayers(prev => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
       setName('')
       setPrimary('MILIEU')
@@ -160,7 +160,7 @@ export default function PlayersPage() {
 
   async function updatePlayer(id: string, patch: Partial<Player>) {
     try {
-      const p = await apiPut<Player>(`/api/players/${id}`, patch)
+      const p = await apiPut<Player>(`/players/${id}`, patch)
       setPlayers(prev => prev.map(x => x.id === id ? p : x))
     } catch (err: unknown) {
       alert(`Erreur mise à jour: ${getErrorMessage(err)}`)
@@ -170,7 +170,7 @@ export default function PlayersPage() {
   async function removePlayer(id: string) {
     if (!confirm('Supprimer ce joueur ?')) return
     try {
-      await apiDelete(`/api/players/${id}`)
+      await apiDelete(`/players/${id}`)
       setPlayers(prev => prev.filter(p => p.id !== id))
       setDetailOpen(false)
       setSelectedPlayer(null)

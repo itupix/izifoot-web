@@ -1,9 +1,9 @@
 
 
 import { useEffect, useMemo, useState } from 'react'
+import { API_BASE } from '../api'
 
 // ---- Minimal API helpers (same style as other pages) ----
-const API_BASE = import.meta.env?.VITE_API_URL ?? ''
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
 function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.toString() }
 function getAuthHeaders(): Record<string, string> { const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null; return t ? { Authorization: `Bearer ${t}` } : {} }
@@ -59,10 +59,10 @@ export default function StatsPage() {
       setLoading(true); setError(null)
       try {
         const [rows, plist, plats, attends] = await Promise.all([
-          apiGet<MatchLite[]>('/api/matches'),
-          apiGet<Player[]>('/api/players'),
-          apiGet<Plateau[]>('/api/plateaus'),
-          apiGet<AttendanceRow[]>('/api/attendance')
+          apiGet<MatchLite[]>('/matches'),
+          apiGet<Player[]>('/players'),
+          apiGet<Plateau[]>('/plateaus'),
+          apiGet<AttendanceRow[]>('/attendance')
         ])
         if (!cancelled) { setMatches(rows); setPlayers(plist); setPlateaus(plats); setAttendance(attends) }
       } catch (err: unknown) {

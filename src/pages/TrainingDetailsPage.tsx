@@ -127,11 +127,11 @@ export default function TrainingDetailsPage() {
       setError(null)
       try {
         const [t, ps, dr, ds, att] = await Promise.all([
-          apiGet<Training>(`/api/trainings/${id}`),
-          apiGet<Player[]>('/api/players'),
-          apiGet<{ items: Drill[] }>('/api/drills'),
-          apiGet<TrainingDrill[]>(`/api/trainings/${id}/drills`),
-          apiGet<AttendanceRow[]>(`/api/attendance?session_type=TRAINING&session_id=${encodeURIComponent(id)}`),
+          apiGet<Training>(`/trainings/${id}`),
+          apiGet<Player[]>('/players'),
+          apiGet<{ items: Drill[] }>('/drills'),
+          apiGet<TrainingDrill[]>(`/trainings/${id}/drills`),
+          apiGet<AttendanceRow[]>(`/attendance?session_type=TRAINING&session_id=${encodeURIComponent(id)}`),
         ])
         if (!cancelled) {
           setTraining(t)
@@ -158,7 +158,7 @@ export default function TrainingDetailsPage() {
   async function setTrainingStatus(cancelled: boolean) {
     if (!training) return
     try {
-      const updated = await apiPut<Training>(`/api/trainings/${training.id}`, { status: cancelled ? 'CANCELLED' : 'PLANNED' })
+      const updated = await apiPut<Training>(`/trainings/${training.id}`, { status: cancelled ? 'CANCELLED' : 'PLANNED' })
       setTraining(updated)
     } catch (err: unknown) {
       alert(`Erreur mise à jour statut: ${getErrorMessage(err)}`)
@@ -169,7 +169,7 @@ export default function TrainingDetailsPage() {
     if (!training) return
     if (!confirm('Supprimer définitivement cet entraînement ?')) return
     try {
-      await apiDelete(`/api/trainings/${training.id}`)
+      await apiDelete(`/trainings/${training.id}`)
       navigate('/planning')
     } catch (err: unknown) {
       alert(`Erreur suppression: ${getErrorMessage(err)}`)
@@ -179,7 +179,7 @@ export default function TrainingDetailsPage() {
   async function togglePresence(playerId: string, present: boolean) {
     if (!training) return
     try {
-      await apiPost('/api/attendance', {
+      await apiPost('/attendance', {
         session_type: 'TRAINING',
         session_id: training.id,
         playerId,
@@ -198,7 +198,7 @@ export default function TrainingDetailsPage() {
   async function addDrill() {
     if (!training || !addDrillId) return
     try {
-      const row = await apiPost<TrainingDrill>(`/api/trainings/${training.id}/drills`, {
+      const row = await apiPost<TrainingDrill>(`/trainings/${training.id}/drills`, {
         drillId: addDrillId,
         notes: addNotes || undefined,
         duration: typeof addDuration === 'number' ? addDuration : undefined,
@@ -215,7 +215,7 @@ export default function TrainingDetailsPage() {
   async function removeDrill(trainingDrillId: string) {
     if (!training) return
     try {
-      await apiDelete(`/api/trainings/${training.id}/drills/${trainingDrillId}`)
+      await apiDelete(`/trainings/${training.id}/drills/${trainingDrillId}`)
       setDrills(prev => prev.filter(d => d.id !== trainingDrillId))
     } catch (err: unknown) {
       alert(`Erreur suppression: ${getErrorMessage(err)}`)
@@ -225,7 +225,7 @@ export default function TrainingDetailsPage() {
   async function updateDrill(trainingDrillId: string, patch: Partial<Pick<TrainingDrill, 'notes' | 'duration' | 'order'>>) {
     if (!training) return
     try {
-      const updated = await apiPut<TrainingDrill>(`/api/trainings/${training.id}/drills/${trainingDrillId}`, patch)
+      const updated = await apiPut<TrainingDrill>(`/trainings/${training.id}/drills/${trainingDrillId}`, patch)
       setDrills(prev => prev.map(d => d.id === trainingDrillId ? updated : d))
     } catch (err: unknown) {
       alert(`Erreur mise à jour: ${getErrorMessage(err)}`)

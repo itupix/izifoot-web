@@ -86,7 +86,7 @@ export default function MatchDay() {
     const player = data?.playersById?.[playerId]
     const body: { plateauId: string; email?: string } = { plateauId: id }
     if (withEmail && player?.email) body.email = player.email
-    const resp = await fetch(`${API_BASE}/api/players/${playerId}/invite`, {
+    const resp = await fetch(`${API_BASE}/players/${playerId}/invite`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -114,7 +114,7 @@ export default function MatchDay() {
       const player = data?.convocations.find(c => c.player.id === pid)?.player
       const body: { plateauId: string; email?: string } = { plateauId: id }
       if (withEmail && player?.email) body.email = player.email
-      const resp = await fetch(`${API_BASE}/api/players/${pid}/invite`, {
+      const resp = await fetch(`${API_BASE}/players/${pid}/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -147,7 +147,7 @@ export default function MatchDay() {
       try {
         setLoading(true)
         setError(null)
-        const resp = await fetch(`${API_BASE}/api/plateaus/${id}/summary`, {
+        const resp = await fetch(`${API_BASE}/plateaus/${id}/summary`, {
           credentials: 'include',
           signal: abort.signal
         })
