@@ -33,13 +33,6 @@ export default function Home() {
     color: '#0f172a',
   };
 
-  const subtitle: React.CSSProperties = {
-    color: '#334155',
-    fontSize: 18,
-    maxWidth: 520,
-    margin: '0 0 18px',
-  };
-
   const ctaRow: React.CSSProperties = {
     display: 'flex',
     gap: 12,
@@ -54,11 +47,6 @@ export default function Home() {
     marginTop: 8,
   };
 
-  const visualInner: React.CSSProperties = {
-    width: '100%',
-    height: 280,
-    display: 'block',
-  };
   const visualImage: React.CSSProperties = {
     width: '100%',
     height: '100%',
@@ -129,17 +117,6 @@ export default function Home() {
     color: 'white',
     fontWeight: 700,
     boxShadow: '0 10px 20px rgba(52,211,153,0.25), 0 2px 6px rgba(52,211,153,0.2)'
-  };
-
-  const secondaryBtn: React.CSSProperties = {
-    appearance: 'none',
-    border: '1px solid #e2e8f0',
-    textDecoration: 'none',
-    padding: '12px 18px',
-    borderRadius: 12,
-    background: 'white',
-    color: '#0f172a',
-    fontWeight: 700,
   };
 
   const footer: React.CSSProperties = {

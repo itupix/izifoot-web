@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 function buildHeaders(): Record<string, string> {
@@ -13,13 +13,6 @@ function full(url: string) {
 }
 
 // ------- Types ---------
-interface Player {
-  id: string
-  name: string
-  primary_position: string
-  secondary_position?: string | null
-}
-
 interface Training {
   id: string
   date: string // ISO
@@ -84,27 +77,24 @@ function getErrorMessage(err: unknown) {
 }
 
 export default function TrainingsPage() {
-  const [players, setPlayers] = useState<Player[]>([])
   const [trainings, setTrainings] = useState<Training[]>([])
   const [plateaus, setPlateaus] = useState<Plateau[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Load players + trainings + plateaus
+  // Load trainings + plateaus
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
       setError(null)
       try {
-        const [ps, ts, pls] = await Promise.all([
-          apiGet<Player[]>(full('/api/players')),
+        const [ts, pls] = await Promise.all([
           apiGet<Training[]>(full('/api/trainings')),
           apiGet<Plateau[]>(full('/api/plateaus')),
         ])
         if (!cancelled) {
-          setPlayers(ps)
           // sort by date desc
           ts.sort((a, b) => +new Date(b.date) - +new Date(a.date))
           setTrainings(ts)
@@ -136,7 +126,6 @@ export default function TrainingsPage() {
     try {
       const created = await apiPost<Plateau>(full('/api/plateaus'), { date: day.toISOString(), lieu: lieu.trim() })
       setPlateaus(prev => [created, ...prev])
-      setSelectedPlateauId(created.id)
     } catch (err: unknown) {
       alert(`Erreur création plateau: ${getErrorMessage(err)}`)
     }
@@ -148,22 +137,9 @@ export default function TrainingsPage() {
     try {
       const created = await apiPost<Training>(full('/api/trainings'), { date: day.toISOString() })
       setTrainings(prev => [created, ...prev])
-      setSelectedTrainingId(created.id)
     } catch (err: unknown) {
       alert(`Erreur création entraînement: ${getErrorMessage(err)}`)
     }
-  }
-
-  function readMultiSelect(sel: HTMLSelectElement): string[] {
-    return Array.from(sel.selectedOptions).map(o => o.value)
-  }
-  function addScorer() {
-    if (!newScorerPlayerId) return
-    setScorers(prev => [...prev, { playerId: newScorerPlayerId, side: newScorerSide }])
-    setNewScorerPlayerId('')
-  }
-  function removeScorer(i: number) {
-    setScorers(prev => prev.filter((_, idx) => idx !== i))
   }
 
   return (
