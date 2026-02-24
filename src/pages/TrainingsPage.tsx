@@ -20,10 +20,28 @@ function toDateOnly(dateISO: string) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
+function addDays(d: Date, amount: number) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + amount)
+}
+
+function formatDateTitle(d: Date) {
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(d)
+}
+
 export default function TrainingsPage() {
   const [trainings, setTrainings] = useState<Training[]>([])
   const [plateaus, setPlateaus] = useState<Plateau[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
+  const [pickerMonth, setPickerMonth] = useState<Date>(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
 
   // Load trainings + plateaus
   const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
@@ -38,12 +56,28 @@ export default function TrainingsPage() {
   }, [])
   // Derived data for selected day
   const selectedDayKey = useMemo(() => yyyyMmDd(selectedDate), [selectedDate])
+  const todayKey = useMemo(() => yyyyMmDd(new Date()), [])
+  const isTodaySelected = selectedDayKey === todayKey
   const dayTrainings = useMemo(() => {
     return trainings.filter(t => yyyyMmDd(toDateOnly(t.date)) === selectedDayKey)
   }, [trainings, selectedDayKey])
   const dayPlateaus = useMemo(() => {
     return plateaus.filter(p => yyyyMmDd(toDateOnly(p.date)) === selectedDayKey)
   }, [plateaus, selectedDayKey])
+  const monthLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('fr-FR', {
+        month: 'long',
+        year: 'numeric',
+      }).format(pickerMonth),
+    [pickerMonth],
+  )
+  const calendarCells = useMemo(() => {
+    const firstDay = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), 1)
+    const startOffset = (firstDay.getDay() + 6) % 7
+    const daysInMonth = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 0).getDate()
+    return Array.from({ length: startOffset + daysInMonth }, (_, idx) => idx - startOffset + 1)
+  }, [pickerMonth])
 
   // Auto-select not needed (details now on dedicated page)
 
@@ -69,70 +103,217 @@ export default function TrainingsPage() {
     }
   }
 
+  const blockStyle = {
+    display: 'grid',
+    gap: 12,
+    border: '1px solid #dbe5f1',
+    borderRadius: 16,
+    padding: 14,
+    background: 'linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)',
+    boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)',
+  } as const
+
+  const itemStyle = {
+    display: 'block',
+    width: '100%',
+    padding: '11px 12px',
+    textAlign: 'left' as const,
+    borderRadius: 10,
+    border: '1px solid #d6deea',
+    background: '#fff',
+    color: '#0f172a',
+    fontSize: 16,
+  }
+
+  const ctaButtonStyle = {
+    fontSize: 16,
+    fontWeight: 600,
+    border: 'none',
+    borderRadius: 10,
+    padding: '10px 12px',
+    background: '#0f172a',
+    color: '#fff',
+    cursor: 'pointer',
+    boxShadow: '0 8px 18px rgba(15, 23, 42, 0.22)',
+  } as const
+
   return (
-    <div style={{ display: 'grid', gap: 24 }}>
+    <div style={{ display: 'grid', gap: 24, fontSize: 16 }}>
       <div style={{ display: 'grid', gap: 12 }}>
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <h2 style={{ margin: 0 }}>Planning</h2>
-          <input
-            type="date"
-            value={selectedDayKey}
-            onChange={(e) => setSelectedDate(new Date(`${e.target.value}T00:00:00`))}
-            style={{ padding: 6, border: '1px solid #d1d5db', borderRadius: 6 }}
-          />
+        <header style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setSelectedDate((prev) => addDays(prev, -1))}
+              aria-label="Jour précédent"
+              style={{ border: '1px solid #d1d5db', borderRadius: 999, background: '#fff', width: 32, height: 32, cursor: 'pointer' }}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(new Date())}
+              aria-label="Revenir à aujourd'hui"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                margin: 0,
+                padding: 0,
+                textTransform: 'capitalize',
+                textAlign: 'center',
+                fontSize: 24,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {isTodaySelected ? "Aujourd'hui" : formatDateTitle(selectedDate)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate((prev) => addDays(prev, 1))}
+              aria-label="Jour suivant"
+              style={{ border: '1px solid #d1d5db', borderRadius: 999, background: '#fff', width: 32, height: 32, cursor: 'pointer' }}
+            >
+              ›
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPickerMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1))
+                setIsDatePickerOpen((prev) => !prev)
+              }}
+              aria-label="Choisir une date"
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: 8,
+                background: '#fff',
+                width: 36,
+                height: 32,
+                cursor: 'pointer',
+                display: 'grid',
+                placeItems: 'center',
+              }}
+            >
+              📅
+            </button>
+            {isDatePickerOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 42,
+                  right: 0,
+                  zIndex: 10,
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 10,
+                  boxShadow: '0 8px 20px rgba(0,0,0,0.1)',
+                  padding: 10,
+                  width: 250,
+                  display: 'grid',
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                    aria-label="Mois précédent"
+                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 28, height: 28, cursor: 'pointer' }}
+                  >
+                    ‹
+                  </button>
+                  <strong style={{ textTransform: 'capitalize', fontSize: 16 }}>{monthLabel}</strong>
+                  <button
+                    type="button"
+                    onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                    aria-label="Mois suivant"
+                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 28, height: 28, cursor: 'pointer' }}
+                  >
+                    ›
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+                  {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
+                    <div key={`${d}-${i}`} style={{ textAlign: 'center', fontSize: 16, color: '#64748b' }}>{d}</div>
+                  ))}
+                  {calendarCells.map((day, idx) => {
+                    if (day <= 0) {
+                      return <div key={`empty-${idx}`} />
+                    }
+                    const candidate = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), day)
+                    const isSelected = yyyyMmDd(candidate) === selectedDayKey
+                    return (
+                      <button
+                        key={`${pickerMonth.getFullYear()}-${pickerMonth.getMonth()}-${day}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDate(candidate)
+                          setIsDatePickerOpen(false)
+                        }}
+                        style={{
+                          border: '1px solid #d1d5db',
+                          borderRadius: 6,
+                          background: isSelected ? '#0f172a' : '#fff',
+                          color: isSelected ? '#fff' : '#0f172a',
+                          height: 28,
+                          cursor: 'pointer',
+                          fontSize: 16,
+                        }}
+                      >
+                        {day}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </header>
 
-        <div style={{ display: 'grid', gap: 8 }}>
-          <div style={{ fontSize: 12, color: '#6b7280' }}>Entraînements</div>
+        <section style={blockStyle}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#334155', letterSpacing: 0.2 }}>Entraînements</div>
           {dayTrainings.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#64748b' }}>Aucun entraînement ce jour.</div>
+            <div style={{ fontSize: 16, color: '#64748b', padding: '2px 2px 4px' }}>Aucun entraînement ce jour.</div>
           ) : (
             dayTrainings.map((t) => (
               <Link
                 key={t.id}
                 to={`/training/${t.id}`}
-                style={{
-                  display: 'block', width: '100%', padding: '8px 10px', textAlign: 'left', borderRadius: 8,
-                  border: '1px solid #d1d5db', background: '#fff'
-                }}
+                style={itemStyle}
               >
                 {t.status === 'CANCELLED' ? '❌ Entraînement' : '⚽️ Entraînement'}
               </Link>
             ))
           )}
-          <button onClick={() => createTrainingForDay(selectedDate)} style={{ fontSize: 12, border: '1px dashed #cbd5e1', borderRadius: 8, padding: '6px 10px', background: '#fff' }}>
-            + Ajouter un entraînement
+          <button onClick={() => createTrainingForDay(selectedDate)} style={ctaButtonStyle}>
+            Ajouter un entraînement
           </button>
-        </div>
+        </section>
 
-        <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-          <div style={{ fontSize: 12, color: '#6b7280' }}>Plateaux</div>
+        <section style={blockStyle}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#334155', letterSpacing: 0.2 }}>Plateaux</div>
           {dayPlateaus.length === 0 ? (
-            <div style={{ fontSize: 13, color: '#64748b' }}>Aucun plateau ce jour.</div>
+            <div style={{ fontSize: 16, color: '#64748b', padding: '2px 2px 4px' }}>Aucun plateau ce jour.</div>
           ) : (
             dayPlateaus.map((p) => (
               <Link
                 key={p.id}
                 to={`/plateau/${p.id}`}
-                style={{
-                  display: 'block', width: '100%', padding: '8px 10px', textAlign: 'left', borderRadius: 8,
-                  border: '1px solid #d1d5db', background: '#fff'
-                }}
+                style={itemStyle}
               >
                 📍 Plateau — {p.lieu}
               </Link>
             ))
           )}
-          <button onClick={() => createPlateauForDay(selectedDate)} style={{ fontSize: 12, border: '1px dashed #cbd5e1', borderRadius: 8, padding: '6px 10px', background: '#fff' }}>
-            + Ajouter un plateau
+          <button onClick={() => createPlateauForDay(selectedDate)} style={ctaButtonStyle}>
+            Ajouter un plateau
           </button>
-        </div>
+        </section>
       </div>
 
       <aside>
         {loading && <p>Chargement…</p>}
         {error && <p style={{ color: 'crimson' }}>{error}</p>}
-        <p>Les détails des plateaux sont disponibles sur leur page dédiée.</p>
       </aside>
     </div>
   )
