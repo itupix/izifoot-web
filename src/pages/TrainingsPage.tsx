@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/icons'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { uiAlert, uiPrompt } from '../ui'
@@ -137,18 +138,40 @@ export default function TrainingsPage() {
     boxShadow: '0 8px 18px rgba(15, 23, 42, 0.22)',
   } as const
 
+  const navIconButtonStyle = {
+    border: '1px solid #d1d5db',
+    borderRadius: 999,
+    background: '#fff',
+    width: 44,
+    height: 44,
+    cursor: 'pointer',
+    fontSize: 28,
+    lineHeight: 1,
+    display: 'grid',
+    placeItems: 'center',
+  } as const
+
   return (
     <div style={{ display: 'grid', gap: 24, fontSize: 16 }}>
       <div style={{ display: 'grid', gap: 12 }}>
         <header style={{ display: 'grid', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, position: 'relative' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '44px 1fr 44px 44px',
+              alignItems: 'center',
+              gap: 10,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
             <button
               type="button"
               onClick={() => setSelectedDate((prev) => addDays(prev, -1))}
               aria-label="Jour précédent"
-              style={{ border: '1px solid #d1d5db', borderRadius: 999, background: '#fff', width: 32, height: 32, cursor: 'pointer' }}
+              style={navIconButtonStyle}
             >
-              ‹
+              <ChevronLeftIcon size={26} />
             </button>
             <button
               type="button"
@@ -164,6 +187,7 @@ export default function TrainingsPage() {
                 fontSize: 24,
                 fontWeight: 700,
                 cursor: 'pointer',
+                width: '100%',
               }}
             >
               {isTodaySelected ? "Aujourd'hui" : formatDateTitle(selectedDate)}
@@ -172,9 +196,9 @@ export default function TrainingsPage() {
               type="button"
               onClick={() => setSelectedDate((prev) => addDays(prev, 1))}
               aria-label="Jour suivant"
-              style={{ border: '1px solid #d1d5db', borderRadius: 999, background: '#fff', width: 32, height: 32, cursor: 'pointer' }}
+              style={navIconButtonStyle}
             >
-              ›
+              <ChevronRightIcon size={26} />
             </button>
             <button
               type="button"
@@ -187,14 +211,15 @@ export default function TrainingsPage() {
                 border: '1px solid #d1d5db',
                 borderRadius: 8,
                 background: '#fff',
-                width: 36,
-                height: 32,
+                width: 44,
+                height: 44,
                 cursor: 'pointer',
                 display: 'grid',
                 placeItems: 'center',
+                fontSize: 24,
               }}
             >
-              📅
+              <CalendarIcon size={24} />
             </button>
             {isDatePickerOpen && (
               <div
@@ -218,18 +243,18 @@ export default function TrainingsPage() {
                     type="button"
                     onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
                     aria-label="Mois précédent"
-                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 28, height: 28, cursor: 'pointer' }}
+                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 36, height: 36, cursor: 'pointer', fontSize: 24 }}
                   >
-                    ‹
+                    <ChevronLeftIcon size={22} />
                   </button>
                   <strong style={{ textTransform: 'capitalize', fontSize: 16 }}>{monthLabel}</strong>
                   <button
                     type="button"
                     onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
                     aria-label="Mois suivant"
-                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 28, height: 28, cursor: 'pointer' }}
+                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 36, height: 36, cursor: 'pointer', fontSize: 24 }}
                   >
-                    ›
+                    <ChevronRightIcon size={22} />
                   </button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
@@ -281,7 +306,7 @@ export default function TrainingsPage() {
                 to={`/training/${t.id}`}
                 style={itemStyle}
               >
-                {t.status === 'CANCELLED' ? '❌ Entraînement' : '⚽️ Entraînement'}
+                {t.status === 'CANCELLED' ? <span style={{ fontSize: 20 }}>❌</span> : <span style={{ fontSize: 20 }}>⚽️</span>} Entraînement
               </Link>
             ))
           )}
@@ -301,7 +326,7 @@ export default function TrainingsPage() {
                 to={`/plateau/${p.id}`}
                 style={itemStyle}
               >
-                📍 Plateau — {p.lieu}
+                <span style={{ fontSize: 20 }}>📍</span> Plateau — {p.lieu}
               </Link>
             ))
           )}
