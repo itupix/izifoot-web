@@ -15,7 +15,7 @@ function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
 function bust(url: string) {
   const u = new URL(url, window.location.origin)
   u.searchParams.set('_', Date.now().toString())
-  return u.pathname + u.search
+  return u.toString()
 }
 function getAuthHeaders(): Record<string, string> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null

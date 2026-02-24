@@ -35,7 +35,7 @@ function getAuthHeaders(): Record<string, string> {
 function bust(url: string) {
   const u = new URL(url, window.location.origin)
   u.searchParams.set('_', Date.now().toString())
-  return u.pathname + u.search
+  return u.toString()
 }
 
 async function apiGet<T>(url: string): Promise<T> {

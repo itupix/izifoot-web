@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 // ---- Minimal API helpers (same style as other pages) ----
 const API_BASE = import.meta.env?.VITE_API_URL ?? ''
 function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
-function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.pathname + u.search }
+function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.toString() }
 function getAuthHeaders(): Record<string, string> { const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null; return t ? { Authorization: `Bearer ${t}` } : {} }
 function buildHeaders(): Record<string, string> { return { 'Content-Type': 'application/json', ...getAuthHeaders() } }
 async function apiGet<T>(url: string): Promise<T> {
