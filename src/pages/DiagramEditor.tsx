@@ -1,33 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { API_BASE } from '../api'
+import { apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-
-// --- API helpers identiques au reste ---
-function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
-function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.toString() }
-function getAuthHeaders(): Record<string, string> {
-  const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
-  return t ? { Authorization: `Bearer ${t}` } : {}
-}
-function buildHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
-}
-async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(bust(full(url)), { headers: buildHeaders(), credentials: 'include', cache: 'no-store' })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), { method: 'POST', headers: buildHeaders(), body: JSON.stringify(body), credentials: 'include', cache: 'no-store' })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-async function apiPut<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), { method: 'PUT', headers: buildHeaders(), body: JSON.stringify(body), credentials: 'include', cache: 'no-store' })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
+import { toErrorMessage } from '../errors'
+import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { uiAlert } from '../ui'
 
 // --- Types ---
 type Tool = 'select' | 'player' | 'cone' | 'arrow'
@@ -63,8 +40,7 @@ export default function DiagramEditor() {
   const [tool, setTool] = useState<Tool>('select')
   const [title, setTitle] = useState('Nouveau diagramme')
   const [data, setData] = useState<DiagramData>({ items: [] })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // context: either existing diagram id OR target drill/trainingDrill
@@ -73,26 +49,12 @@ export default function DiagramEditor() {
   const trainingDrillId = qs('trainingDrillId')
 
   // load if editing
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      if (!diagramId) return
-      setLoading(true); setError(null)
-      try {
-        const d = await apiGet<Diagram>(apiRoutes.diagrams.byId(diagramId))
-        if (!cancelled) {
-          setTitle(d.title || 'Diagramme')
-          setData(normalizeData(d.data))
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
-        if (!cancelled) setError(message)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+  const { loading, error, setError } = useAsyncLoader(async ({ isCancelled }) => {
+    if (!diagramId) return
+    const d = await apiGet<Diagram>(apiRoutes.diagrams.byId(diagramId))
+    if (isCancelled()) return
+    setTitle(d.title || 'Diagramme')
+    setData(normalizeData(d.data))
   }, [diagramId])
 
   // drawing interactions
@@ -172,7 +134,7 @@ export default function DiagramEditor() {
 
   async function save() {
     try {
-      setLoading(true); setError(null)
+      setSaving(true); setError(null)
       const payload = { title: title.trim() || 'Diagramme', data }
       let saved: Diagram
       if (diagramId) {
@@ -182,17 +144,17 @@ export default function DiagramEditor() {
       } else if (drillId) {
         saved = await apiPost<Diagram>(apiRoutes.drills.diagrams(drillId), payload)
       } else {
-        alert('Contexte manquant (drillId ou trainingDrillId)'); return
+        uiAlert('Contexte manquant (drillId ou trainingDrillId)'); return
       }
       // redirect or just notify
-      alert('Diagramme sauvegardé ✔️')
+      uiAlert('Diagramme sauvegardé ✔️')
       if (!diagramId) {
         navigate(`/diagram-editor?id=${saved.id}`)
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(toErrorMessage(err))
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
@@ -240,7 +202,7 @@ export default function DiagramEditor() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={save} disabled={loading} style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}>
+          <button onClick={save} disabled={loading || saving} style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}>
             {diagramId ? 'Mettre à jour' : 'Sauvegarder'}
           </button>
           <button onClick={delSelected} disabled={!selectedId} style={{ border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, background: '#fff', padding: '6px 10px' }}>

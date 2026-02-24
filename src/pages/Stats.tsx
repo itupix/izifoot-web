@@ -1,27 +1,10 @@
 
 
-import { useEffect, useMemo, useState } from 'react'
-import { API_BASE } from '../api'
+import { useMemo, useState } from 'react'
+import { apiGet } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-
-// ---- Minimal API helpers (same style as other pages) ----
-function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
-function bust(url: string) { const u = new URL(url, window.location.origin); u.searchParams.set('_', Date.now().toString()); return u.toString() }
-function getAuthHeaders(): Record<string, string> { const t = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null; return t ? { Authorization: `Bearer ${t}` } : {} }
-function buildHeaders(): Record<string, string> { return { 'Content-Type': 'application/json', ...getAuthHeaders() } }
-async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(bust(full(url)), { headers: buildHeaders(), credentials: 'include', cache: 'no-store' })
-  if (!res.ok) throw new Error(await res.text());
-  return res.json()
-}
-
-// ---- Types (subset of backend) ----
-interface MatchTeam { id: string; side: 'home' | 'away'; score: number }
-interface Scorer { playerId: string; side: 'home' | 'away' }
-interface MatchLite { id: string; createdAt: string; type: 'ENTRAINEMENT' | 'PLATEAU'; plateauId?: string | null; teams: MatchTeam[]; scorers?: Scorer[] }
-interface Player { id: string; name: string }
-interface Plateau { id: string; date: string; lieu: string }
-interface AttendanceRow { session_type: 'TRAINING' | 'PLATEAU'; session_id: string; playerId: string }
+import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
 
 // ---- Helpers ----
 function sortByDateAsc<T extends { createdAt: string }>(arr: T[]) { return arr.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) }
@@ -46,34 +29,24 @@ function prettyAvg(v: number) { return (Math.round(v * 100) / 100).toFixed(2) }
 
 export default function StatsPage() {
   const [matches, setMatches] = useState<MatchLite[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [plateaus, setPlateaus] = useState<Plateau[]>([])
   const [attendance, setAttendance] = useState<AttendanceRow[]>([])
   const [viewMode, setViewMode] = useState<'match' | 'plateau'>('match')
   const [rankTab, setRankTab] = useState<'buteurs' | 'entrainements' | 'plateaux'>('buteurs')
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true); setError(null)
-      try {
-        const [rows, plist, plats, attends] = await Promise.all([
-          apiGet<MatchLite[]>(apiRoutes.matches.list),
-          apiGet<Player[]>(apiRoutes.players.list),
-          apiGet<Plateau[]>(apiRoutes.plateaus.list),
-          apiGet<AttendanceRow[]>(apiRoutes.attendance.list)
-        ])
-        if (!cancelled) { setMatches(rows); setPlayers(plist); setPlateaus(plats); setAttendance(attends) }
-      } catch (err: unknown) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+    const [rows, plist, plats, attends] = await Promise.all([
+      apiGet<MatchLite[]>(apiRoutes.matches.list),
+      apiGet<Player[]>(apiRoutes.players.list),
+      apiGet<Plateau[]>(apiRoutes.plateaus.list),
+      apiGet<AttendanceRow[]>(apiRoutes.attendance.list)
+    ])
+    if (isCancelled()) return
+    setMatches(rows)
+    setPlayers(plist)
+    setPlateaus(plats)
+    setAttendance(attends)
   }, [])
 
   const ordered = useMemo(() => sortByDateAsc(matches), [matches])

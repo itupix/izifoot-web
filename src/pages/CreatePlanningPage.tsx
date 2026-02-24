@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { api } from '../api';
 import { useNavigate } from 'react-router-dom';
 import PlanningEditor, { type PlanningData } from '../components/PlanningEditor';
+import { toErrorMessage } from '../errors';
 
 export default function CreatePlanningPage() {
   const nav = useNavigate();
@@ -22,7 +23,7 @@ export default function CreatePlanningPage() {
       const p = await api.createPlanning(dateISO, dataObj);
       nav(`/plannings/${p.id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erreur');
+      setError(toErrorMessage(err));
     } finally {
       setSaving(false);
     }

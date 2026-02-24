@@ -1,93 +1,18 @@
 
 
 import React, { useEffect, useMemo, useState } from 'react'
+import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-
-// -------- API helpers (same style as TrainingsPage) --------
-const API_BASE = (() => {
-  const env = import.meta.env?.VITE_API_URL
-  if (env) return env
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:4000'
-  }
-  return window.location.origin
-})()
-function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
-function bust(url: string) {
-  const u = new URL(url, window.location.origin)
-  u.searchParams.set('_', Date.now().toString())
-  return u.toString()
-}
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-function buildHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
-}
-async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(bust(full(url)), {
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-async function apiPut<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'PUT',
-    headers: buildHeaders(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-async function apiDelete<T = unknown>(url: string): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'DELETE',
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-// -------- Types --------
-interface Player {
-  id: string
-  name: string
-  primary_position: string
-  secondary_position?: string | null
-  email?: string | null
-  phone?: string | null
-}
+import { toErrorMessage } from '../errors'
+import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { uiAlert, uiConfirm } from '../ui'
+import type { Player } from '../types/api'
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
-
-function getErrorMessage(err: unknown) {
-  return err instanceof Error ? err.message : String(err)
-}
 
 // -------- UI --------
 export default function PlayersPage() {
   const [players, setPlayers] = useState<Player[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
@@ -104,21 +29,9 @@ export default function PlayersPage() {
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true); setError(null)
-      try {
-        const list = await apiGet<Player[]>(apiRoutes.players.list)
-        if (!cancelled) setPlayers(list)
-      } catch (err: unknown) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+    const list = await apiGet<Player[]>(apiRoutes.players.list)
+    if (!isCancelled()) setPlayers(list)
   }, [])
 
   const filtered = useMemo(() => {
@@ -155,7 +68,7 @@ export default function PlayersPage() {
       setEmail(''); setPhone('')
       setModalOpen(false)
     } catch (err: unknown) {
-      alert(`Erreur création joueur: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur création joueur: ${toErrorMessage(err)}`)
     }
   }
 
@@ -164,19 +77,19 @@ export default function PlayersPage() {
       const p = await apiPut<Player>(apiRoutes.players.byId(id), patch)
       setPlayers(prev => prev.map(x => x.id === id ? p : x))
     } catch (err: unknown) {
-      alert(`Erreur mise à jour: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur mise à jour: ${toErrorMessage(err)}`)
     }
   }
 
   async function removePlayer(id: string) {
-    if (!confirm('Supprimer ce joueur ?')) return
+    if (!uiConfirm('Supprimer ce joueur ?')) return
     try {
       await apiDelete(apiRoutes.players.byId(id))
       setPlayers(prev => prev.filter(p => p.id !== id))
       setDetailOpen(false)
       setSelectedPlayer(null)
     } catch (err: unknown) {
-      alert(`Erreur suppression: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur suppression: ${toErrorMessage(err)}`)
     }
   }
 

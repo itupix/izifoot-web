@@ -3,8 +3,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
-import { API_BASE } from '../api'
+import { apiUrl } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { toErrorMessage } from '../errors'
+import { uiAlert } from '../ui'
+import type { Plateau, Player } from '../types/api'
 function useQuery() {
   const { search } = useLocation()
   return useMemo(() => new URLSearchParams(search), [search])
@@ -13,15 +16,6 @@ function useQuery() {
 // Normalize side/role helpers (handle casing)
 const normSide = (s: unknown): 'home' | 'away' => (String(s || '').toLowerCase() === 'away' ? 'away' : 'home')
 const isSub = (r: unknown) => String(r || '').toLowerCase() === 'sub'
-
-interface Player {
-  id: string
-  name: string
-  primary_position?: string | null
-  secondary_position?: string | null
-  email?: string | null
-  phone?: string | null
-}
 
 interface Convocation {
   player: Player
@@ -42,8 +36,6 @@ interface Match {
   scorersDetailed?: Scorer[]
   createdAt: string
 }
-
-interface Plateau { id: string; date: string; lieu: string; /* adresse?: string | null */ }
 
 interface SummaryResponse {
   plateau: Plateau
@@ -87,7 +79,7 @@ export default function MatchDay() {
     const player = data?.playersById?.[playerId]
     const body: { plateauId: string; email?: string } = { plateauId: id }
     if (withEmail && player?.email) body.email = player.email
-    const resp = await fetch(`${API_BASE}${apiRoutes.players.invite(playerId)}`, {
+    const resp = await fetch(apiUrl(apiRoutes.players.invite(playerId)), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -115,7 +107,7 @@ export default function MatchDay() {
       const player = data?.convocations.find(c => c.player.id === pid)?.player
       const body: { plateauId: string; email?: string } = { plateauId: id }
       if (withEmail && player?.email) body.email = player.email
-      const resp = await fetch(`${API_BASE}${apiRoutes.players.invite(pid)}`, {
+      const resp = await fetch(apiUrl(apiRoutes.players.invite(pid)), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -132,14 +124,14 @@ export default function MatchDay() {
     const ids = selectedIds
     if (!ids.length) return
     await genLinksForMany(ids, true)
-    alert(`Convocation envoyée pour ${ids.length} joueur(s) (si email dispo).`)
+    uiAlert(`Convocation envoyée pour ${ids.length} joueur(s) (si email dispo).`)
   }
 
   const generateLinksSelected = async () => {
     const ids = selectedIds
     if (!ids.length) return
     await genLinksForMany(ids, false)
-    alert(`Liens générés pour ${ids.length} joueur(s). Vous pouvez copier depuis la colonne RSVP.`)
+    uiAlert(`Liens générés pour ${ids.length} joueur(s). Vous pouvez copier depuis la colonne RSVP.`)
   }
 
   useEffect(() => {
@@ -149,7 +141,7 @@ export default function MatchDay() {
       try {
         setLoading(true)
         setError(null)
-        const resp = await fetch(`${API_BASE}${apiRoutes.plateaus.summary(id)}`, {
+        const resp = await fetch(apiUrl(apiRoutes.plateaus.summary(id)), {
           credentials: 'include',
           signal: abort.signal
         })
@@ -158,7 +150,7 @@ export default function MatchDay() {
         setData(json)
       } catch (err: unknown) {
         const isAbort = err instanceof DOMException && err.name === 'AbortError'
-        if (!isAbort) setError(err instanceof Error ? err.message : 'Erreur inconnue')
+        if (!isAbort) setError(toErrorMessage(err, 'Erreur inconnue'))
       } finally {
         setLoading(false)
       }

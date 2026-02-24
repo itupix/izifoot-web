@@ -2,8 +2,11 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { API_BASE } from '../api'
+import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { toErrorMessage } from '../errors'
+import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import type { Drill, DrillsResponse } from '../types/api'
 
 // Thumbnail helpers
 type DiagramData = { items?: unknown[] }
@@ -20,59 +23,7 @@ function normalizeDiagramData(input: unknown): DiagramData {
   }
 }
 
-// API helpers (same pattern as TrainingsPage)
-function full(url: string) { return API_BASE ? `${API_BASE}${url}` : url }
-function bust(url: string) {
-  const u = new URL(url, window.location.origin)
-  u.searchParams.set('_', Date.now().toString())
-  return u.toString()
-}
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-function buildHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
-}
-async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(bust(full(url)), {
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(bust(full(url)), {
-    method: 'POST',
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store',
-    body: JSON.stringify(body)
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
 // Types
-interface Drill {
-  id: string
-  title: string
-  category: string
-  duration: number
-  players: string
-  description: string
-  tags: string[]
-}
-
-interface DrillsResponse {
-  items: Drill[]
-  categories: string[]
-  tags: string[]
-}
-
 interface DiagramMeta {
   id: string
   title: string
@@ -135,8 +86,6 @@ export default function DrillsPage() {
   const [category, setCategory] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [diagramsByDrill, setDiagramsByDrill] = useState<Record<string, DiagramMeta[]>>({})
   const [loadingDiagramsFor, setLoadingDiagramsFor] = useState<string | null>(null)
 
@@ -181,21 +130,9 @@ export default function DrillsPage() {
     return () => { cancelled = true }
   }, [expanded, diagramsByDrill])
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true); setError(null)
-      try {
-        const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
-        if (!cancelled) setData(res)
-      } catch (err: unknown) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load();
-    return () => { cancelled = true }
+  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+    const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
+    if (!isCancelled()) setData(res)
   }, [])
 
   const filtered = useMemo(() => {
@@ -248,7 +185,7 @@ export default function DrillsPage() {
       // reset form
       setNewTitle(''); setNewCategory(''); setNewDuration(''); setNewPlayers(''); setNewDescription(''); setNewTags('')
     } catch (err: unknown) {
-      setCreateErr(err instanceof Error ? err.message : String(err))
+      setCreateErr(toErrorMessage(err))
     } finally {
       setCreating(false)
     }

@@ -1,98 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { API_BASE } from '../api'
+import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-
-interface Player {
-  id: string
-  name: string
-  primary_position: string
-  secondary_position?: string | null
-}
-
-interface Plateau {
-  id: string
-  date: string
-  lieu: string
-}
-
-interface AttendanceRow {
-  id: string
-  session_type: 'TRAINING' | 'PLATEAU'
-  session_id: string
-  playerId: string
-}
-
-interface MatchLite {
-  id: string
-  type: 'ENTRAINEMENT' | 'PLATEAU'
-  plateauId?: string | null
-  teams: { id: string; side: 'home' | 'away'; score: number; players: { player: { id: string; name: string } }[] }[]
-  scorers: { id: string; playerId: string; side: 'home' | 'away' }[]
-  opponentName?: string | null
-}
-
-function full(url: string) {
-  return API_BASE ? `${API_BASE}${url}` : url
-}
-
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-function buildHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
-}
-
-async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(full(url), {
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiPut<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'PUT',
-    headers: buildHeaders(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiDelete<T = unknown>(url: string): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'DELETE',
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-function getErrorMessage(err: unknown) {
-  return err instanceof Error ? err.message : String(err)
-}
+import { toErrorMessage } from '../errors'
+import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { uiAlert, uiConfirm } from '../ui'
+import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
 
 export default function PlateauDetailsPage() {
   const { id } = useParams<{ id: string }>()
@@ -102,8 +15,6 @@ export default function PlateauDetailsPage() {
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
   const [plateauMatches, setPlateauMatches] = useState<MatchLite[]>([])
   const [matchEdits, setMatchEdits] = useState<Record<string, { home: number; away: number; opponentName: string }>>({})
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const [homeStarters, setHomeStarters] = useState<string[]>([])
   const [awayStarters, setAwayStarters] = useState<string[]>([])
@@ -114,33 +25,19 @@ export default function PlateauDetailsPage() {
   const [newScorerSide, setNewScorerSide] = useState<'home' | 'away'>('home')
   const [opponentName, setOpponentName] = useState<string>('')
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      if (!id) return
-      setLoading(true)
-      setError(null)
-      try {
-        const [p, ps, matches, attends] = await Promise.all([
-          apiGet<Plateau>(apiRoutes.plateaus.byId(id)),
-          apiGet<Player[]>(apiRoutes.players.list),
-          apiGet<MatchLite[]>(apiRoutes.matches.byPlateau(id)),
-          apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', id)),
-        ])
-        if (!cancelled) {
-          setPlateau(p)
-          setPlayers(ps)
-          setPlateauMatches(matches)
-          setPlateauAttendance(new Set(attends.map(a => a.playerId)))
-        }
-      } catch (err: unknown) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+    if (!id) return
+    const [p, ps, matches, attends] = await Promise.all([
+      apiGet<Plateau>(apiRoutes.plateaus.byId(id)),
+      apiGet<Player[]>(apiRoutes.players.list),
+      apiGet<MatchLite[]>(apiRoutes.matches.byPlateau(id)),
+      apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', id)),
+    ])
+    if (isCancelled()) return
+    setPlateau(p)
+    setPlayers(ps)
+    setPlateauMatches(matches)
+    setPlateauAttendance(new Set(attends.map(a => a.playerId)))
   }, [id])
 
   useEffect(() => {
@@ -177,7 +74,7 @@ export default function PlateauDetailsPage() {
         return next
       })
     } catch (err: unknown) {
-      alert(`Erreur présence (plateau): ${getErrorMessage(err)}`)
+      uiAlert(`Erreur présence (plateau): ${toErrorMessage(err)}`)
     }
   }
 
@@ -191,29 +88,29 @@ export default function PlateauDetailsPage() {
       })
       setPlateauMatches(prev => prev.map(m => m.id === matchId ? updated : m))
     } catch (err: unknown) {
-      alert(`Erreur mise à jour du match: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur mise à jour du match: ${toErrorMessage(err)}`)
     }
   }
 
   async function deleteMatch(matchId: string) {
-    if (!confirm('Supprimer définitivement ce match ?')) return
+    if (!uiConfirm('Supprimer définitivement ce match ?')) return
     try {
       await apiDelete(apiRoutes.matches.byId(matchId))
       setPlateauMatches(prev => prev.filter(m => m.id !== matchId))
       setMatchEdits(prev => { const n = { ...prev }; delete n[matchId]; return n })
     } catch (err: unknown) {
-      alert(`Erreur suppression du match: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur suppression du match: ${toErrorMessage(err)}`)
     }
   }
 
   async function deletePlateau() {
     if (!id) return
-    if (!confirm('Supprimer définitivement ce plateau (et tous ses matchs) ?')) return
+    if (!uiConfirm('Supprimer définitivement ce plateau (et tous ses matchs) ?')) return
     try {
       await apiDelete(apiRoutes.plateaus.byId(id))
       navigate('/planning')
     } catch (err: unknown) {
-      alert(`Erreur suppression plateau: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur suppression plateau: ${toErrorMessage(err)}`)
     }
   }
 
@@ -250,7 +147,7 @@ export default function PlateauDetailsPage() {
       setPlateauMatches(prev => [created, ...prev])
       setHomeStarters([]); setAwayStarters([]); setHomeScore(0); setAwayScore(0); setScorers([]); setNewScorerPlayerId(''); setNewScorerSide('home'); setOpponentName('')
     } catch (err: unknown) {
-      alert(`Erreur création match: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur création match: ${toErrorMessage(err)}`)
     }
   }
 
@@ -378,12 +275,12 @@ export default function PlateauDetailsPage() {
               return (
                 <div key={m.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <div><strong>Home</strong> {home ? `(${home.players.map(p => p.player.name).join(', ')})` : ''}</div>
+                    <div><strong>Home</strong> {home ? `(${home.players?.map(p => p.player.name).join(', ') || ''})` : ''}</div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontWeight: 700 }}>{home?.score ?? 0} - {away?.score ?? 0}</div>
                       {m.opponentName && <div style={{ fontSize: 12, color: '#6b7280' }}>vs {m.opponentName}</div>}
                     </div>
-                    <div><strong>Away</strong> {away ? `(${away.players.map(p => p.player.name).join(', ')})` : ''}</div>
+                    <div><strong>Away</strong> {away ? `(${away.players?.map(p => p.player.name).join(', ') || ''})` : ''}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
                     <label style={{ fontSize: 12, color: '#6b7280' }}>Score</label>

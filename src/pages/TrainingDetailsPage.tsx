@@ -1,110 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { API_BASE } from '../api'
+import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-
-interface Drill {
-  id: string
-  title: string
-  category: string
-  duration: number
-  players: string
-  description: string
-  tags: string[]
-}
-
-interface TrainingDrill {
-  id: string
-  trainingId: string
-  drillId: string
-  order: number
-  duration?: number | null
-  notes?: string | null
-  meta?: Drill | null
-}
-
-interface Player {
-  id: string
-  name: string
-  primary_position: string
-  secondary_position?: string | null
-}
-
-interface Training {
-  id: string
-  date: string // ISO
-  status: string
-}
-
-interface AttendanceRow {
-  id: string
-  session_type: 'TRAINING' | 'PLATEAU'
-  session_id: string
-  playerId: string
-}
-
-function full(url: string) {
-  return API_BASE ? `${API_BASE}${url}` : url
-}
-
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-function buildHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
-}
-
-async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(full(url), {
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiPut<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'PUT',
-    headers: buildHeaders(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiDelete<T = unknown>(url: string): Promise<T> {
-  const res = await fetch(full(url), {
-    method: 'DELETE',
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-function getErrorMessage(err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err)
-  return msg.includes('<!DOCTYPE') ? 'Erreur serveur' : msg
-}
+import { toErrorMessage } from '../errors'
+import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { uiAlert, uiConfirm } from '../ui'
+import type { AttendanceRow, Drill, Player, Training, TrainingDrill } from '../types/api'
 
 export default function TrainingDetailsPage() {
   const { id } = useParams<{ id: string }>()
@@ -117,38 +18,21 @@ export default function TrainingDetailsPage() {
   const [addDrillId, setAddDrillId] = useState<string>('')
   const [addNotes, setAddNotes] = useState<string>('')
   const [addDuration, setAddDuration] = useState<number | ''>('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      if (!id) return
-      setLoading(true)
-      setError(null)
-      try {
-        const [t, ps, dr, ds, att] = await Promise.all([
-          apiGet<Training>(apiRoutes.trainings.byId(id)),
-          apiGet<Player[]>(apiRoutes.players.list),
-          apiGet<{ items: Drill[] }>(apiRoutes.drills.list),
-          apiGet<TrainingDrill[]>(apiRoutes.trainings.drills(id)),
-          apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('TRAINING', id)),
-        ])
-        if (!cancelled) {
-          setTraining(t)
-          setPlayers(ps)
-          setCatalog(dr.items)
-          setDrills(ds)
-          setAttendance(new Set(att.map(a => a.playerId)))
-        }
-      } catch (err: unknown) {
-        if (!cancelled) setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+    if (!id) return
+    const [t, ps, dr, ds, att] = await Promise.all([
+      apiGet<Training>(apiRoutes.trainings.byId(id)),
+      apiGet<Player[]>(apiRoutes.players.list),
+      apiGet<{ items: Drill[] }>(apiRoutes.drills.list),
+      apiGet<TrainingDrill[]>(apiRoutes.trainings.drills(id)),
+      apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('TRAINING', id)),
+    ])
+    if (isCancelled()) return
+    setTraining(t)
+    setPlayers(ps)
+    setCatalog(dr.items)
+    setDrills(ds)
+    setAttendance(new Set(att.map(a => a.playerId)))
   }, [id])
 
   const trainingDateLabel = useMemo(() => {
@@ -162,18 +46,18 @@ export default function TrainingDetailsPage() {
       const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), { status: cancelled ? 'CANCELLED' : 'PLANNED' })
       setTraining(updated)
     } catch (err: unknown) {
-      alert(`Erreur mise à jour statut: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur mise à jour statut: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
 
   async function deleteTraining() {
     if (!training) return
-    if (!confirm('Supprimer définitivement cet entraînement ?')) return
+    if (!uiConfirm('Supprimer définitivement cet entraînement ?')) return
     try {
       await apiDelete(apiRoutes.trainings.byId(training.id))
       navigate('/planning')
     } catch (err: unknown) {
-      alert(`Erreur suppression: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur suppression: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
 
@@ -192,7 +76,7 @@ export default function TrainingDetailsPage() {
         return next
       })
     } catch (err: unknown) {
-      alert(`Erreur présence: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur présence: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
 
@@ -209,7 +93,7 @@ export default function TrainingDetailsPage() {
       setAddNotes('')
       setAddDuration('')
     } catch (err: unknown) {
-      alert(`Erreur ajout exercice: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur ajout exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
 
@@ -219,7 +103,7 @@ export default function TrainingDetailsPage() {
       await apiDelete(apiRoutes.trainings.drillById(training.id, trainingDrillId))
       setDrills(prev => prev.filter(d => d.id !== trainingDrillId))
     } catch (err: unknown) {
-      alert(`Erreur suppression: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur suppression: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
 
@@ -229,7 +113,7 @@ export default function TrainingDetailsPage() {
       const updated = await apiPut<TrainingDrill>(apiRoutes.trainings.drillById(training.id, trainingDrillId), patch)
       setDrills(prev => prev.map(d => d.id === trainingDrillId ? updated : d))
     } catch (err: unknown) {
-      alert(`Erreur mise à jour: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur mise à jour: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
 

@@ -6,6 +6,7 @@ import '../index.css';
 import whistleImg from '../assets/whistle.png';
 import slateImg from '../assets/slate.png';
 import ballImg from '../assets/ball.png';
+import { toErrorMessage } from '../errors';
 
 export default function Home() {
   const { me, login, register } = useAuth();
@@ -161,7 +162,7 @@ export default function Home() {
       }
       navigate('/planning');
     } catch (err: unknown) {
-      setAuthError(err instanceof Error ? err.message : 'Erreur');
+      setAuthError(toErrorMessage(err));
     } finally {
       setAuthLoading(false);
     }

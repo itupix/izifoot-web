@@ -1,33 +1,25 @@
 // src/pages/PlanningsListPage.tsx
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api, type Planning } from '../api';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAsyncLoader } from '../hooks/useAsyncLoader';
 
 export default function PlanningsListPage() {
   const [items, setItems] = useState<Planning[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const nav = useNavigate();
 
-  const load = async () => {
-    try {
-      setError(null);
-      const res = await api.listPlannings();
-      setItems(res);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erreur');
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
+  const { error } = useAsyncLoader(async ({ isCancelled }) => {
+    const res = await api.listPlannings();
+    if (!isCancelled()) setItems(res);
+  }, [reloadToken]);
 
   return (
     <div>
       <h2>Mes plannings</h2>
       <div style={{ margin: '8px 0' }}>
         <button onClick={() => nav('/plannings/new')}>Créer un planning</button>
-        <button onClick={load} style={{ marginLeft: 8 }}>Rafraîchir</button>
+        <button onClick={() => setReloadToken(x => x + 1)} style={{ marginLeft: 8 }}>Rafraîchir</button>
       </div>
       {error && <div style={{ color: 'crimson' }}>{error}</div>}
       {!items ? (

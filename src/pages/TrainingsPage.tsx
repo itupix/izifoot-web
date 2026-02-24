@@ -1,64 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { API_BASE } from '../api'
+import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { toErrorMessage } from '../errors'
+import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { uiAlert, uiPrompt } from '../ui'
+import type { Plateau, Training } from '../types/api'
 
-function buildHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
-}
-
-
-function full(url: string) {
-  return API_BASE ? `${API_BASE}${url}` : url
-}
-
-// ------- Types ---------
-interface Training {
-  id: string
-  date: string // ISO
-  status: string
-}
-
-interface Plateau {
-  id: string
-  date: string // ISO
-  lieu: string
-}
-
-
-// ------- Helpers ---------
-function getAuthHeaders(): Record<string, string> {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-function bust(url: string) {
-  const u = new URL(url, window.location.origin)
-  u.searchParams.set('_', Date.now().toString())
-  return u.toString()
-}
-
-async function apiGet<T>(url: string): Promise<T> {
-  const res = await fetch(bust(url), {
-    headers: buildHeaders(),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-
-async function apiPost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify(body),
-    credentials: 'include',
-    cache: 'no-store'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
 
 function yyyyMmDd(d: Date) {
   const y = d.getFullYear()
@@ -72,42 +20,21 @@ function toDateOnly(dateISO: string) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-function getErrorMessage(err: unknown) {
-  return err instanceof Error ? err.message : String(err)
-}
-
 export default function TrainingsPage() {
   const [trainings, setTrainings] = useState<Training[]>([])
   const [plateaus, setPlateaus] = useState<Plateau[]>([])
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   // Load trainings + plateaus
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const [ts, pls] = await Promise.all([
-          apiGet<Training[]>(full(apiRoutes.trainings.list)),
-          apiGet<Plateau[]>(full(apiRoutes.plateaus.list)),
-        ])
-        if (!cancelled) {
-          // sort by date desc
-          ts.sort((a, b) => +new Date(b.date) - +new Date(a.date))
-          setTrainings(ts)
-          setPlateaus(pls)
-        }
-      } catch (err: unknown) {
-        setError(getErrorMessage(err))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
+  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+    const [ts, pls] = await Promise.all([
+      apiGet<Training[]>(apiRoutes.trainings.list),
+      apiGet<Plateau[]>(apiRoutes.plateaus.list),
+    ])
+    if (isCancelled()) return
+    ts.sort((a, b) => +new Date(b.date) - +new Date(a.date))
+    setTrainings(ts)
+    setPlateaus(pls)
   }, [])
   // Derived data for selected day
   const selectedDayKey = useMemo(() => yyyyMmDd(selectedDate), [selectedDate])
@@ -121,13 +48,13 @@ export default function TrainingsPage() {
   // Auto-select not needed (details now on dedicated page)
 
   async function createPlateauForDay(day: Date) {
-    const lieu = window.prompt('Lieu du plateau ?') || ''
+    const lieu = uiPrompt('Lieu du plateau ?') || ''
     if (!lieu.trim()) return
     try {
-      const created = await apiPost<Plateau>(full(apiRoutes.plateaus.list), { date: day.toISOString(), lieu: lieu.trim() })
+      const created = await apiPost<Plateau>(apiRoutes.plateaus.list, { date: day.toISOString(), lieu: lieu.trim() })
       setPlateaus(prev => [created, ...prev])
     } catch (err: unknown) {
-      alert(`Erreur création plateau: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur création plateau: ${toErrorMessage(err)}`)
     }
   }
 
@@ -135,10 +62,10 @@ export default function TrainingsPage() {
 
   async function createTrainingForDay(day: Date) {
     try {
-      const created = await apiPost<Training>(full(apiRoutes.trainings.list), { date: day.toISOString() })
+      const created = await apiPost<Training>(apiRoutes.trainings.list, { date: day.toISOString() })
       setTrainings(prev => [created, ...prev])
     } catch (err: unknown) {
-      alert(`Erreur création entraînement: ${getErrorMessage(err)}`)
+      uiAlert(`Erreur création entraînement: ${toErrorMessage(err)}`)
     }
   }
 
