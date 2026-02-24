@@ -16,6 +16,7 @@ import PlayersPage from './pages/PlayersPage';
 import DiagramEditor from './pages/DiagramEditor';
 import StatsPage from './pages/Stats';
 import MatchDay from './pages/MatchDay';
+import { MenuIcon } from './components/icons';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { me, loading } = useAuth();
@@ -30,7 +31,7 @@ export default function App() {
   const isHome = location.pathname === '/';
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const headerHeight = 56;
+  const headerHeight = 64;
   const handleLogout = async () => {
     await logout();
     navigate('/');
@@ -58,11 +59,26 @@ export default function App() {
             <button
               onClick={() => setMenuOpen(true)}
               aria-label="Ouvrir le menu"
-              style={{ border: '1px solid #e2e8f0', borderRadius: 10, background: '#fff', padding: '8px 10px' }}
+              style={{
+                border: '1px solid #d1d5db',
+                borderRadius: 999,
+                background: '#fff',
+                width: 44,
+                height: 44,
+                display: 'grid',
+                placeItems: 'center',
+                cursor: 'pointer',
+              }}
             >
-              ☰
+              <MenuIcon size={24} />
             </button>
-            <Link to="/planning" className={style.logo} style={{ textDecoration: 'none', fontWeight: 700 }}>izifoot</Link>
+            <Link
+              to="/planning"
+              className={style.logo}
+              style={{ textDecoration: 'none', fontWeight: 800, fontSize: 34, lineHeight: 1 }}
+            >
+              izifoot
+            </Link>
           </header>
           {menuOpen && (
             <div

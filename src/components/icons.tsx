@@ -72,3 +72,11 @@ export function TrophyIcon({ size, style }: IconProps) {
     </IconBase>
   )
 }
+
+export function MenuIcon({ size, style }: IconProps) {
+  return (
+    <IconBase size={size} style={style}>
+      <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </IconBase>
+  )
+}
