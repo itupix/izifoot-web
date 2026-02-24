@@ -9,6 +9,8 @@ import Home from './pages/Home';
 import { useAuth } from './useAuth';
 import style from './App.module.css'
 import TrainingsPage from './pages/TrainingsPage';
+import TrainingDetailsPage from './pages/TrainingDetailsPage';
+import PlateauDetailsPage from './pages/PlateauDetailsPage';
 import DrillsPage from './pages/Drills';
 import PlayersPage from './pages/PlayersPage';
 import DiagramEditor from './pages/DiagramEditor';
@@ -113,6 +115,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/account" element={<Protected><AccountPage /></Protected>} />
           <Route path="/planning" element={<Protected><TrainingsPage /></Protected>} />
+          <Route path="/training/:id" element={<Protected><TrainingDetailsPage /></Protected>} />
+          <Route path="/plateau/:id" element={<Protected><PlateauDetailsPage /></Protected>} />
           <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
           <Route path="/exercices/:id" element={<Protected><DrillsPage /></Protected>} />
           <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
