@@ -74,8 +74,6 @@ interface Player {
   secondary_position?: string | null
   email?: string | null
   phone?: string | null
-  invitePresentUrl?: string
-  inviteAbsentUrl?: string
 }
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
@@ -86,27 +84,13 @@ function getErrorMessage(err: unknown) {
 
 // -------- UI --------
 export default function PlayersPage() {
-  // Invite player helper, now with setPlayers access
-  async function invitePlayer(playerId: string, email?: string) {
-    const plateauId = window.prompt('ID du plateau pour ces liens RSVP ?') || ''
-    if (!plateauId) return
-    const body: { plateauId: string; email?: string } = { plateauId }
-    if (email) body.email = email
-    const res = await apiPost<{ ok: boolean; presentUrl: string; absentUrl: string }>(
-      `/api/players/${playerId}/invite`,
-      body
-    )
-    setPlayers(prev =>
-      prev.map(p =>
-        p.id === playerId
-          ? { ...p, invitePresentUrl: res.presentUrl, inviteAbsentUrl: res.absentUrl }
-          : p
-      )
-    )
-  }
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [detailEdit, setDetailEdit] = useState(false)
 
   // form create
   const [name, setName] = useState('')
@@ -168,6 +152,7 @@ export default function PlayersPage() {
       setPrimary('MILIEU')
       setSecondary('')
       setEmail(''); setPhone('')
+      setModalOpen(false)
     } catch (err: unknown) {
       alert(`Erreur création joueur: ${getErrorMessage(err)}`)
     }
@@ -187,183 +172,259 @@ export default function PlayersPage() {
     try {
       await apiDelete(`/api/players/${id}`)
       setPlayers(prev => prev.filter(p => p.id !== id))
+      setDetailOpen(false)
+      setSelectedPlayer(null)
     } catch (err: unknown) {
       alert(`Erreur suppression: ${getErrorMessage(err)}`)
     }
   }
 
+  function openDetails(p: Player) {
+    setSelectedPlayer(p)
+    setDetailOpen(true)
+    setDetailEdit(false)
+  }
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24 }}>
-      {/* Sidebar create/filter */}
-      <aside>
-        <h2 style={{ marginTop: 0 }}>Effectif</h2>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <h2 style={{ marginTop: 0 }}>Effectif</h2>
 
-        <form onSubmit={createPlayer} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, marginBottom: 16, background: '#fff' }}>
-          <strong style={{ display: 'block', marginBottom: 8 }}>Ajouter un joueur</strong>
-          <div style={{ display: 'grid', gap: 8 }}>
-            <input
-              placeholder="Nom"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              required
-              style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-            />
-            <label style={{ fontSize: 12, color: '#6b7280' }}>Poste principal</label>
-            <select value={primary} onChange={e => setPrimary(e.target.value as typeof POSITIONS[number])} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
-              {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <input
-              placeholder="Poste secondaire (optionnel)"
-              list="positions"
-              value={secondary}
-              onChange={e => setSecondary(e.target.value)}
-              style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-            />
-            <datalist id="positions">
-              {POSITIONS.map(p => <option key={p} value={p} />)}
-            </datalist>
-            <input
-              placeholder="Email (optionnel)"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-            />
-            <input
-              placeholder="Téléphone (optionnel)"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-            />
-            <button type="submit" style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6' }}>Ajouter</button>
-          </div>
-        </form>
-
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff' }}>
-          <strong style={{ display: 'block', marginBottom: 8 }}>Filtres</strong>
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 12 }}>
           <input
             placeholder="Recherche par nom"
             value={q}
             onChange={e => setQ(e.target.value)}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
           />
           <select value={posFilter} onChange={e => setPosFilter(e.target.value)} style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
             <option value="">Tous les postes</option>
             {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
-      </aside>
+      </div>
 
-      {/* Main list */}
-      <main>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ color: '#6b7280', fontSize: 14 }}>{filtered.length} joueur(s)</div>
-          {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
-          {error && <div style={{ color: 'crimson' }}>{error}</div>}
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ color: '#6b7280', fontSize: 14 }}>{filtered.length} joueur(s)</div>
+        {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
+        {error && <div style={{ color: 'crimson' }}>{error}</div>}
+      </div>
 
-        <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ background: '#f9fafb' }}>
-              <tr>
-                <th style={th}>Nom</th>
-                <th style={th}>Poste principal</th>
-                <th style={th}>Poste secondaire</th>
-                <th style={th}>Email</th>
-                <th style={th}>Téléphone</th>
-                <th style={th}>Invitation</th>
-                <th style={th}>Actions</th>
+      <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead style={{ background: '#f9fafb' }}>
+            <tr>
+              <th style={th}>Nom</th>
+              <th style={th}>Poste principal</th>
+              <th style={th}>Poste secondaire</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(p => (
+              <tr key={p.id} onClick={() => openDetails(p)} style={{ cursor: 'pointer' }}>
+                <td style={td}>{p.name}</td>
+                <td style={td}>{p.primary_position}</td>
+                <td style={td}>{p.secondary_position || '—'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.map(p => (
-                <tr key={p.id}>
-                  <td style={td}>
-                    <InlineEdit
-                      value={p.name}
-                      onSave={(v) => v !== p.name && updatePlayer(p.id, { name: v })}
-                    />
-                  </td>
-                  <td style={td}>
-                    <SelectInline
-                      value={p.primary_position}
-                      options={[...POSITIONS]}
-                      onChange={(v) => v !== p.primary_position && updatePlayer(p.id, { primary_position: v })}
-                    />
-                  </td>
-                  <td style={td}>
-                    <SelectInline
-                      value={p.secondary_position || ''}
-                      options={['', ...POSITIONS]}
-                      onChange={(v) => (v || null) !== (p.secondary_position || null) && updatePlayer(p.id, { secondary_position: v || null })}
-                    />
-                  </td>
-                  <td style={td}>
-                    <InlineEdit
-                      value={p.email || ''}
-                      onSave={(v) => v !== (p.email || '') && updatePlayer(p.id, { email: v || null })}
-                    />
-                  </td>
-                  <td style={td}>
-                    <InlineEdit
-                      value={p.phone || ''}
-                      onSave={(v) => v !== (p.phone || '') && updatePlayer(p.id, { phone: v || null })}
-                    />
-                  </td>
-                  <td style={td}>
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input
-                          value={p.invitePresentUrl || ''}
-                          readOnly
-                          placeholder="URL Présence"
-                          style={{ flex: 1, padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                        />
-                        <button
-                          disabled={!p.invitePresentUrl}
-                          onClick={() => p.invitePresentUrl && navigator.clipboard.writeText(p.invitePresentUrl)}
-                          style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
-                        >
-                          Copier
-                        </button>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input
-                          value={p.inviteAbsentUrl || ''}
-                          readOnly
-                          placeholder="URL Absence"
-                          style={{ flex: 1, padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                        />
-                        <button
-                          disabled={!p.inviteAbsentUrl}
-                          onClick={() => p.inviteAbsentUrl && navigator.clipboard.writeText(p.inviteAbsentUrl)}
-                          style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
-                        >
-                          Copier
-                        </button>
-                      </div>
-                      <div>
-                        <button
-                          onClick={() => invitePlayer(p.id, p.email || undefined)}
-                          style={{ border: '1px solid #10b981', color: '#10b981', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
-                        >
-                          Générer…
-                        </button>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={td}>
-                    <button onClick={() => removePlayer(p.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>Supprimer</button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td style={{ ...td, textAlign: 'center' }} colSpan={7}>Aucun joueur</td></tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td style={{ ...td, textAlign: 'center' }} colSpan={3}>Aucun joueur</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {detailOpen && selectedPlayer && (
+        <>
+          <div
+            onClick={() => setDetailOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 40 }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 'min(460px, 92vw)',
+              background: '#fff',
+              borderRadius: 12,
+              padding: 16,
+              border: '1px solid #e5e7eb',
+              zIndex: 45,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong>Détails joueur</strong>
+              <button onClick={() => setDetailOpen(false)} style={{ border: 'none', background: 'transparent', fontSize: 18 }}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <label style={{ fontSize: 12, color: '#6b7280' }}>Nom</label>
+              {detailEdit ? (
+                <InlineEdit
+                  value={selectedPlayer.name}
+                  onSave={(v) => {
+                    if (v !== selectedPlayer.name) updatePlayer(selectedPlayer.id, { name: v })
+                    setSelectedPlayer(prev => prev ? { ...prev, name: v } : prev)
+                  }}
+                />
+              ) : (
+                <div>{selectedPlayer.name}</div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </main>
+              <label style={{ fontSize: 12, color: '#6b7280' }}>Poste principal</label>
+              {detailEdit ? (
+                <SelectInline
+                  value={selectedPlayer.primary_position}
+                  options={[...POSITIONS]}
+                  onChange={(v) => {
+                    if (v !== selectedPlayer.primary_position) updatePlayer(selectedPlayer.id, { primary_position: v })
+                    setSelectedPlayer(prev => prev ? { ...prev, primary_position: v } : prev)
+                  }}
+                />
+              ) : (
+                <div>{selectedPlayer.primary_position}</div>
+              )}
+              <label style={{ fontSize: 12, color: '#6b7280' }}>Poste secondaire</label>
+              {detailEdit ? (
+                <SelectInline
+                  value={selectedPlayer.secondary_position || ''}
+                  options={['', ...POSITIONS]}
+                  onChange={(v) => {
+                    const next = v || null
+                    if (next !== (selectedPlayer.secondary_position || null)) updatePlayer(selectedPlayer.id, { secondary_position: next })
+                    setSelectedPlayer(prev => prev ? { ...prev, secondary_position: next } : prev)
+                  }}
+                />
+              ) : (
+                <div>{selectedPlayer.secondary_position || '—'}</div>
+              )}
+              <label style={{ fontSize: 12, color: '#6b7280' }}>Email</label>
+              {detailEdit ? (
+                <InlineEdit
+                  value={selectedPlayer.email || ''}
+                  onSave={(v) => {
+                    const next = v || null
+                    if (next !== (selectedPlayer.email || null)) updatePlayer(selectedPlayer.id, { email: next })
+                    setSelectedPlayer(prev => prev ? { ...prev, email: next } : prev)
+                  }}
+                />
+              ) : (
+                <div>{selectedPlayer.email || '—'}</div>
+              )}
+              <label style={{ fontSize: 12, color: '#6b7280' }}>Téléphone</label>
+              {detailEdit ? (
+                <InlineEdit
+                  value={selectedPlayer.phone || ''}
+                  onSave={(v) => {
+                    const next = v || null
+                    if (next !== (selectedPlayer.phone || null)) updatePlayer(selectedPlayer.id, { phone: next })
+                    setSelectedPlayer(prev => prev ? { ...prev, phone: next } : prev)
+                  }}
+                />
+              ) : (
+                <div>{selectedPlayer.phone || '—'}</div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                <button
+                  onClick={() => setDetailEdit(!detailEdit)}
+                  style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+                >
+                  {detailEdit ? 'Terminer' : 'Modifier'}
+                </button>
+                <button onClick={() => removePlayer(selectedPlayer.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {modalOpen && (
+        <>
+          <div
+            onClick={() => setModalOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 40 }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 'min(420px, 90vw)',
+              background: '#fff',
+              borderRadius: 12,
+              padding: 16,
+              border: '1px solid #e5e7eb',
+              zIndex: 45,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong>Ajouter un joueur</strong>
+              <button onClick={() => setModalOpen(false)} style={{ border: 'none', background: 'transparent', fontSize: 18 }}>✕</button>
+            </div>
+            <form onSubmit={createPlayer} style={{ display: 'grid', gap: 8 }}>
+              <input
+                placeholder="Nom"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                required
+                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+              />
+              <label style={{ fontSize: 12, color: '#6b7280' }}>Poste principal</label>
+              <select value={primary} onChange={e => setPrimary(e.target.value as typeof POSITIONS[number])} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <input
+                placeholder="Poste secondaire (optionnel)"
+                list="positions"
+                value={secondary}
+                onChange={e => setSecondary(e.target.value)}
+                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+              />
+              <datalist id="positions">
+                {POSITIONS.map(p => <option key={p} value={p} />)}
+              </datalist>
+              <input
+                placeholder="Email (optionnel)"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+              />
+              <input
+                placeholder="Téléphone (optionnel)"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+              />
+              <button type="submit" style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6' }}>Ajouter</button>
+            </form>
+          </div>
+        </>
+      )}
+
+      <button
+        onClick={() => setModalOpen(true)}
+        aria-label="Ajouter un joueur"
+        style={{
+          position: 'fixed',
+          right: 20,
+          bottom: 20,
+          width: 48,
+          height: 48,
+          borderRadius: 999,
+          border: 'none',
+          background: '#2563eb',
+          color: '#fff',
+          fontSize: 24,
+          boxShadow: '0 12px 24px rgba(37, 99, 235, 0.3)',
+          zIndex: 30,
+        }}
+      >
+        +
+      </button>
     </div>
   )
 }
@@ -403,6 +464,3 @@ function SelectInline({ value, options, onChange }: { value: string; options: st
     </select>
   )
 }
-
-// --- Invite player helper (now inside PlayersPage) ---
-// Moved inside PlayersPage for access to setPlayers
