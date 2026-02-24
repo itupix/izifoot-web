@@ -1,8 +1,9 @@
 
 
 
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
+import { API_BASE } from '../api'
 function useQuery() {
   const { search } = useLocation()
   return useMemo(() => new URLSearchParams(search), [search])
@@ -11,8 +12,6 @@ function useQuery() {
 // Normalize side/role helpers (handle casing)
 const normSide = (s: unknown): 'home' | 'away' => (String(s || '').toLowerCase() === 'away' ? 'away' : 'home')
 const isSub = (r: unknown) => String(r || '').toLowerCase() === 'sub'
-
-const API_BASE = import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
 interface Player {
   id: string

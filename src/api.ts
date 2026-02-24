@@ -1,5 +1,18 @@
 // src/api.ts
-export const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
+const rawApiBase =
+  import.meta.env?.VITE_API_URL ??
+  import.meta.env?.VITE_API_BASE ??
+  import.meta.env?.VITE_API_BASE_URL
+
+function resolveApiBase(): string {
+  if (rawApiBase) return String(rawApiBase).replace(/\/+$/, '')
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:4000'
+  }
+  return window.location.origin
+}
+
+export const API_BASE = resolveApiBase()
 
 export type Me = {
   id: string;

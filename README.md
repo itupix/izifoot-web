@@ -2,6 +2,19 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## API backend (Railway)
+
+Create a `.env` file at the project root:
+
+```bash
+VITE_API_URL=https://your-backend.up.railway.app
+```
+
+Notes:
+- The frontend now uses `VITE_API_URL` as the primary API base URL.
+- `VITE_API_BASE` and `VITE_API_BASE_URL` are still accepted as fallback names.
+- In local dev, if no env var is set, the app falls back to `http://localhost:4000`.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
