@@ -27,6 +27,8 @@ export default function App() {
   const location = useLocation();
   const isHome = location.pathname === '/';
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const headerHeight = 56;
   const handleLogout = async () => {
     await logout();
     navigate('/');
@@ -34,24 +36,79 @@ export default function App() {
   return (
     <>
       {!isHome && (
-        <header style={{ display: 'flex', gap: 16, padding: 12, borderBottom: '1px solid #ddd' }}>
-          <Link to="/planning" className={style.logo} style={{ textDecoration: 'none', fontWeight: 700 }}>izifoot</Link>
-          <nav style={{ display: 'flex', gap: 12 }}>
-            <Link to="/planning">Planning</Link>
-            <Link to="/exercices">Exercices</Link>
-            <Link to="/effectif">Effectif</Link>
-            <Link to="/stats">Stats</Link>
-          </nav>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
-            <Link to="/plannings/new" style={{ fontWeight: 600, textDecoration: 'none' }}>Organiser un plateau</Link>
-            {me ? (
-              <button onClick={handleLogout}>Se déconnecter</button>
-            ) : null}
-          </div>
-        </header>
+        <>
+          <header
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: headerHeight,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '0 12px',
+              background: '#fff',
+              borderBottom: '1px solid #e2e8f0',
+              zIndex: 50,
+            }}
+          >
+            <button
+              onClick={() => setMenuOpen(true)}
+              aria-label="Ouvrir le menu"
+              style={{ border: '1px solid #e2e8f0', borderRadius: 10, background: '#fff', padding: '8px 10px' }}
+            >
+              ☰
+            </button>
+            <Link to="/planning" className={style.logo} style={{ textDecoration: 'none', fontWeight: 700 }}>izifoot</Link>
+          </header>
+          {menuOpen && (
+            <div
+              onClick={() => setMenuOpen(false)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 40 }}
+            />
+          )}
+          <aside
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: 260,
+              padding: 16,
+              background: '#fff',
+              borderRight: '1px solid #e2e8f0',
+              boxShadow: '0 20px 40px rgba(15, 23, 42, 0.12)',
+              transform: menuOpen ? 'translateX(0)' : 'translateX(-110%)',
+              transition: 'transform 200ms ease',
+              zIndex: 60,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setMenuOpen(false)} style={{ border: 'none', background: 'transparent', fontSize: 18 }}>✕</button>
+            </div>
+            <nav style={{ display: 'grid', gap: 8 }}>
+              <Link to="/planning" onClick={() => setMenuOpen(false)}>Planning</Link>
+              <Link to="/exercices" onClick={() => setMenuOpen(false)}>Exercices</Link>
+              <Link to="/effectif" onClick={() => setMenuOpen(false)}>Effectif</Link>
+              <Link to="/stats" onClick={() => setMenuOpen(false)}>Stats</Link>
+            </nav>
+            <div style={{ marginTop: 'auto', display: 'grid', gap: 8 }}>
+              <Link to="/plannings/new" onClick={() => setMenuOpen(false)} style={{ fontWeight: 600, textDecoration: 'none' }}>
+                Organiser un plateau
+              </Link>
+              {me ? (
+                <button onClick={handleLogout}>Se déconnecter</button>
+              ) : null}
+            </div>
+          </aside>
+        </>
       )}
 
-      <main style={isHome ? { padding: 0 } : undefined}>
+      <main style={isHome ? { padding: 0 } : { padding: 16, paddingTop: headerHeight + 16 }}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/account" element={<Protected><AccountPage /></Protected>} />
@@ -65,6 +122,7 @@ export default function App() {
           <Route path="/plannings/:id" element={<Protected><PlanningDetailPage /></Protected>} />
           <Route path="/stats" element={<Protected><StatsPage /></Protected>} />
           <Route path="/match-day/:id" element={<Protected><MatchDay /></Protected>} />
+          <Route path="*" element={<Navigate to={me ? "/planning" : "/"} replace />} />
         </Routes>
       </main>
     </>
