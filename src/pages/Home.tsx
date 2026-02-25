@@ -1,12 +1,13 @@
 // src/pages/Home.tsx
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 import '../index.css';
 import whistleImg from '../assets/whistle.png';
 import slateImg from '../assets/slate.png';
 import ballImg from '../assets/ball.png';
 import { toErrorMessage } from '../errors';
+import CtaButton from '../components/CtaButton';
 
 export default function Home() {
   const { me, login, register } = useAuth();
@@ -108,18 +109,6 @@ export default function Home() {
     borderTop: '1px solid #e2e8f0',
   };
 
-  const primaryBtn: React.CSSProperties = {
-    appearance: 'none',
-    border: 'none',
-    textDecoration: 'none',
-    padding: '12px 18px',
-    borderRadius: 12,
-    background: 'linear-gradient(180deg, #6ee7b7, #34d399)',
-    color: 'white',
-    fontWeight: 700,
-    boxShadow: '0 10px 20px rgba(52,211,153,0.25), 0 2px 6px rgba(52,211,153,0.2)'
-  };
-
   const footer: React.CSSProperties = {
     padding: '16px',
     color: '#64748b',
@@ -176,7 +165,7 @@ export default function Home() {
           <h1 style={title}>izifoot</h1>
           <div style={ctaRow}>
             {me ? (
-              <Link to="/plannings" style={primaryBtn}>Voir mes plannings</Link>
+              <CtaButton to="/plannings">Voir mes plannings</CtaButton>
             ) : null}
           </div>
           <div style={visualWrap}>
@@ -251,9 +240,9 @@ export default function Home() {
                 </>
               )}
               {authError && <div style={{ fontSize: 12, color: '#b91c1c' }}>{authError}</div>}
-              <button type="submit" disabled={authLoading} style={primaryBtn}>
+              <CtaButton type="submit" disabled={authLoading} style={{ width: '100%' }}>
                 {authLoading ? 'Envoi…' : (mode === 'login' ? 'Se connecter' : 'Créer le compte')}
-              </button>
+              </CtaButton>
               <div style={helperText}>
                 {mode === 'login' ? 'Pas de compte ?' : 'Vous avez un compte ?'}{' '}
                 <button

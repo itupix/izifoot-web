@@ -16,7 +16,7 @@ import PlayersPage from './pages/PlayersPage';
 import DiagramEditor from './pages/DiagramEditor';
 import StatsPage from './pages/Stats';
 import MatchDay from './pages/MatchDay';
-import { MenuIcon } from './components/icons';
+import { CloseIcon, MenuIcon } from './components/icons';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { me, loading } = useAuth();
@@ -32,6 +32,7 @@ export default function App() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const headerHeight = 64;
+  const pageWidth = 980;
   const handleLogout = async () => {
     await logout();
     navigate('/');
@@ -60,17 +61,21 @@ export default function App() {
               onClick={() => setMenuOpen(true)}
               aria-label="Ouvrir le menu"
               style={{
+                appearance: 'none',
                 border: '1px solid #d1d5db',
                 borderRadius: 999,
                 background: '#fff',
-                width: 44,
-                height: 44,
-                display: 'grid',
-                placeItems: 'center',
+                width: 32,
+                height: 32,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 0,
+                padding: 0,
                 cursor: 'pointer',
               }}
             >
-              <MenuIcon size={24} />
+              <MenuIcon size={18} />
             </button>
             <Link
               to="/planning"
@@ -106,7 +111,26 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setMenuOpen(false)} style={{ border: 'none', background: 'transparent', fontSize: 18 }}>✕</button>
+              <button
+                onClick={() => setMenuOpen(false)}
+                aria-label="Fermer le menu"
+                style={{
+                  appearance: 'none',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 999,
+                  background: '#fff',
+                  color: '#334155',
+                  width: 32,
+                  height: 32,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 0,
+                  padding: 0,
+                }}
+              >
+                <CloseIcon size={16} />
+              </button>
             </div>
             <nav style={{ display: 'grid', gap: 8 }}>
               <Link to="/planning" onClick={() => setMenuOpen(false)}>Planning</Link>
@@ -126,24 +150,32 @@ export default function App() {
         </>
       )}
 
-      <main style={isHome ? { padding: 0 } : { padding: 16, paddingTop: headerHeight + 16 }}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/account" element={<Protected><AccountPage /></Protected>} />
-          <Route path="/planning" element={<Protected><TrainingsPage /></Protected>} />
-          <Route path="/training/:id" element={<Protected><TrainingDetailsPage /></Protected>} />
-          <Route path="/plateau/:id" element={<Protected><PlateauDetailsPage /></Protected>} />
-          <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
-          <Route path="/exercices/:id" element={<Protected><DrillsPage /></Protected>} />
-          <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
-          <Route path="/effectif" element={<Protected><PlayersPage /></Protected>} />
-          <Route path="/plannings" element={<Protected><PlanningsListPage /></Protected>} />
-          <Route path="/plannings/new" element={<Protected><CreatePlanningPage /></Protected>} />
-          <Route path="/plannings/:id" element={<Protected><PlanningDetailPage /></Protected>} />
-          <Route path="/stats" element={<Protected><StatsPage /></Protected>} />
-          <Route path="/match-day/:id" element={<Protected><MatchDay /></Protected>} />
-          <Route path="*" element={<Navigate to={me ? "/planning" : "/"} replace />} />
-        </Routes>
+      <main
+        style={
+          isHome
+            ? { padding: 0, display: 'flex', justifyContent: 'center' }
+            : { padding: 16, paddingTop: headerHeight + 16, display: 'flex', justifyContent: 'center' }
+        }
+      >
+        <div style={{ width: '100%', maxWidth: pageWidth }}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/account" element={<Protected><AccountPage /></Protected>} />
+            <Route path="/planning" element={<Protected><TrainingsPage /></Protected>} />
+            <Route path="/training/:id" element={<Protected><TrainingDetailsPage /></Protected>} />
+            <Route path="/plateau/:id" element={<Protected><PlateauDetailsPage /></Protected>} />
+            <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
+            <Route path="/exercices/:id" element={<Protected><DrillsPage /></Protected>} />
+            <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
+            <Route path="/effectif" element={<Protected><PlayersPage /></Protected>} />
+            <Route path="/plannings" element={<Protected><PlanningsListPage /></Protected>} />
+            <Route path="/plannings/new" element={<Protected><CreatePlanningPage /></Protected>} />
+            <Route path="/plannings/:id" element={<Protected><PlanningDetailPage /></Protected>} />
+            <Route path="/stats" element={<Protected><StatsPage /></Protected>} />
+            <Route path="/match-day/:id" element={<Protected><MatchDay /></Protected>} />
+            <Route path="*" element={<Navigate to={me ? "/planning" : "/"} replace />} />
+          </Routes>
+        </div>
       </main>
     </>
   );

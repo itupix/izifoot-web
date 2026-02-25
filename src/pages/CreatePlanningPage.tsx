@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useNavigate } from 'react-router-dom';
 import PlanningEditor, { type PlanningData } from '../components/PlanningEditor';
 import { toErrorMessage } from '../errors';
+import CtaButton from '../components/CtaButton';
 
 export default function CreatePlanningPage() {
   const nav = useNavigate();
@@ -43,9 +44,9 @@ export default function CreatePlanningPage() {
           />
         </label>
         <div>
-          <button type="submit" disabled={!date || !dataObj || saving}>
+          <CtaButton type="submit" disabled={!date || !dataObj || saving}>
             {saving ? 'Création…' : 'Créer'}
-          </button>
+          </CtaButton>
         </div>
       </form>
 

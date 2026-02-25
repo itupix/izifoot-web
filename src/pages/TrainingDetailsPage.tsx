@@ -1,23 +1,33 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DotsHorizontalIcon } from '../components/icons'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, Drill, Player, Training, TrainingDrill } from '../types/api'
+import './TrainingDetailsPage.css'
+
+function getFirstName(fullName: string) {
+  return fullName.trim().split(/\s+/)[0] || fullName
+}
 
 export default function TrainingDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+
   const [training, setTraining] = useState<Training | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [attendance, setAttendance] = useState<Set<string>>(new Set())
   const [drills, setDrills] = useState<TrainingDrill[]>([])
   const [catalog, setCatalog] = useState<Drill[]>([])
-  const [addDrillId, setAddDrillId] = useState<string>('')
-  const [addNotes, setAddNotes] = useState<string>('')
-  const [addDuration, setAddDuration] = useState<number | ''>('')
+  const [query, setQuery] = useState('')
+  const [selectedDrill, setSelectedDrill] = useState<Drill | null>(null)
+  const [playersOpen, setPlayersOpen] = useState(false)
+  const [manageDrillsOpen, setManageDrillsOpen] = useState(false)
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+
   const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
     if (!id) return
     const [t, ps, dr, ds, att] = await Promise.all([
@@ -27,23 +37,50 @@ export default function TrainingDetailsPage() {
       apiGet<TrainingDrill[]>(apiRoutes.trainings.drills(id)),
       apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('TRAINING', id)),
     ])
+
     if (isCancelled()) return
     setTraining(t)
     setPlayers(ps)
     setCatalog(dr.items)
     setDrills(ds)
-    setAttendance(new Set(att.map(a => a.playerId)))
+    setAttendance(new Set(att.map((a) => a.playerId)))
   }, [id])
 
   const trainingDateLabel = useMemo(() => {
     if (!training?.date) return ''
-    return new Date(training.date).toLocaleDateString()
+    return new Intl.DateTimeFormat('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(training.date))
   }, [training])
+
+  const drillIdsInSession = useMemo(() => new Set(drills.map((d) => d.drillId)), [drills])
+  const catalogById = useMemo(() => new Map(catalog.map((d) => [d.id, d])), [catalog])
+
+  const filteredCatalog = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    const list = catalog.filter((d) => {
+      if (!needle) return true
+      return (
+        d.title.toLowerCase().includes(needle) ||
+        d.description.toLowerCase().includes(needle) ||
+        d.category.toLowerCase().includes(needle) ||
+        d.tags.some((tag) => tag.toLowerCase().includes(needle))
+      )
+    })
+
+    return list.sort((a, b) => Number(drillIdsInSession.has(a.id)) - Number(drillIdsInSession.has(b.id)))
+  }, [catalog, query, drillIdsInSession])
+  const isCancelled = training?.status === 'CANCELLED'
 
   async function setTrainingStatus(cancelled: boolean) {
     if (!training) return
     try {
-      const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), { status: cancelled ? 'CANCELLED' : 'PLANNED' })
+      const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
+        status: cancelled ? 'CANCELLED' : 'PLANNED',
+      })
       setTraining(updated)
     } catch (err: unknown) {
       uiAlert(`Erreur mise à jour statut: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
@@ -68,11 +105,13 @@ export default function TrainingDetailsPage() {
         session_type: 'TRAINING',
         session_id: training.id,
         playerId,
-        present
+        present,
       })
-      setAttendance(prev => {
+
+      setAttendance((prev) => {
         const next = new Set(prev)
-        if (present) next.add(playerId); else next.delete(playerId)
+        if (present) next.add(playerId)
+        else next.delete(playerId)
         return next
       })
     } catch (err: unknown) {
@@ -80,18 +119,11 @@ export default function TrainingDetailsPage() {
     }
   }
 
-  async function addDrill() {
-    if (!training || !addDrillId) return
+  async function addDrill(drillId: string) {
+    if (!training || !drillId) return
     try {
-      const row = await apiPost<TrainingDrill>(apiRoutes.trainings.drills(training.id), {
-        drillId: addDrillId,
-        notes: addNotes || undefined,
-        duration: typeof addDuration === 'number' ? addDuration : undefined,
-      })
-      setDrills(prev => [...prev, row])
-      setAddDrillId('')
-      setAddNotes('')
-      setAddDuration('')
+      const row = await apiPost<TrainingDrill>(apiRoutes.trainings.drills(training.id), { drillId })
+      setDrills((prev) => [...prev, row])
     } catch (err: unknown) {
       uiAlert(`Erreur ajout exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
@@ -101,148 +133,273 @@ export default function TrainingDetailsPage() {
     if (!training) return
     try {
       await apiDelete(apiRoutes.trainings.drillById(training.id, trainingDrillId))
-      setDrills(prev => prev.filter(d => d.id !== trainingDrillId))
+      setDrills((prev) => prev.filter((d) => d.id !== trainingDrillId))
     } catch (err: unknown) {
-      uiAlert(`Erreur suppression: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
-    }
-  }
-
-  async function updateDrill(trainingDrillId: string, patch: Partial<Pick<TrainingDrill, 'notes' | 'duration' | 'order'>>) {
-    if (!training) return
-    try {
-      const updated = await apiPut<TrainingDrill>(apiRoutes.trainings.drillById(training.id, trainingDrillId), patch)
-      setDrills(prev => prev.map(d => d.id === trainingDrillId ? updated : d))
-    } catch (err: unknown) {
-      uiAlert(`Erreur mise à jour: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+      uiAlert(`Erreur suppression exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
 
   if (!id) return <div>Entraînement introuvable.</div>
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <Link to="/planning">← Retour</Link>
-          <h2 style={{ margin: '4px 0' }}>Entraînement</h2>
-          <div style={{ fontSize: 13, color: '#6b7280' }}>{trainingDateLabel}</div>
+    <div className="training-details-page">
+      <header className="topbar">
+        <button
+          type="button"
+          className="back-round-button"
+          onClick={() => navigate(-1)}
+          aria-label="Revenir à la page précédente"
+        >
+          <ChevronLeftIcon size={18} />
+        </button>
+        <div className="topbar-title">
+          <h2>
+            Entrainement
+            {isCancelled && <span className="cancelled-tag">Annulé</span>}
+          </h2>
+          <p>{trainingDateLabel}</p>
         </div>
-        {training && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {training.status === 'CANCELLED' && (
-              <span style={{ fontSize: 12, color: '#b91c1c', border: '1px solid #fecaca', background: '#fee2e2', padding: '2px 6px', borderRadius: 6 }}>Annulé</span>
-            )}
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: '#374151' }}>
-              <input type="checkbox" checked={training.status === 'CANCELLED'} onChange={e => setTrainingStatus(e.target.checked)} />
-              Annulé
-            </label>
-            <button onClick={deleteTraining} style={{ border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, background: '#fff', padding: '4px 8px' }}>Supprimer</button>
-          </div>
-        )}
-      </div>
+        <div className="topbar-menu-wrap">
+          <button
+            type="button"
+            className="menu-dots-button"
+            onClick={() => setActionsMenuOpen((prev) => !prev)}
+            aria-expanded={actionsMenuOpen}
+            aria-label="Ouvrir le menu d'actions"
+          >
+            <DotsHorizontalIcon size={18} />
+          </button>
+          {actionsMenuOpen && (
+            <>
+              <button
+                type="button"
+                className="menu-backdrop"
+                aria-label="Fermer le menu"
+                onClick={() => setActionsMenuOpen(false)}
+              />
+              <div className="floating-menu">
+                {training && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionsMenuOpen(false)
+                      setTrainingStatus(training.status !== 'CANCELLED')
+                    }}
+                  >
+                    {training.status === 'CANCELLED' ? 'Rétablir l’entrainement' : 'Annuler l’entrainement'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => {
+                    setActionsMenuOpen(false)
+                    deleteTraining()
+                  }}
+                >
+                  Supprimer l’entrainement
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </header>
 
       {loading && <p>Chargement…</p>}
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      {error && <p className="error-text">{error}</p>}
 
       {training && (
+        <div className="training-details-grid">
+          <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
+            {!isCancelled ? (
+              <button
+                type="button"
+                className="card-head-button"
+                onClick={() => setPlayersOpen((prev) => !prev)}
+                aria-expanded={playersOpen}
+                aria-label={playersOpen ? 'Réduire la liste des joueurs' : 'Ouvrir la liste des joueurs'}
+              >
+                <div className="card-head">
+                  <h3>Présents</h3>
+                  <div className="head-actions">
+                    <span>{attendance.size}/{players.length}</span>
+                    <ChevronRightIcon size={18} style={{ transform: playersOpen ? 'rotate(90deg)' : 'rotate(0deg)' }} />
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div className="card-head">
+                <h3>Présents</h3>
+                <div className="head-actions">
+                  <span>{attendance.size}/{players.length}</span>
+                </div>
+              </div>
+            )}
+            {isCancelled ? (
+              <p className="muted-line">Séance annulée: présences indisponibles.</p>
+            ) : playersOpen && (
+              <div className="attendance-list-simple">
+                {players.map((player) => {
+                  const present = attendance.has(player.id)
+                  return (
+                    <label key={player.id} className="attendance-row">
+                      <span>{getFirstName(player.name)}</span>
+                      <input
+                        type="checkbox"
+                        checked={present}
+                        onChange={(e) => togglePresence(player.id, e.target.checked)}
+                      />
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
+            <div className="card-head">
+              <h3>Exercices</h3>
+              <div className="head-actions">
+                {!isCancelled && (
+                  <button
+                    type="button"
+                    className="add-button"
+                    onClick={() => setManageDrillsOpen(true)}
+                    aria-label="Ajouter un exercice"
+                  >
+                    Ajouter
+                  </button>
+                )}
+              </div>
+            </div>
+            {isCancelled ? (
+              <p className="muted-line">Séance annulée: exercices indisponibles.</p>
+            ) : (
+              <>
+                <div className="drill-cards-grid">
+                  {drills.map((row) => {
+                    const meta = row.meta || catalogById.get(row.drillId) || null
+                    return (
+                      <article
+                        key={row.id}
+                        className="drill-card"
+                        onClick={() => {
+                          if (meta) setSelectedDrill(meta)
+                        }}
+                      >
+                        <div className="drill-card-head">
+                          <h4>{meta?.title || 'Exercice'}</h4>
+                          <button
+                            type="button"
+                            className="icon-danger-button card-delete-button"
+                            aria-label="Supprimer l'exercice"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeDrill(row.id)
+                            }}
+                          >
+                            <CloseIcon size={16} />
+                          </button>
+                        </div>
+                        <small>{meta?.category || '—'} · {row.duration ?? meta?.duration ?? '—'} min</small>
+                      </article>
+                    )
+                  })}
+                  {drills.length === 0 && (
+                    <p className="muted-line">Aucun exercice ajouté pour cette séance.</p>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
+
+      {manageDrillsOpen && !isCancelled && (
         <>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: '#374151' }}>Présents: {attendance.size} / {players.length}</span>
-          </div>
-          <div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff' }}>
-            {players.map(p => {
-              const present = attendance.has(p.id)
-              return (
-                <label key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{p.name}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>{p.primary_position}{p.secondary_position ? ` / ${p.secondary_position}` : ''}</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={present}
-                    onChange={(e) => togglePresence(p.id, e.target.checked)}
-                  />
-                </label>
-              )
-            })}
-          </div>
-
-          <div style={{ display: 'grid', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <h4 style={{ margin: '8px 0' }}>🧩 Exercices de la séance</h4>
-              <small style={{ color: '#6b7280' }}>{drills.length} exercice(s)</small>
+          <div className="modal-overlay" onClick={() => setManageDrillsOpen(false)} />
+          <div className="drill-modal manage-modal" role="dialog" aria-modal="true">
+            <div className="drill-modal-head">
+              <h3>Gérer les exercices</h3>
+              <button type="button" onClick={() => setManageDrillsOpen(false)}>✕</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 8 }}>
-              <select value={addDrillId} onChange={e => setAddDrillId(e.target.value)} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
-                <option value="">— Ajouter un exercice —</option>
-                {catalog.map(d => (
-                  <option key={d.id} value={d.id}>{d.title} • {d.category}</option>
-                ))}
-              </select>
-              <button onClick={addDrill} disabled={!addDrillId} style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6' }}>Ajouter</button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
+            <div className="drill-search-box">
               <input
-                placeholder="Notes (optionnel)"
-                value={addNotes}
-                onChange={e => setAddNotes(e.target.value)}
-                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-              />
-              <input
-                placeholder="Durée (min)"
-                type="number"
-                min={1}
-                value={addDuration}
-                onChange={e => setAddDuration(e.target.value === '' ? '' : Number(e.target.value))}
-                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Rechercher un exercice"
               />
             </div>
 
-            <div style={{ display: 'grid', gap: 8 }}>
-              {drills.map((d) => {
-                const meta = d.meta || catalog.find(c => c.id === d.drillId) || null
+            <div className="manage-section">
+              <h4>Choisir un exercice</h4>
+              {filteredCatalog.length === 0 && (
+                <p className="muted-line">Aucun exercice trouvé.</p>
+              )}
+              {filteredCatalog.map((item) => {
+                const alreadyAdded = drillIdsInSession.has(item.id)
                 return (
-                  <div key={d.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#fff' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <strong>{meta?.title ?? d.drillId}</strong>
-                      <small style={{ color: '#6b7280' }}>
-                        {meta?.category ?? '—'} • ⏱ {d.duration ?? meta?.duration ?? '—'}′
-                      </small>
-                    </div>
-                    {meta?.tags?.length ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
-                        {meta.tags.map(t => <span key={t} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 9999, border: '1px solid #d1d5db' }}>{t}</span>)}
+                  <article key={item.id} className="drill-card">
+                    <div className="drill-card-head">
+                      <h4>{item.title}</h4>
+                      <div className="card-actions">
+                        <button type="button" className="add-text" onClick={() => setSelectedDrill(item)}>
+                          Détails
+                        </button>
+                        <button
+                          type="button"
+                          className="add-text"
+                          disabled={alreadyAdded}
+                          onClick={() => {
+                            addDrill(item.id)
+                            setManageDrillsOpen(false)
+                            setQuery('')
+                          }}
+                        >
+                          {alreadyAdded ? 'Déjà ajouté' : 'Ajouter'}
+                        </button>
                       </div>
-                    ) : null}
-                    <div style={{ fontSize: 12, color: '#374151', margin: '6px 0' }}>
-                      {meta?.description}
                     </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr auto', gap: 8 }}>
-                      <input
-                        type="number"
-                        min={1}
-                        value={d.duration ?? ''}
-                        onChange={e => updateDrill(d.id, { duration: e.target.value === '' ? null : Number(e.target.value) })}
-                        placeholder="Durée (min)"
-                        style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                      />
-                      <input
-                        value={d.notes ?? ''}
-                        onChange={e => updateDrill(d.id, { notes: e.target.value === '' ? null : e.target.value })}
-                        placeholder="Notes"
-                        style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                      />
-                      <button onClick={() => removeDrill(d.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, background: '#fff' }}>
-                        Supprimer
-                      </button>
-                    </div>
-                  </div>
+                    <small>{item.category || '—'} · {item.duration ?? '—'} min</small>
+                  </article>
                 )
               })}
+            </div>
+          </div>
+        </>
+      )}
+
+      {selectedDrill && (
+        <>
+          <div className="modal-overlay" onClick={() => setSelectedDrill(null)} />
+          <div className="drill-modal" role="dialog" aria-modal="true">
+            <div className="drill-modal-head">
+              <h3>{selectedDrill.title}</h3>
+              <button type="button" onClick={() => setSelectedDrill(null)}>✕</button>
+            </div>
+            <p>{selectedDrill.description || 'Aucune description.'}</p>
+            <div className="modal-meta-grid">
+              <div>
+                <strong>Catégorie</strong>
+                <span>{selectedDrill.category || '—'}</span>
+              </div>
+              <div>
+                <strong>Joueurs</strong>
+                <span>{selectedDrill.players || '—'}</span>
+              </div>
+              <div>
+                <strong>Durée</strong>
+                <span>{selectedDrill.duration ?? '—'} min</span>
+              </div>
+              <div>
+                <strong>Tags</strong>
+                <span>{selectedDrill.tags.length ? selectedDrill.tags.join(', ') : '—'}</span>
+              </div>
+              <div>
+                <strong>Statut séance</strong>
+                <span>{drillIdsInSession.has(selectedDrill.id) ? 'Ajouté' : 'Non ajouté'}</span>
+              </div>
             </div>
           </div>
         </>

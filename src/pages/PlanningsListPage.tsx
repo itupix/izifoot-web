@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api, type Planning } from '../api';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAsyncLoader } from '../hooks/useAsyncLoader';
+import CtaButton from '../components/CtaButton';
 
 export default function PlanningsListPage() {
   const [items, setItems] = useState<Planning[] | null>(null);
@@ -17,9 +18,9 @@ export default function PlanningsListPage() {
   return (
     <div>
       <h2>Mes plannings</h2>
-      <div style={{ margin: '8px 0' }}>
-        <button onClick={() => nav('/plannings/new')}>Créer un planning</button>
-        <button onClick={() => setReloadToken(x => x + 1)} style={{ marginLeft: 8 }}>Rafraîchir</button>
+      <div style={{ margin: '8px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <CtaButton onClick={() => nav('/plannings/new')}>Créer un planning</CtaButton>
+        <button onClick={() => setReloadToken(x => x + 1)}>Rafraîchir</button>
       </div>
       {error && <div style={{ color: 'crimson' }}>{error}</div>}
       {!items ? (

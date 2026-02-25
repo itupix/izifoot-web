@@ -1,0 +1,11 @@
+.ctaButton {
+  width: auto;
+  max-width: 320px;
+}
+
+@media (max-width: 768px) {
+  .ctaButton {
+    width: 100%;
+    max-width: none;
+  }
+}

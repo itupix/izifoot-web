@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import CtaButton from '../components/CtaButton'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SoccerBallIcon, TrophyIcon } from '../components/icons'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
@@ -65,6 +66,12 @@ export default function TrainingsPage() {
   const dayPlateaus = useMemo(() => {
     return plateaus.filter(p => yyyyMmDd(toDateOnly(p.date)) === selectedDayKey)
   }, [plateaus, selectedDayKey])
+  const trainingDayKeys = useMemo(() => {
+    return new Set(trainings.map((t) => yyyyMmDd(toDateOnly(t.date))))
+  }, [trainings])
+  const plateauDayKeys = useMemo(() => {
+    return new Set(plateaus.map((p) => yyyyMmDd(toDateOnly(p.date))))
+  }, [plateaus])
   const monthLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('fr-FR', {
@@ -126,29 +133,19 @@ export default function TrainingsPage() {
     textDecoration: 'none',
   }
 
-  const ctaButtonStyle = {
-    fontSize: 16,
-    fontWeight: 600,
-    border: 'none',
-    borderRadius: 10,
-    padding: '10px 12px',
-    background: '#0f172a',
-    color: '#fff',
-    cursor: 'pointer',
-    boxShadow: '0 8px 18px rgba(15, 23, 42, 0.22)',
-  } as const
-
   const navIconButtonStyle = {
+    appearance: 'none',
     border: '1px solid #d1d5db',
     borderRadius: 999,
     background: '#fff',
-    width: 44,
-    height: 44,
+    width: 32,
+    height: 32,
     cursor: 'pointer',
-    fontSize: 28,
-    lineHeight: 1,
-    display: 'grid',
-    placeItems: 'center',
+    lineHeight: 0,
+    padding: 0,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   } as const
 
   return (
@@ -162,7 +159,6 @@ export default function TrainingsPage() {
               alignItems: 'center',
               gap: 10,
               width: '100%',
-              position: 'relative',
             }}
           >
             <button
@@ -171,7 +167,7 @@ export default function TrainingsPage() {
               aria-label="Jour précédent"
               style={navIconButtonStyle}
             >
-              <ChevronLeftIcon size={24} />
+              <ChevronLeftIcon size={18} />
             </button>
             <button
               type="button"
@@ -198,7 +194,7 @@ export default function TrainingsPage() {
               aria-label="Jour suivant"
               style={navIconButtonStyle}
             >
-              <ChevronRightIcon size={24} />
+              <ChevronRightIcon size={18} />
             </button>
             <button
               type="button"
@@ -208,90 +204,22 @@ export default function TrainingsPage() {
               }}
               aria-label="Choisir une date"
               style={{
+                appearance: 'none',
                 border: '1px solid #d1d5db',
                 borderRadius: 999,
                 background: '#fff',
-                width: 44,
-                height: 44,
+                width: 32,
+                height: 32,
                 cursor: 'pointer',
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: 24,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 0,
+                padding: 0,
               }}
             >
-              <CalendarIcon size={24} />
+              <CalendarIcon size={18} />
             </button>
-            {isDatePickerOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 42,
-                  right: 0,
-                  zIndex: 10,
-                  background: '#fff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 10,
-                  boxShadow: '0 8px 20px rgba(0,0,0,0.1)',
-                  padding: 10,
-                  width: 250,
-                  display: 'grid',
-                  gap: 8,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <button
-                    type="button"
-                    onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                    aria-label="Mois précédent"
-                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 36, height: 36, cursor: 'pointer', fontSize: 24 }}
-                  >
-                    <ChevronLeftIcon size={24} />
-                  </button>
-                  <strong style={{ textTransform: 'capitalize', fontSize: 16 }}>{monthLabel}</strong>
-                  <button
-                    type="button"
-                    onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                    aria-label="Mois suivant"
-                    style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', width: 36, height: 36, cursor: 'pointer', fontSize: 24 }}
-                  >
-                    <ChevronRightIcon size={24} />
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-                  {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
-                    <div key={`${d}-${i}`} style={{ textAlign: 'center', fontSize: 16, color: '#64748b' }}>{d}</div>
-                  ))}
-                  {calendarCells.map((day, idx) => {
-                    if (day <= 0) {
-                      return <div key={`empty-${idx}`} />
-                    }
-                    const candidate = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), day)
-                    const isSelected = yyyyMmDd(candidate) === selectedDayKey
-                    return (
-                      <button
-                        key={`${pickerMonth.getFullYear()}-${pickerMonth.getMonth()}-${day}`}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDate(candidate)
-                          setIsDatePickerOpen(false)
-                        }}
-                        style={{
-                          border: '1px solid #d1d5db',
-                          borderRadius: 6,
-                          background: isSelected ? '#0f172a' : '#fff',
-                          color: isSelected ? '#fff' : '#0f172a',
-                          height: 28,
-                          cursor: 'pointer',
-                          fontSize: 16,
-                        }}
-                      >
-                        {day}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </header>
 
@@ -316,9 +244,22 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          <button onClick={() => createTrainingForDay(selectedDate)} style={ctaButtonStyle}>
-            Ajouter un entraînement
-          </button>
+          <div
+            style={{
+              background: '#f4f8fb',
+              borderTop: '1px solid #dbe5f1',
+              margin: '0 -14px -14px',
+              padding: '10px 14px',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              borderBottomLeftRadius: 16,
+              borderBottomRightRadius: 16,
+            }}
+          >
+            <CtaButton onClick={() => createTrainingForDay(selectedDate)}>
+              Ajouter un entraînement
+            </CtaButton>
+          </div>
         </section>
 
         <section style={blockStyle}>
@@ -342,9 +283,22 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          <button onClick={() => createPlateauForDay(selectedDate)} style={ctaButtonStyle}>
-            Ajouter un plateau
-          </button>
+          <div
+            style={{
+              background: '#f4f8fb',
+              borderTop: '1px solid #dbe5f1',
+              margin: '0 -14px -14px',
+              padding: '10px 14px',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              borderBottomLeftRadius: 16,
+              borderBottomRightRadius: 16,
+            }}
+          >
+            <CtaButton onClick={() => createPlateauForDay(selectedDate)}>
+              Ajouter un plateau
+            </CtaButton>
+          </div>
         </section>
       </div>
 
@@ -352,6 +306,138 @@ export default function TrainingsPage() {
         {loading && <p>Chargement…</p>}
         {error && <p style={{ color: 'crimson' }}>{error}</p>}
       </aside>
+
+      {isDatePickerOpen && (
+        <div
+          onClick={() => setIsDatePickerOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 90,
+            background: 'rgba(15, 23, 42, 0.45)',
+            display: 'grid',
+            placeItems: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(560px, 100%)',
+              background: '#fff',
+              border: '1px solid #d1d5db',
+              borderRadius: 16,
+              boxShadow: '0 24px 48px rgba(15, 23, 42, 0.25)',
+              padding: 16,
+              display: 'grid',
+              gap: 14,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                aria-label="Mois précédent"
+                style={{
+                  appearance: 'none',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 999,
+                  background: '#fff',
+                  width: 32,
+                  height: 32,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 0,
+                  padding: 0,
+                }}
+              >
+                <ChevronLeftIcon size={18} />
+              </button>
+              <strong style={{ textTransform: 'capitalize', fontSize: 24 }}>{monthLabel}</strong>
+              <button
+                type="button"
+                onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                aria-label="Mois suivant"
+                style={{
+                  appearance: 'none',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 999,
+                  background: '#fff',
+                  width: 32,
+                  height: 32,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 0,
+                  padding: 0,
+                }}
+              >
+                <ChevronRightIcon size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
+                <div key={`${d}-${i}`} style={{ textAlign: 'center', fontSize: 16, color: '#64748b', fontWeight: 600 }}>{d}</div>
+              ))}
+              {calendarCells.map((day, idx) => {
+                if (day <= 0) {
+                  return <div key={`empty-${idx}`} />
+                }
+                const candidate = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), day)
+                const dayKey = yyyyMmDd(candidate)
+                const isSelected = dayKey === selectedDayKey
+                const hasTraining = trainingDayKeys.has(dayKey)
+                const hasPlateau = plateauDayKeys.has(dayKey)
+                return (
+                  <button
+                    key={`${pickerMonth.getFullYear()}-${pickerMonth.getMonth()}-${day}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(candidate)
+                      setIsDatePickerOpen(false)
+                    }}
+                    style={{
+                      border: '1px solid #d1d5db',
+                      borderRadius: 10,
+                      background: isSelected ? '#0f172a' : '#fff',
+                      color: isSelected ? '#fff' : '#0f172a',
+                      minHeight: 58,
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      display: 'grid',
+                      alignContent: 'center',
+                      justifyItems: 'center',
+                      gap: 8,
+                      paddingTop: 6,
+                    }}
+                  >
+                    <span>{day}</span>
+                    <span style={{ display: 'inline-flex', gap: 6, minHeight: 8 }}>
+                      {hasTraining && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#ef4444' }} />}
+                      {hasPlateau && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#3b82f6' }} />}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 14, color: '#334155' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, background: '#ef4444' }} />
+                Entraînement
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, background: '#3b82f6' }} />
+                Plateau
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

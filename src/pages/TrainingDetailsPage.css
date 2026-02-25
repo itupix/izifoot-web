@@ -1,0 +1,413 @@
+.training-details-page {
+  display: grid;
+  gap: 16px;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.topbar-title h2 {
+  margin: 0;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-title p {
+  margin: 0;
+  color: #64748b;
+  text-transform: capitalize;
+  font-size: 13px;
+}
+
+.back-round-button {
+  font: inherit;
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.topbar-menu-wrap {
+  position: relative;
+}
+
+.menu-dots-button {
+  font: inherit;
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  border: none;
+  background: transparent;
+  z-index: 940;
+}
+
+.floating-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 950;
+  min-width: 210px;
+  border: 1px solid #dbe5f1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.floating-menu button {
+  font: inherit;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #1e293b;
+}
+
+.floating-menu button:hover {
+  background: #f8fafc;
+}
+
+.floating-menu button.danger {
+  color: #b91c1c;
+}
+
+.cancelled-tag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #fecaca;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.training-details-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.details-card {
+  border: 1px solid #dbe5f1;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.details-card.is-disabled {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.details-card.is-disabled .card-head h3,
+.details-card.is-disabled .card-head span,
+.details-card.is-disabled .muted-line {
+  color: #64748b;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-head-button {
+  font: inherit;
+  border: none;
+  background: transparent;
+  padding: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card-head h3 {
+  margin: 0;
+}
+
+.card-head span {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-toggle {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.add-button {
+  font: inherit;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b65c2;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+
+.attendance-list {
+  display: grid;
+}
+
+.attendance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  margin: 0;
+}
+
+.attendance-row:last-child {
+  border-bottom: 0;
+}
+
+.attendance-list-simple {
+  display: grid;
+}
+
+.drill-search-box {
+  display: grid;
+  gap: 8px;
+}
+
+.drill-cards-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.manage-section {
+  display: grid;
+  gap: 8px;
+}
+
+.manage-section h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.drill-card {
+  border: 1px solid #dbe5f1;
+  border-radius: 10px;
+  padding: 10px;
+  padding-right: 52px;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  position: relative;
+}
+
+.drill-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drill-card h4,
+.drill-card p {
+  margin: 0;
+}
+
+.drill-card p {
+  font-size: 14px;
+  color: #475569;
+}
+
+.drill-card small {
+  color: #64748b;
+}
+
+.danger-text {
+  border: none;
+  background: transparent;
+  color: #b91c1c;
+  padding: 0;
+}
+
+.icon-danger-button {
+  appearance: none;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  line-height: 0;
+  padding: 0;
+}
+
+.card-delete-button {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.add-text {
+  border: none;
+  background: transparent;
+  color: #0b65c2;
+  padding: 0;
+}
+
+.add-text:disabled {
+  color: #94a3b8;
+}
+
+.muted-line {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.error-text {
+  color: #b91c1c;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 1000;
+}
+
+.drill-modal {
+  position: fixed;
+  z-index: 1001;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 24px));
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.drill-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.drill-modal-head h3,
+.drill-modal p {
+  margin: 0;
+}
+
+.drill-modal-head button {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+}
+
+.manage-modal {
+  top: 5vh;
+  transform: translateX(-50%);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-meta-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.modal-meta-grid div {
+  display: grid;
+  gap: 2px;
+}
+
+.modal-meta-grid strong {
+  font-size: 12px;
+  color: #64748b;
+}
+
+@media (min-width: 900px) {
+  .topbar {
+    grid-template-columns: 44px 1fr 44px;
+  }
+
+  .training-details-grid {
+    grid-template-columns: 320px 1fr;
+    align-items: start;
+  }
+
+  .drill-cards-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modal-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
