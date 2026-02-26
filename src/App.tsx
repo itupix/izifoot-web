@@ -17,6 +17,7 @@ import DiagramEditor from './pages/DiagramEditor';
 import StatsPage from './pages/Stats';
 import MatchDay from './pages/MatchDay';
 import { CloseIcon, MenuIcon } from './components/icons';
+import RoundIconButton from './components/RoundIconButton';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { me, loading } = useAuth();
@@ -57,30 +58,13 @@ export default function App() {
               zIndex: 50,
             }}
           >
-            <button
-              onClick={() => setMenuOpen(true)}
-              aria-label="Ouvrir le menu"
-              style={{
-                appearance: 'none',
-                border: '1px solid #d1d5db',
-                borderRadius: 999,
-                background: '#fff',
-                width: 32,
-                height: 32,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                lineHeight: 0,
-                padding: 0,
-                cursor: 'pointer',
-              }}
-            >
+            <RoundIconButton ariaLabel="Ouvrir le menu" onClick={() => setMenuOpen(true)}>
               <MenuIcon size={18} />
-            </button>
+            </RoundIconButton>
             <Link
               to="/planning"
               className={style.logo}
-              style={{ textDecoration: 'none', fontWeight: 800, fontSize: 34, lineHeight: 1 }}
+              style={{ textDecoration: 'none', fontWeight: 800, fontSize: 28, lineHeight: 1 }}
             >
               izifoot
             </Link>
@@ -111,26 +95,9 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setMenuOpen(false)}
-                aria-label="Fermer le menu"
-                style={{
-                  appearance: 'none',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 999,
-                  background: '#fff',
-                  color: '#334155',
-                  width: 32,
-                  height: 32,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 0,
-                  padding: 0,
-                }}
-              >
+              <RoundIconButton ariaLabel="Fermer le menu" onClick={() => setMenuOpen(false)} style={{ color: '#334155' }}>
                 <CloseIcon size={16} />
-              </button>
+              </RoundIconButton>
             </div>
             <nav style={{ display: 'grid', gap: 8 }}>
               <Link to="/planning" onClick={() => setMenuOpen(false)}>Planning</Link>

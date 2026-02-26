@@ -1,0 +1,227 @@
+.trainings-page {
+  display: grid;
+  gap: 24px;
+  font-size: 16px;
+}
+
+.trainings-main {
+  display: grid;
+  gap: 12px;
+}
+
+.trainings-date-header {
+  display: grid;
+  gap: 10px;
+}
+
+.trainings-date-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.trainings-date-title-btn {
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  text-transform: capitalize;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+}
+
+.trainings-date-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trainings-block {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dbe5f1;
+  border-radius: 16px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+.trainings-block-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: 0.2px;
+}
+
+.trainings-empty {
+  font-size: 16px;
+  color: #64748b;
+  padding: 2px 2px 4px;
+}
+
+.trainings-item {
+  display: block;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid #d6deea;
+  background: #fff;
+  color: #0f172a;
+  font-size: 16px;
+  text-decoration: none;
+}
+
+.trainings-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trainings-item-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trainings-item-right {
+  color: #64748b;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.trainings-block-footer {
+  background: #f4f8fb;
+  border-top: 1px solid #dbe5f1;
+  margin: 0 -14px -14px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: flex-end;
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+.trainings-aside-error {
+  color: crimson;
+}
+
+.trainings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 23, 42, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.trainings-calendar-modal {
+  width: min(560px, 100%);
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.25);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.trainings-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.trainings-month-label {
+  text-transform: capitalize;
+  font-size: 24px;
+}
+
+.trainings-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.trainings-weekday {
+  text-align: center;
+  font-size: 16px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.trainings-day-btn {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  min-height: 58px;
+  cursor: pointer;
+  font-size: 16px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.trainings-day-btn--selected {
+  background: #0f172a;
+  color: #fff;
+}
+
+.trainings-day-btn--default {
+  background: #fff;
+  color: #0f172a;
+}
+
+.trainings-day-dots {
+  display: inline-flex;
+  gap: 6px;
+  min-height: 8px;
+}
+
+.trainings-dot-training {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ef4444;
+}
+
+.trainings-dot-plateau {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #3b82f6;
+}
+
+.trainings-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 14px;
+  color: #334155;
+}
+
+.trainings-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trainings-legend-dot-training {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ef4444;
+}
+
+.trainings-legend-dot-plateau {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #3b82f6;
+}

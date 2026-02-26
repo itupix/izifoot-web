@@ -17,7 +17,7 @@ function IconBase({
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
-      style={{ display: 'block', margin: 'auto', ...style }}
+      style={{ display: 'block', ...style }}
     >
       {children}
     </svg>
@@ -95,15 +95,6 @@ export function CloseIcon({ size, style }: IconProps) {
   return (
     <IconBase size={size} style={style}>
       <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </IconBase>
-  )
-}
-
-export function TrashIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M8 7.5h8M10 7.5V6h4v1.5M9 10v6M12 10v6M15 10v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M7.5 7.5h9l-.6 10a2 2 0 0 1-2 1.9h-4a2 2 0 0 1-2-1.9l-.4-10Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
     </IconBase>
   )
 }

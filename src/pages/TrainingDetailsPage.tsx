@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DotsHorizontalIcon } from '../components/icons'
+import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { uiAlert, uiConfirm } from '../ui'
@@ -144,14 +145,9 @@ export default function TrainingDetailsPage() {
   return (
     <div className="training-details-page">
       <header className="topbar">
-        <button
-          type="button"
-          className="back-round-button"
-          onClick={() => navigate(-1)}
-          aria-label="Revenir à la page précédente"
-        >
+        <RoundIconButton ariaLabel="Revenir à la page précédente" className="back-round-button" onClick={() => navigate(-1)}>
           <ChevronLeftIcon size={18} />
-        </button>
+        </RoundIconButton>
         <div className="topbar-title">
           <h2>
             Entrainement
@@ -160,15 +156,13 @@ export default function TrainingDetailsPage() {
           <p>{trainingDateLabel}</p>
         </div>
         <div className="topbar-menu-wrap">
-          <button
-            type="button"
+          <RoundIconButton
+            ariaLabel="Ouvrir le menu d'actions"
             className="menu-dots-button"
             onClick={() => setActionsMenuOpen((prev) => !prev)}
-            aria-expanded={actionsMenuOpen}
-            aria-label="Ouvrir le menu d'actions"
           >
             <DotsHorizontalIcon size={18} />
-          </button>
+          </RoundIconButton>
           {actionsMenuOpen && (
             <>
               <button
@@ -289,17 +283,16 @@ export default function TrainingDetailsPage() {
                       >
                         <div className="drill-card-head">
                           <h4>{meta?.title || 'Exercice'}</h4>
-                          <button
-                            type="button"
+                          <RoundIconButton
+                            ariaLabel="Supprimer l'exercice"
                             className="icon-danger-button card-delete-button"
-                            aria-label="Supprimer l'exercice"
                             onClick={(e) => {
                               e.stopPropagation()
                               removeDrill(row.id)
                             }}
                           >
                             <CloseIcon size={16} />
-                          </button>
+                          </RoundIconButton>
                         </div>
                         <small>{meta?.category || '—'} · {row.duration ?? meta?.duration ?? '—'} min</small>
                       </article>

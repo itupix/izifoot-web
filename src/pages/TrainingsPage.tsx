@@ -4,10 +4,12 @@ import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import CtaButton from '../components/CtaButton'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SoccerBallIcon, TrophyIcon } from '../components/icons'
+import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { uiAlert, uiPrompt } from '../ui'
 import type { Plateau, Training } from '../types/api'
+import './TrainingsPage.css'
 
 
 function yyyyMmDd(d: Date) {
@@ -111,190 +113,93 @@ export default function TrainingsPage() {
     }
   }
 
-  const blockStyle = {
-    display: 'grid',
-    gap: 12,
-    border: '1px solid #dbe5f1',
-    borderRadius: 16,
-    padding: 14,
-    background: 'linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)',
-    boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)',
-  } as const
-
-  const itemStyle = {
-    display: 'block',
-    width: '100%',
-    padding: '11px 12px',
-    borderRadius: 10,
-    border: '1px solid #d6deea',
-    background: '#fff',
-    color: '#0f172a',
-    fontSize: 16,
-    textDecoration: 'none',
-  }
-
-  const navIconButtonStyle = {
-    appearance: 'none',
-    border: '1px solid #d1d5db',
-    borderRadius: 999,
-    background: '#fff',
-    width: 32,
-    height: 32,
-    cursor: 'pointer',
-    lineHeight: 0,
-    padding: 0,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  } as const
-
   return (
-    <div style={{ display: 'grid', gap: 24, fontSize: 16 }}>
-      <div style={{ display: 'grid', gap: 12 }}>
-        <header style={{ display: 'grid', gap: 10 }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '44px 1fr 44px 44px',
-              alignItems: 'center',
-              gap: 10,
-              width: '100%',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setSelectedDate((prev) => addDays(prev, -1))}
-              aria-label="Jour précédent"
-              style={navIconButtonStyle}
-            >
+    <div className="trainings-page">
+      <div className="trainings-main">
+        <header className="trainings-date-header">
+          <div className="trainings-date-row">
+            <RoundIconButton ariaLabel="Jour précédent" onClick={() => setSelectedDate((prev) => addDays(prev, -1))}>
               <ChevronLeftIcon size={18} />
-            </button>
+            </RoundIconButton>
             <button
               type="button"
               onClick={() => setSelectedDate(new Date())}
               aria-label="Revenir à aujourd'hui"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                margin: 0,
-                padding: 0,
-                textTransform: 'capitalize',
-                textAlign: 'center',
-                fontSize: 24,
-                fontWeight: 700,
-                cursor: 'pointer',
-                width: '100%',
-              }}
+              className="trainings-date-title-btn"
             >
               {isTodaySelected ? "Aujourd'hui" : formatDateTitle(selectedDate)}
             </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDate((prev) => addDays(prev, 1))}
-              aria-label="Jour suivant"
-              style={navIconButtonStyle}
-            >
-              <ChevronRightIcon size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPickerMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1))
-                setIsDatePickerOpen((prev) => !prev)
-              }}
-              aria-label="Choisir une date"
-              style={{
-                appearance: 'none',
-                border: '1px solid #d1d5db',
-                borderRadius: 999,
-                background: '#fff',
-                width: 32,
-                height: 32,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                lineHeight: 0,
-                padding: 0,
-              }}
-            >
-              <CalendarIcon size={18} />
-            </button>
+            <div className="trainings-date-actions">
+              <RoundIconButton ariaLabel="Jour suivant" onClick={() => setSelectedDate((prev) => addDays(prev, 1))}>
+                <ChevronRightIcon size={18} />
+              </RoundIconButton>
+              <RoundIconButton
+                ariaLabel="Choisir une date"
+                onClick={() => {
+                  setPickerMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1))
+                  setIsDatePickerOpen((prev) => !prev)
+                }}
+              >
+                <CalendarIcon size={18} />
+              </RoundIconButton>
+            </div>
           </div>
         </header>
 
-        <section style={blockStyle}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#334155', letterSpacing: 0.2 }}>Entraînements</div>
+        <section className="trainings-block">
+          <div className="trainings-block-title">Entraînements</div>
           {dayTrainings.length === 0 ? (
-            <div style={{ fontSize: 16, color: '#64748b', padding: '2px 2px 4px' }}>Aucun entraînement ce jour.</div>
+            <div className="trainings-empty">Aucun entraînement ce jour.</div>
           ) : (
             dayTrainings.map((t) => (
               <Link
                 key={t.id}
                 to={`/training/${t.id}`}
-                style={itemStyle}
+                className="trainings-item"
               >
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <span className="trainings-item-row">
+                  <span className="trainings-item-left">
                     {t.status === 'CANCELLED' ? <span style={{ fontSize: 24 }}>❌</span> : <SoccerBallIcon size={24} />}
                     Entraînement
                   </span>
-                  <ChevronRightIcon size={24} style={{ color: '#64748b' }} />
+                  <span className="trainings-item-right">
+                    <ChevronRightIcon size={24} />
+                  </span>
                 </span>
               </Link>
             ))
           )}
-          <div
-            style={{
-              background: '#f4f8fb',
-              borderTop: '1px solid #dbe5f1',
-              margin: '0 -14px -14px',
-              padding: '10px 14px',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              borderBottomLeftRadius: 16,
-              borderBottomRightRadius: 16,
-            }}
-          >
+          <div className="trainings-block-footer">
             <CtaButton onClick={() => createTrainingForDay(selectedDate)}>
               Ajouter un entraînement
             </CtaButton>
           </div>
         </section>
 
-        <section style={blockStyle}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#334155', letterSpacing: 0.2 }}>Plateaux</div>
+        <section className="trainings-block">
+          <div className="trainings-block-title">Plateaux</div>
           {dayPlateaus.length === 0 ? (
-            <div style={{ fontSize: 16, color: '#64748b', padding: '2px 2px 4px' }}>Aucun plateau ce jour.</div>
+            <div className="trainings-empty">Aucun plateau ce jour.</div>
           ) : (
             dayPlateaus.map((p) => (
               <Link
                 key={p.id}
                 to={`/plateau/${p.id}`}
-                style={itemStyle}
+                className="trainings-item"
               >
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <span className="trainings-item-row">
+                  <span className="trainings-item-left">
                     <TrophyIcon size={24} />
                     Plateau — {p.lieu}
                   </span>
-                  <ChevronRightIcon size={24} style={{ color: '#64748b' }} />
+                  <span className="trainings-item-right">
+                    <ChevronRightIcon size={24} />
+                  </span>
                 </span>
               </Link>
             ))
           )}
-          <div
-            style={{
-              background: '#f4f8fb',
-              borderTop: '1px solid #dbe5f1',
-              margin: '0 -14px -14px',
-              padding: '10px 14px',
-              display: 'flex',
-              justifyContent: 'flex-end',
-              borderBottomLeftRadius: 16,
-              borderBottomRightRadius: 16,
-            }}
-          >
+          <div className="trainings-block-footer">
             <CtaButton onClick={() => createPlateauForDay(selectedDate)}>
               Ajouter un plateau
             </CtaButton>
@@ -304,84 +209,34 @@ export default function TrainingsPage() {
 
       <aside>
         {loading && <p>Chargement…</p>}
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+        {error && <p className="trainings-aside-error">{error}</p>}
       </aside>
 
       {isDatePickerOpen && (
-        <div
-          onClick={() => setIsDatePickerOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 90,
-            background: 'rgba(15, 23, 42, 0.45)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 16,
-          }}
-        >
+        <div onClick={() => setIsDatePickerOpen(false)} className="trainings-overlay">
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              width: 'min(560px, 100%)',
-              background: '#fff',
-              border: '1px solid #d1d5db',
-              borderRadius: 16,
-              boxShadow: '0 24px 48px rgba(15, 23, 42, 0.25)',
-              padding: 16,
-              display: 'grid',
-              gap: 14,
-            }}
+            className="trainings-calendar-modal"
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button
-                type="button"
+            <div className="trainings-calendar-head">
+              <RoundIconButton
+                ariaLabel="Mois précédent"
                 onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                aria-label="Mois précédent"
-                style={{
-                  appearance: 'none',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 999,
-                  background: '#fff',
-                  width: 32,
-                  height: 32,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 0,
-                  padding: 0,
-                }}
               >
                 <ChevronLeftIcon size={18} />
-              </button>
-              <strong style={{ textTransform: 'capitalize', fontSize: 24 }}>{monthLabel}</strong>
-              <button
-                type="button"
+              </RoundIconButton>
+              <strong className="trainings-month-label">{monthLabel}</strong>
+              <RoundIconButton
+                ariaLabel="Mois suivant"
                 onClick={() => setPickerMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                aria-label="Mois suivant"
-                style={{
-                  appearance: 'none',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 999,
-                  background: '#fff',
-                  width: 32,
-                  height: 32,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 0,
-                  padding: 0,
-                }}
               >
                 <ChevronRightIcon size={18} />
-              </button>
+              </RoundIconButton>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+            <div className="trainings-weekdays">
               {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
-                <div key={`${d}-${i}`} style={{ textAlign: 'center', fontSize: 16, color: '#64748b', fontWeight: 600 }}>{d}</div>
+                <div key={`${d}-${i}`} className="trainings-weekday">{d}</div>
               ))}
               {calendarCells.map((day, idx) => {
                 if (day <= 0) {
@@ -400,38 +255,25 @@ export default function TrainingsPage() {
                       setSelectedDate(candidate)
                       setIsDatePickerOpen(false)
                     }}
-                    style={{
-                      border: '1px solid #d1d5db',
-                      borderRadius: 10,
-                      background: isSelected ? '#0f172a' : '#fff',
-                      color: isSelected ? '#fff' : '#0f172a',
-                      minHeight: 58,
-                      cursor: 'pointer',
-                      fontSize: 16,
-                      display: 'grid',
-                      alignContent: 'center',
-                      justifyItems: 'center',
-                      gap: 8,
-                      paddingTop: 6,
-                    }}
+                    className={`trainings-day-btn ${isSelected ? 'trainings-day-btn--selected' : 'trainings-day-btn--default'}`}
                   >
                     <span>{day}</span>
-                    <span style={{ display: 'inline-flex', gap: 6, minHeight: 8 }}>
-                      {hasTraining && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#ef4444' }} />}
-                      {hasPlateau && <span style={{ width: 8, height: 8, borderRadius: 999, background: '#3b82f6' }} />}
+                    <span className="trainings-day-dots">
+                      {hasTraining && <span className="trainings-dot-training" />}
+                      {hasPlateau && <span className="trainings-dot-plateau" />}
                     </span>
                   </button>
                 )
               })}
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 14, color: '#334155' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 999, background: '#ef4444' }} />
+            <div className="trainings-legend">
+              <span className="trainings-legend-item">
+                <span className="trainings-legend-dot-training" />
                 Entraînement
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 999, background: '#3b82f6' }} />
+              <span className="trainings-legend-item">
+                <span className="trainings-legend-dot-plateau" />
                 Plateau
               </span>
             </div>
