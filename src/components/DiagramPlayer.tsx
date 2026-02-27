@@ -38,7 +38,13 @@ function interpolateItem(fromItem: Item | undefined, toItem: Item, progress: num
 
 export default function DiagramPlayer({ data }: Props) {
   const normalized = useMemo(() => normalizeDiagramData(data), [data])
-  const frames = normalized.frames
+  const frames = useMemo(() => {
+    const compressed = normalized.frames.filter((frame, index, list) => {
+      if (index === 0) return true
+      return JSON.stringify(frame.items) !== JSON.stringify(list[index - 1].items)
+    })
+    return compressed.length > 0 ? compressed : normalized.frames.slice(0, 1)
+  }, [normalized.frames])
   const fps = Math.max(1, Math.min(8, Math.round(normalized.fps || 2)))
   const [activeIndex, setActiveIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -58,6 +64,13 @@ export default function DiagramPlayer({ data }: Props) {
     setTransitionFromIndex(null)
     setTransitionProgress(0)
     setActiveIndex((idx) => Math.max(0, idx - 1))
+  }
+
+  function restart() {
+    setIsPlaying(false)
+    setTransitionFromIndex(null)
+    setTransitionProgress(0)
+    setActiveIndex(0)
   }
 
   function animateToNext(keepPlaying: boolean) {
@@ -115,7 +128,7 @@ export default function DiagramPlayer({ data }: Props) {
 
   const displayItems = useMemo(() => {
     const activeItems = frames[Math.min(activeIndex, frames.length - 1)]?.items || []
-    if (!isPlaying || transitionFromIndex === null || transitionFromIndex >= frames.length - 1) return activeItems
+    if (transitionFromIndex === null || transitionFromIndex >= frames.length - 1) return activeItems
     const fromItems = frames[transitionFromIndex]?.items || []
     const toItems = frames[transitionFromIndex + 1]?.items || activeItems
     const fromMap = new Map(fromItems.map((item) => [item.id, item]))
@@ -202,15 +215,25 @@ export default function DiagramPlayer({ data }: Props) {
           )
         })}
       </svg>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <button type="button" onClick={goToPrevious} disabled={activeIndex === 0} style={playerButtonStyle}>
-          Précédent
+      <div style={playerBarStyle}>
+        <button type="button" onClick={restart} disabled={activeIndex === 0 && !isPlaying} style={playerButtonStyle} aria-label="Début" title="Début">
+          {'⏮'}
         </button>
-        <button type="button" onClick={togglePlayback} disabled={frames.length <= 1} style={playerButtonStyle}>
-          {isPlaying ? 'Pause' : 'Lecture'}
+        <button type="button" onClick={goToPrevious} disabled={activeIndex === 0} style={playerButtonStyle} aria-label="Précédent" title="Précédent">
+          {'⏪'}
         </button>
-        <button type="button" onClick={goToNext} disabled={activeIndex >= frames.length - 1} style={playerButtonStyle}>
-          Suivant
+        <button
+          type="button"
+          onClick={togglePlayback}
+          disabled={frames.length <= 1}
+          style={{ ...playerButtonStyle, width: 56, height: 56, fontSize: 24 }}
+          aria-label={isPlaying ? 'Pause' : 'Lecture'}
+          title={isPlaying ? 'Pause' : 'Lecture'}
+        >
+          {isPlaying ? '⏸' : '▶'}
+        </button>
+        <button type="button" onClick={goToNext} disabled={activeIndex >= frames.length - 1} style={playerButtonStyle} aria-label="Suivant" title="Suivant">
+          {'⏩'}
         </button>
       </div>
     </div>
@@ -218,12 +241,23 @@ export default function DiagramPlayer({ data }: Props) {
 }
 
 const playerButtonStyle: React.CSSProperties = {
-  flex: 1,
-  minHeight: 42,
+  width: 46,
+  height: 46,
   borderRadius: 999,
   border: '1px solid #cbd5e1',
   background: '#fff',
   color: '#334155',
-  fontSize: 14,
+  fontSize: 20,
   fontWeight: 600,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+}
+
+const playerBarStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 10,
 }

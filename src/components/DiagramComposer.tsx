@@ -310,11 +310,13 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
 
   function deleteSelected() {
     if (!selectedId) return
+    if (!window.confirm('Supprimer cet élément sur toutes les étapes ?')) return
     removeItemEverywhere(selectedId)
     setSelectedId(null)
   }
 
   function resetCurrentStep() {
+    if (!window.confirm('Réinitialiser complètement le diagramme ?')) return
     onChange({
       ...value,
       frames: createEmptyDiagramData().frames,
@@ -504,6 +506,13 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
         <div className="toolbar-group">
           <IconButton active={tool === 'select'} onClick={() => setTool('select')} label="Sélection" icon="⌖" />
           <IconButton active={false} onClick={deleteSelected} label="Supprimer" icon="⌫" disabled={!selectedId} danger />
+          <IconButton
+            active={false}
+            onClick={resetCurrentStep}
+            label="Réinitialiser"
+            icon="↺"
+            disabled={frames.every((frame) => frame.items.length === 0)}
+          />
         </div>
         <div className="toolbar-group toolbar-grow">
           <label className="material-picker">
@@ -534,14 +543,23 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
       </div>
 
       <div className="diagram-step-bar">
-        <div className="step-status">Étape {activeFrameIndex + 1} / {frames.length}</div>
         <div className="frames-actions">
-          <button type="button" className="ghost-btn" onClick={goToPreviousStep} disabled={activeFrameIndex === 0}>Précédente</button>
-          <button type="button" className="ghost-btn" onClick={goToNextStep} disabled={activeFrameIndex >= frames.length - 1}>Suivante</button>
-          <button type="button" className={`ghost-btn ${isPlaying ? 'active' : ''}`} disabled={frames.length <= 1} onClick={startPlayback}>
-            {isPlaying ? 'Pause' : 'Lecture'}
+          <button type="button" className="ghost-btn control-btn" onClick={goToPreviousStep} disabled={activeFrameIndex === 0} aria-label="Précédente" title="Précédente">
+            {'⏮'}
           </button>
-          <button type="button" className="ghost-btn" onClick={resetCurrentStep} disabled={frames.every((frame) => frame.items.length === 0)}>Reset</button>
+          <button
+            type="button"
+            className={`ghost-btn control-btn play ${isPlaying ? 'active' : ''}`}
+            disabled={frames.length <= 1}
+            onClick={startPlayback}
+            aria-label={isPlaying ? 'Pause' : 'Lecture'}
+            title={isPlaying ? 'Pause' : 'Lecture'}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+          <button type="button" className="ghost-btn control-btn" onClick={goToNextStep} disabled={activeFrameIndex >= frames.length - 1} aria-label="Suivante" title="Suivante">
+            {'⏭'}
+          </button>
         </div>
       </div>
 

@@ -19,8 +19,6 @@ export default function DrillsPage() {
   // creation form state
   const [newTitle, setNewTitle] = useState('')
   const [newCategory, setNewCategory] = useState('')
-  const [newDuration, setNewDuration] = useState<number | ''>('')
-  const [newPlayers, setNewPlayers] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newDiagramData, setNewDiagramData] = useState<DiagramData>(createEmptyDiagramData())
   const [creating, setCreating] = useState(false)
@@ -49,7 +47,7 @@ export default function DrillsPage() {
   async function createDrill(e: React.FormEvent) {
     e.preventDefault()
     setCreateErr(null)
-    if (!newTitle || !newCategory || !newDuration || !newPlayers || !newDescription) {
+    if (!newTitle || !newCategory) {
       setCreateErr('Remplis tous les champs obligatoires.')
       return
     }
@@ -58,8 +56,8 @@ export default function DrillsPage() {
       const payload = {
         title: newTitle.trim(),
         category: newCategory.trim(),
-        duration: Number(newDuration),
-        players: newPlayers.trim(),
+        duration: 1,
+        players: 'Variable',
         description: newDescription.trim(),
         tags: []
       }
@@ -74,8 +72,6 @@ export default function DrillsPage() {
       setData(res)
       setNewTitle('')
       setNewCategory('')
-      setNewDuration('')
-      setNewPlayers('')
       setNewDescription('')
       setNewDiagramData(createEmptyDiagramData())
       setShowCreateModal(false)
@@ -182,23 +178,8 @@ export default function DrillsPage() {
                 onChange={e => setNewCategory(e.target.value)}
                 style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
               />
-              <input
-                placeholder="Durée (min) *"
-                type="number"
-                min={1}
-                max={180}
-                value={newDuration}
-                onChange={e => setNewDuration(e.target.value ? Number(e.target.value) : '')}
-                style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-              />
-              <input
-                placeholder="Joueurs (ex: 6-12) *"
-                value={newPlayers}
-                onChange={e => setNewPlayers(e.target.value)}
-                style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-              />
               <textarea
-                placeholder="Description *"
+                placeholder="Description (optionnel)"
                 rows={4}
                 value={newDescription}
                 onChange={e => setNewDescription(e.target.value)}

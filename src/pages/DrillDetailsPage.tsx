@@ -34,8 +34,6 @@ export default function DrillDetailsPage() {
   const [editError, setEditError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
-  const [duration, setDuration] = useState<number | ''>('')
-  const [players, setPlayers] = useState('')
   const [description, setDescription] = useState('')
   const [diagramData, setDiagramData] = useState<DiagramData>(createEmptyDiagramData())
 
@@ -55,8 +53,6 @@ export default function DrillDetailsPage() {
     if (!drill) return
     setTitle(drill.title)
     setCategory(drill.category)
-    setDuration(drill.duration)
-    setPlayers(drill.players)
     setDescription(drill.description)
     setDiagramData(diagram ? normalizeDiagramData(diagram.data) : createEmptyDiagramData())
     setEditError(null)
@@ -67,7 +63,7 @@ export default function DrillDetailsPage() {
     e.preventDefault()
     if (!drill) return
     setEditError(null)
-    if (!title.trim() || !category.trim() || !duration || !players.trim() || !description.trim()) {
+    if (!title.trim() || !category.trim()) {
       setEditError('Remplis tous les champs obligatoires.')
       return
     }
@@ -76,8 +72,8 @@ export default function DrillDetailsPage() {
       const payload = {
         title: title.trim(),
         category: category.trim(),
-        duration: Number(duration),
-        players: players.trim(),
+        duration: drill.duration && drill.duration > 0 ? drill.duration : 1,
+        players: drill.players?.trim() ? drill.players : 'Variable',
         description: description.trim(),
         tags: drill.tags,
       }
@@ -135,17 +131,13 @@ export default function DrillDetailsPage() {
           <h2 style={{ margin: 0 }}>{drill.title}</h2>
           <span style={{ fontSize: 13, color: '#6b7280' }}>{drill.category}</span>
         </header>
-        <div style={{ display: 'flex', gap: 10, fontSize: 13, color: '#475569', marginBottom: 8, flexWrap: 'wrap' }}>
-          <span>Durée: {drill.duration} min</span>
-          <span>Joueurs: {drill.players}</span>
-        </div>
         {materials.length > 0 && (
           <div style={{ display: 'grid', gap: 4, marginBottom: 8 }}>
             <strong style={{ fontSize: 13, color: '#475569' }}>Matériel</strong>
             <div style={{ fontSize: 13, color: '#334155' }}>{materials.join(', ')}</div>
           </div>
         )}
-        <p style={{ margin: 0, color: '#334155', lineHeight: 1.5 }}>{drill.description}</p>
+        {!!drill.description && <p style={{ margin: 0, color: '#334155', lineHeight: 1.5 }}>{drill.description}</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <button type="button" onClick={openEditModal} style={secondaryButtonStyle}>Modifier</button>
           <button type="button" onClick={deleteDrill} disabled={deleting} style={dangerButtonStyle}>
@@ -193,20 +185,10 @@ export default function DrillDetailsPage() {
             <form onSubmit={saveEdit}>
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre *" style={fieldStyle} />
               <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Catégorie *" style={fieldStyle} />
-              <input
-                value={duration}
-                onChange={(e) => setDuration(e.target.value ? Number(e.target.value) : '')}
-                placeholder="Durée (min) *"
-                type="number"
-                min={1}
-                max={180}
-                style={fieldStyle}
-              />
-              <input value={players} onChange={(e) => setPlayers(e.target.value)} placeholder="Joueurs (ex: 6-12) *" style={fieldStyle} />
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description *"
+                placeholder="Description (optionnel)"
                 rows={4}
                 style={{ ...fieldStyle, resize: 'vertical' }}
               />
