@@ -1,6 +1,8 @@
 
 
 import React, { useEffect, useMemo, useState } from 'react'
+import FloatingPlusButton from '../components/FloatingPlusButton'
+import SearchSelectBar from '../components/SearchSelectBar'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
@@ -103,20 +105,15 @@ export default function PlayersPage() {
     <div style={{ display: 'grid', gap: 16 }}>
       <h2 style={{ marginTop: 0 }}>Effectif</h2>
 
-      <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 12 }}>
-          <input
-            placeholder="Recherche par nom"
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-          />
-          <select value={posFilter} onChange={e => setPosFilter(e.target.value)} style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
-            <option value="">Tous les postes</option>
-            {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-      </div>
+      <SearchSelectBar
+        query={q}
+        onQueryChange={setQ}
+        queryPlaceholder="Recherche par nom"
+        selectValue={posFilter}
+        onSelectChange={setPosFilter}
+        selectPlaceholder="Tous les postes"
+        options={POSITIONS.map(p => ({ value: p, label: p }))}
+      />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ color: '#6b7280', fontSize: 14 }}>{filtered.length} joueur(s)</div>
@@ -319,26 +316,7 @@ export default function PlayersPage() {
         </>
       )}
 
-      <button
-        onClick={() => setModalOpen(true)}
-        aria-label="Ajouter un joueur"
-        style={{
-          position: 'fixed',
-          right: 20,
-          bottom: 20,
-          width: 48,
-          height: 48,
-          borderRadius: 999,
-          border: 'none',
-          background: '#2563eb',
-          color: '#fff',
-          fontSize: 24,
-          boxShadow: '0 12px 24px rgba(37, 99, 235, 0.3)',
-          zIndex: 30,
-        }}
-      >
-        +
-      </button>
+      <FloatingPlusButton ariaLabel="Ajouter un joueur" onClick={() => setModalOpen(true)} />
     </div>
   )
 }

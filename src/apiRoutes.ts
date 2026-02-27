@@ -31,6 +31,7 @@ export const apiRoutes = {
   },
   drills: {
     list: '/drills',
+    byId: (id: string) => `/drills/${enc(id)}`,
     diagrams: (drillId: string) => `/drills/${enc(drillId)}/diagrams`,
   },
   trainingDrills: {

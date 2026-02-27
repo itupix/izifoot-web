@@ -1,93 +1,20 @@
-
-
-import React, { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import React, { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import DiagramComposer, { createEmptyDiagramData, hasDiagramContent, type DiagramData } from '../components/DiagramComposer'
+import FloatingPlusButton from '../components/FloatingPlusButton'
+import SearchSelectBar from '../components/SearchSelectBar'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import type { Drill, DrillsResponse } from '../types/api'
 
-// Thumbnail helpers
-type DiagramData = { items?: unknown[] }
-function normalizeDiagramData(input: unknown): DiagramData {
-  try {
-    const obj = typeof input === 'string' ? JSON.parse(input) : input
-    if (obj && typeof obj === 'object' && 'items' in obj) {
-      const items = (obj as { items?: unknown }).items
-      return { items: Array.isArray(items) ? items : [] }
-    }
-    return { items: [] }
-  } catch {
-    return { items: [] }
-  }
-}
-
-// Types
-interface DiagramMeta {
-  id: string
-  title: string
-  data: unknown
-  drillId?: string | null
-  trainingDrillId?: string | null
-  updatedAt: string
-}
-
-async function apiGetDiagramsForDrill(drillId: string): Promise<DiagramMeta[]> {
-  return apiGet<DiagramMeta[]>(apiRoutes.drills.diagrams(drillId))
-}
-
-function DiagramThumb({ data, width = 220 }: { data: unknown; width?: number }) {
-  const parsed = normalizeDiagramData(data)
-  const W = 600, H = 380
-  const w = width, h = Math.round(width * (H / W))
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width={w} height={h} style={{ display: 'block', border: '1px solid #e5e7eb', borderRadius: 6, background: '#f8fff8' }}>
-      {/* terrain minimal */}
-      <rect x={5} y={5} width={W - 10} height={H - 10} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
-      <line x1={W / 2} y1={5} x2={W / 2} y2={H - 5} stroke="#c7e2c7" strokeDasharray="4 4" />
-      {parsed.items?.map((it, idx) => {
-        const item = it as { type?: string; id?: string; from?: { x: number; y: number }; to?: { x: number; y: number }; x?: number; y?: number; side?: string; label?: string }
-        if (item?.type === 'arrow' && item.from && item.to) {
-          return (
-            <g key={item.id || idx}>
-              <defs>
-                <marker id={`m-${idx}`} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L6,3 Z" fill="#111827" />
-                </marker>
-              </defs>
-              <line x1={item.from.x} y1={item.from.y} x2={item.to.x} y2={item.to.y} stroke="#111827" strokeWidth={2} markerEnd={`url(#m-${idx})`} />
-            </g>
-          )
-        }
-        if (item?.type === 'cone') {
-          const x = item.x ?? 0, y = item.y ?? 0
-          return <polygon key={item.id || idx} points={`${x},${y - 10} ${x - 10},${y + 10} ${x + 10},${y + 10}`} fill="#f97316" stroke="#7c2d12" />
-        }
-        if (item?.type === 'player') {
-          const x = item.x ?? 0, y = item.y ?? 0
-          const fill = (item.side === 'away') ? '#f87171' : '#60a5fa'
-          return (
-            <g key={item.id || idx}>
-              <circle cx={x} cy={y} r={14} fill={fill} stroke="#111827" />
-              {item.label ? <text x={x} y={y + 4} textAnchor="middle" fontSize="12" fill="white" fontWeight={700}>{item.label}</text> : null}
-            </g>
-          )
-        }
-        return null
-      })}
-    </svg>
-  )
-}
-
 export default function DrillsPage() {
+  const navigate = useNavigate()
   const [data, setData] = useState<DrillsResponse>({ items: [], categories: [], tags: [] })
   const [q, setQ] = useState('')
   const [category, setCategory] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [diagramsByDrill, setDiagramsByDrill] = useState<Record<string, DiagramMeta[]>>({})
-  const [loadingDiagramsFor, setLoadingDiagramsFor] = useState<string | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   // creation form state
   const [newTitle, setNewTitle] = useState('')
@@ -95,40 +22,9 @@ export default function DrillsPage() {
   const [newDuration, setNewDuration] = useState<number | ''>('')
   const [newPlayers, setNewPlayers] = useState('')
   const [newDescription, setNewDescription] = useState('')
-  const [newTags, setNewTags] = useState('') // comma-separated
+  const [newDiagramData, setNewDiagramData] = useState<DiagramData>(createEmptyDiagramData())
   const [creating, setCreating] = useState(false)
   const [createErr, setCreateErr] = useState<string | null>(null)
-
-  const params = useParams();
-
-  useEffect(() => {
-    if (params && params.id) {
-      const id = params.id as string
-      setExpanded(id)
-      // try to scroll the card into view
-      setTimeout(() => {
-        const el = document.getElementById(`drill-card-${id}`)
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 0)
-    }
-  }, [params])
-  useEffect(() => {
-    let cancelled = false
-    async function loadDiagrams(id: string) {
-      if (diagramsByDrill[id]) return
-      try {
-        setLoadingDiagramsFor(id)
-        const rows = await apiGetDiagramsForDrill(id)
-        if (!cancelled) setDiagramsByDrill(prev => ({ ...prev, [id]: rows }))
-      } catch {
-        // silencieux: pas bloquant pour la page
-      } finally {
-        if (!cancelled) setLoadingDiagramsFor(null)
-      }
-    }
-    if (expanded) loadDiagrams(expanded)
-    return () => { cancelled = true }
-  }, [expanded, diagramsByDrill])
 
   const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
     const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
@@ -141,24 +37,14 @@ export default function DrillsPage() {
       const needle = q.toLowerCase()
       items = items.filter(d =>
         d.title.toLowerCase().includes(needle) ||
-        d.description.toLowerCase().includes(needle) ||
-        d.tags.some(t => t.toLowerCase().includes(needle))
+        d.description.toLowerCase().includes(needle)
       )
     }
     if (category) items = items.filter(d => d.category === category)
-    if (selectedTags.length) {
-      const set = new Set(selectedTags.map(t => t.toLowerCase()))
-      items = items.filter(d => d.tags.some(t => set.has(t.toLowerCase())))
-    }
     return items
-  }, [data.items, q, category, selectedTags])
+  }, [data.items, q, category])
 
   const categories = useMemo(() => data.categories, [data.categories])
-  const tags = useMemo(() => data.tags, [data.tags])
-
-  function toggleTag(tag: string) {
-    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
-  }
 
   async function createDrill(e: React.FormEvent) {
     e.preventDefault()
@@ -175,15 +61,25 @@ export default function DrillsPage() {
         duration: Number(newDuration),
         players: newPlayers.trim(),
         description: newDescription.trim(),
-        tags: newTags.split(',').map(s => s.trim()).filter(Boolean)
+        tags: []
       }
       const created = await apiPost<Drill>(apiRoutes.drills.list, payload)
-      // refresh list
+      if (hasDiagramContent(newDiagramData)) {
+        await apiPost(apiRoutes.drills.diagrams(created.id), {
+          title: 'Diagramme',
+          data: newDiagramData,
+        })
+      }
       const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
       setData(res)
-      setExpanded(created.id)
-      // reset form
-      setNewTitle(''); setNewCategory(''); setNewDuration(''); setNewPlayers(''); setNewDescription(''); setNewTags('')
+      setNewTitle('')
+      setNewCategory('')
+      setNewDuration('')
+      setNewPlayers('')
+      setNewDescription('')
+      setNewDiagramData(createEmptyDiagramData())
+      setShowCreateModal(false)
+      navigate(`/exercices/${created.id}`)
     } catch (err: unknown) {
       setCreateErr(toErrorMessage(err))
     } finally {
@@ -192,151 +88,146 @@ export default function DrillsPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24 }}>
-      {/* Sidebar filters */}
-      <aside>
-        <h2 style={{ marginTop: 0 }}>Exercices</h2>
-        <input
-          placeholder="Recherche (titre, tags, description)"
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 12 }}
+    <div style={{ position: 'relative' }}>
+      <h2 style={{ marginTop: 0, marginBottom: 12 }}>Exercices</h2>
+      <div style={{ marginBottom: 14 }}>
+        <SearchSelectBar
+          query={q}
+          onQueryChange={setQ}
+          queryPlaceholder="Recherche (titre, description)"
+          selectValue={category}
+          onSelectChange={setCategory}
+          selectPlaceholder="Toutes les catégories"
+          options={categories.map(c => ({ value: c, label: c }))}
         />
-        <label style={{ fontSize: 12, color: '#6b7280' }}>Catégorie</label>
-        <select value={category} onChange={e => setCategory(e.target.value)} style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 12 }}>
-          <option value="">Toutes</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <div>
-          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Tags</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {tags.map(t => (
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ color: '#6b7280', fontSize: 14 }}>{filtered.length} exercice(s)</div>
+        {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
+        {error && <div style={{ color: 'crimson' }}>{error}</div>}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+        {filtered.map(d => (
+          <article
+            key={d.id}
+            onClick={() => navigate(`/exercices/${d.id}`)}
+            style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff', cursor: 'pointer' }}
+          >
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{d.category}</div>
+            <header>
+              <strong>{d.title}</strong>
+            </header>
+            <p style={{ fontSize: 13, color: '#374151', marginTop: 8, marginBottom: 0 }}>
+              {d.description}
+            </p>
+          </article>
+        ))}
+      </div>
+      <FloatingPlusButton ariaLabel="Nouvel exercice" zIndex={20} onClick={() => {
+        setCreateErr(null)
+        setNewDiagramData(createEmptyDiagramData())
+        setShowCreateModal(true)
+      }} />
+      {showCreateModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(17, 24, 39, 0.35)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            zIndex: 2000,
+            padding: '76px 12px 12px',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          onClick={() => { if (!creating) setShowCreateModal(false) }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 860,
+              background: 'white',
+              borderRadius: 10,
+              padding: 16,
+              marginBottom: 12,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>Nouvel exercice</h3>
               <button
-                key={t}
-                onClick={() => toggleTag(t)}
-                style={{
-                  padding: '4px 8px', borderRadius: 9999, border: '1px solid #d1d5db',
-                  background: selectedTags.includes(t) ? '#e0f2fe' : '#fff',
-                  cursor: 'pointer', fontSize: 12
-                }}
-              >{t}</button>
-            ))}
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#6b7280' }}
+              >
+                ×
+              </button>
+            </div>
+            {createErr && <div style={{ color: 'crimson', fontSize: 12, marginBottom: 8 }}>{createErr}</div>}
+            <form onSubmit={createDrill}>
+              <input
+                placeholder="Titre *"
+                value={newTitle}
+                onChange={e => setNewTitle(e.target.value)}
+                style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+              />
+              <input
+                placeholder="Catégorie *"
+                value={newCategory}
+                onChange={e => setNewCategory(e.target.value)}
+                style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+              />
+              <input
+                placeholder="Durée (min) *"
+                type="number"
+                min={1}
+                max={180}
+                value={newDuration}
+                onChange={e => setNewDuration(e.target.value ? Number(e.target.value) : '')}
+                style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+              />
+              <input
+                placeholder="Joueurs (ex: 6-12) *"
+                value={newPlayers}
+                onChange={e => setNewPlayers(e.target.value)}
+                style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
+              />
+              <textarea
+                placeholder="Description *"
+                rows={4}
+                value={newDescription}
+                onChange={e => setNewDescription(e.target.value)}
+                style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 12, resize: 'vertical' }}
+              />
+              <div style={{ marginBottom: 12 }}>
+                <strong style={{ display: 'block', marginBottom: 8 }}>Diagramme (optionnel)</strong>
+                <DiagramComposer value={newDiagramData} onChange={setNewDiagramData} minHeight={300} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #16a34a', background: '#16a34a', color: '#fff', cursor: 'pointer' }}
+                >
+                  {creating ? 'Création…' : 'Ajouter'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-        <hr style={{ margin: '16px 0', border: 0, borderTop: '1px solid #e5e7eb' }} />
-        <h3 style={{ margin: '8px 0' }}>Nouvel exercice</h3>
-        {createErr && <div style={{ color: 'crimson', fontSize: 12, marginBottom: 8 }}>{createErr}</div>}
-        <form onSubmit={createDrill}>
-          <input
-            placeholder="Titre *"
-            value={newTitle}
-            onChange={e => setNewTitle(e.target.value)}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-          />
-          <input
-            placeholder="Catégorie *"
-            value={newCategory}
-            onChange={e => setNewCategory(e.target.value)}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-          />
-          <input
-            placeholder="Durée (min) *"
-            type="number"
-            min={1}
-            max={180}
-            value={newDuration}
-            onChange={e => setNewDuration(e.target.value ? Number(e.target.value) : '')}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-          />
-          <input
-            placeholder="Joueurs (ex: 6–12) *"
-            value={newPlayers}
-            onChange={e => setNewPlayers(e.target.value)}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-          />
-          <textarea
-            placeholder="Description *"
-            rows={4}
-            value={newDescription}
-            onChange={e => setNewDescription(e.target.value)}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8, resize: 'vertical' }}
-          />
-          <input
-            placeholder="Tags (séparés par des virgules)"
-            value={newTags}
-            onChange={e => setNewTags(e.target.value)}
-            style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-          />
-          <button type="submit" disabled={creating} style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #d1d5db', background: '#f9fafb', cursor: 'pointer' }}>
-            {creating ? 'Création…' : 'Ajouter'}
-          </button>
-        </form>
-      </aside>
-
-      {/* Main list */}
-      <main>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ color: '#6b7280', fontSize: 14 }}>{filtered.length} exercice(s)</div>
-          {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
-          {error && <div style={{ color: 'crimson' }}>{error}</div>}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-          {filtered.map(d => (
-            <article id={`drill-card-${d.id}`} key={d.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff' }}>
-              <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <strong>{d.title}</strong>
-                <span style={{ fontSize: 12, color: '#6b7280' }}>{d.category}</span>
-              </header>
-              <div style={{ display: 'flex', gap: 8, fontSize: 12, color: '#374151', marginTop: 6 }}>
-                <span>⏱ {d.duration}′</span>
-                <span>👥 {d.players}</span>
-              </div>
-              <p style={{ fontSize: 13, color: '#374151', marginTop: 8, marginBottom: 8 }}>
-                {expanded === d.id ? d.description : d.description.slice(0, 120) + (d.description.length > 120 ? '…' : '')}
-              </p>
-              {expanded === d.id && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Diagrammes</div>
-                  {loadingDiagramsFor === d.id && <div style={{ fontSize: 12, color: '#9ca3af' }}>Chargement…</div>}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-                    {(diagramsByDrill[d.id] || []).map(di => (
-                      <div key={di.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 8, background: '#fff' }}>
-                        <DiagramThumb data={di.data} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                          <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
-                            <strong>{di.title}</strong>
-                          </div>
-                          <Link to={`/diagram-editor?id=${encodeURIComponent(di.id)}`} style={{ fontSize: 12, color: '#2563eb' }}>Ouvrir</Link>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>MAJ {new Date(di.updatedAt).toLocaleDateString()}</div>
-                      </div>
-                    ))}
-                    {((diagramsByDrill[d.id] || []).length === 0 && loadingDiagramsFor !== d.id) && (
-                      <div style={{ fontSize: 12, color: '#6b7280' }}>Aucun diagramme pour cet exercice.</div>
-                    )}
-                  </div>
-                </div>
-              )}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                {d.tags.map(t => <span key={t} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 9999, border: '1px solid #d1d5db' }}>{t}</span>)}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setExpanded(expanded === d.id ? null : d.id)} style={{ fontSize: 12, border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 8px', background: '#f9fafb' }}>
-                    {expanded === d.id ? 'Masquer' : 'Voir'}
-                  </button>
-                  <Link to={`/diagram-editor?drillId=${encodeURIComponent(d.id)}`} style={{ fontSize: 12, color: '#2563eb' }}>
-                    + Nouveau diagramme
-                  </Link>
-                </div>
-                <Link to={`/exercices/${d.id}`} style={{ fontSize: 12, color: '#2563eb' }}>
-                  Détail
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
-      </main>
+      )}
     </div>
   )
 }

@@ -2,3 +2,96 @@
   color: transparent;
   background: linear-gradient(90deg, rgb(14, 165, 233), rgb(34, 197, 94)) text;
 }
+
+.sidebarNav {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebarLink {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.sidebarLink:hover {
+  border-color: #bfdbfe;
+  background: #f8fafc;
+  color: #0b65c2;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.sidebarLink:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.3);
+  outline-offset: 1px;
+}
+
+.sidebarLinkActive {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--brand-1), var(--brand-1b));
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(29, 78, 216, 0.18);
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
+}
+
+.sidebarPrimaryAction {
+  display: block;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: linear-gradient(180deg, var(--brand-1), var(--brand-1b));
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  box-shadow: 0 10px 20px rgba(29, 78, 216, 0.15), 0 2px 6px rgba(29, 78, 216, 0.2);
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+.sidebarPrimaryAction:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+}
+
+.sidebarPrimaryAction:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.3);
+  outline-offset: 1px;
+}
+
+.logoutButton {
+  appearance: none;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.logoutButton:hover {
+  border-color: #f87171;
+  background: #fff1f2;
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.12);
+}
+
+.logoutButton:focus-visible {
+  outline: 3px solid rgba(244, 63, 94, 0.28);
+  outline-offset: 1px;
+}

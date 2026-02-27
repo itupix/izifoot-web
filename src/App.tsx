@@ -12,6 +12,7 @@ import TrainingsPage from './pages/TrainingsPage';
 import TrainingDetailsPage from './pages/TrainingDetailsPage';
 import PlateauDetailsPage from './pages/PlateauDetailsPage';
 import DrillsPage from './pages/Drills';
+import DrillDetailsPage from './pages/DrillDetailsPage';
 import PlayersPage from './pages/PlayersPage';
 import DiagramEditor from './pages/DiagramEditor';
 import StatsPage from './pages/Stats';
@@ -34,10 +35,21 @@ export default function App() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const headerHeight = 64;
   const pageWidth = 980;
+
+  const isActivePath = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
+
+  const navItems = [
+    { to: '/planning', label: 'Planning' },
+    { to: '/exercices', label: 'Exercices' },
+    { to: '/effectif', label: 'Effectif' },
+    { to: '/stats', label: 'Stats' },
+  ];
+
   return (
     <>
       {!isHome && (
@@ -81,17 +93,17 @@ export default function App() {
               top: 0,
               left: 0,
               bottom: 0,
-              width: 260,
+              width: 280,
               padding: 16,
               background: '#fff',
               borderRight: '1px solid #e2e8f0',
-              boxShadow: '0 20px 40px rgba(15, 23, 42, 0.12)',
+              boxShadow: '0 12px 28px rgba(15, 23, 42, 0.12)',
               transform: menuOpen ? 'translateX(0)' : 'translateX(-110%)',
               transition: 'transform 200ms ease',
               zIndex: 60,
               display: 'flex',
               flexDirection: 'column',
-              gap: 12,
+              gap: 14,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -99,18 +111,30 @@ export default function App() {
                 <CloseIcon size={16} />
               </RoundIconButton>
             </div>
-            <nav style={{ display: 'grid', gap: 8 }}>
-              <Link to="/planning" onClick={() => setMenuOpen(false)}>Planning</Link>
-              <Link to="/exercices" onClick={() => setMenuOpen(false)}>Exercices</Link>
-              <Link to="/effectif" onClick={() => setMenuOpen(false)}>Effectif</Link>
-              <Link to="/stats" onClick={() => setMenuOpen(false)}>Stats</Link>
+            <nav className={style.sidebarNav}>
+              {navItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMenuOpen(false)}
+                  className={`${style.sidebarLink} ${isActivePath(item.to) ? style.sidebarLinkActive : ''}`.trim()}
+                >
+                  {item.label}
+                </Link>
+              ))}
             </nav>
-            <div style={{ marginTop: 'auto', display: 'grid', gap: 8 }}>
-              <Link to="/plannings/new" onClick={() => setMenuOpen(false)} style={{ fontWeight: 600, textDecoration: 'none' }}>
+            <div className={style.sidebarFooter}>
+              <Link
+                to="/plannings/new"
+                onClick={() => setMenuOpen(false)}
+                className={style.sidebarPrimaryAction}
+              >
                 Organiser un plateau
               </Link>
               {me ? (
-                <button onClick={handleLogout}>Se déconnecter</button>
+                <button className={style.logoutButton} onClick={handleLogout}>
+                  Se déconnecter
+                </button>
               ) : null}
             </div>
           </aside>
@@ -132,7 +156,7 @@ export default function App() {
             <Route path="/training/:id" element={<Protected><TrainingDetailsPage /></Protected>} />
             <Route path="/plateau/:id" element={<Protected><PlateauDetailsPage /></Protected>} />
             <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
-            <Route path="/exercices/:id" element={<Protected><DrillsPage /></Protected>} />
+            <Route path="/exercices/:id" element={<Protected><DrillDetailsPage /></Protected>} />
             <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
             <Route path="/effectif" element={<Protected><PlayersPage /></Protected>} />
             <Route path="/plannings" element={<Protected><PlanningsListPage /></Protected>} />
