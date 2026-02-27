@@ -13,7 +13,7 @@ VITE_API_URL=https://your-backend.up.railway.app
 Notes:
 - The frontend now uses `VITE_API_URL` as the primary API base URL.
 - `VITE_API_BASE` and `VITE_API_BASE_URL` are still accepted as fallback names.
-- In local dev, if no env var is set, the app falls back to `http://localhost:4000`.
+- If no env var is set, the app now falls back to `https://api.izifoot.fr`.
 
 Currently, two official plugins are available:
 

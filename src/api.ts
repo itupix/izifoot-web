@@ -6,12 +6,11 @@ const rawApiBase =
   import.meta.env?.VITE_API_BASE ??
   import.meta.env?.VITE_API_BASE_URL
 
+const DEFAULT_API_BASE = 'https://api.izifoot.fr'
+
 function resolveApiBase(): string {
   if (rawApiBase) return String(rawApiBase).replace(/\/+$/, '')
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:4000'
-  }
-  return window.location.origin
+  return DEFAULT_API_BASE
 }
 
 export const API_BASE = resolveApiBase()
