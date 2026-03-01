@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { DependencyList } from 'react'
 import { toErrorMessage } from '../errors'
 
 type LoadContext = {
@@ -7,8 +6,7 @@ type LoadContext = {
 }
 
 export function useAsyncLoader(
-  load: (ctx: LoadContext) => Promise<void>,
-  deps: DependencyList
+  load: (ctx: LoadContext) => Promise<void>
 ): { loading: boolean; error: string | null; setError: (message: string | null) => void } {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +26,7 @@ export function useAsyncLoader(
     }
     run()
     return () => { cancelled = true }
-  }, deps)
+  }, [load])
 
   return { loading, error, setError }
 }

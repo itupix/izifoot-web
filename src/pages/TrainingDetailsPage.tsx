@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -47,7 +47,7 @@ export default function TrainingDetailsPage() {
   const [manageDrillsOpen, setManageDrillsOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
 
-  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadTraining = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
     const [t, ps, dr, ds, att] = await Promise.all([
       apiGet<Training>(apiRoutes.trainings.byId(id)),
@@ -64,6 +64,8 @@ export default function TrainingDetailsPage() {
     setDrills(ds)
     setAttendance(new Set(att.map((a) => a.playerId)))
   }, [id])
+
+  const { loading, error } = useAsyncLoader(loadTraining)
 
   const trainingDateLabel = useMemo(() => {
     if (!training?.date) return ''

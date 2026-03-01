@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, type Planning } from '../api'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
@@ -48,7 +48,7 @@ export default function PlateauDetailsPage() {
   const [newScorerPlayerId, setNewScorerPlayerId] = useState<string>('')
   const [opponentName, setOpponentName] = useState<string>('')
 
-  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
     const [p, ps, matches, attends, plannings] = await Promise.all([
       apiGet<Plateau>(apiRoutes.plateaus.byId(id)),
@@ -69,6 +69,8 @@ export default function PlateauDetailsPage() {
         .slice(0, 1)
     )
   }, [id])
+
+  const { loading, error } = useAsyncLoader(loadPlateau)
 
   const dateLabel = useMemo(() => {
     if (!plateau?.date) return ''

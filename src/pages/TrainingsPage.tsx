@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -61,7 +61,7 @@ export default function TrainingsPage() {
   })
 
   // Load trainings + plateaus
-  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadTrainings = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const [ts, pls] = await Promise.all([
       apiGet<Training[]>(apiRoutes.trainings.list),
       apiGet<Plateau[]>(apiRoutes.plateaus.list),
@@ -71,6 +71,8 @@ export default function TrainingsPage() {
     setTrainings(ts)
     setPlateaus(pls)
   }, [])
+
+  const { loading, error } = useAsyncLoader(loadTrainings)
   // Derived data for selected day
   const selectedDate = useMemo(() => parseDateParam(searchParams.get('date')) ?? new Date(), [searchParams])
   const selectedDayKey = useMemo(() => yyyyMmDd(selectedDate), [selectedDate])

@@ -1,39 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { PLAYER_COLOR_OPTIONS, normalizeDiagramData, type Item, type PlayerColor } from './DiagramComposer'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getPlayerFill, interpolateItem, normalizeDiagramData } from './diagramShared'
 
 interface Props {
   data: unknown
-}
-
-function lerp(a: number, b: number, progress: number): number {
-  return a + (b - a) * progress
-}
-
-function getPlayerFill(color: PlayerColor): string {
-  return PLAYER_COLOR_OPTIONS.find((option) => option.value === color)?.fill || '#3b82f6'
-}
-
-function interpolateItem(fromItem: Item | undefined, toItem: Item, progress: number): Item {
-  if (!fromItem || fromItem.type !== toItem.type) return toItem
-  if (toItem.type === 'player' && fromItem.type === 'player') {
-    return { ...toItem, x: lerp(fromItem.x, toItem.x, progress), y: lerp(fromItem.y, toItem.y, progress) }
-  }
-  if (
-    (toItem.type === 'cone' && fromItem.type === 'cone') ||
-    (toItem.type === 'cup' && fromItem.type === 'cup') ||
-    (toItem.type === 'ball' && fromItem.type === 'ball') ||
-    (toItem.type === 'post' && fromItem.type === 'post')
-  ) {
-    return { ...toItem, x: lerp(fromItem.x, toItem.x, progress), y: lerp(fromItem.y, toItem.y, progress) }
-  }
-  if (toItem.type === 'arrow' && fromItem.type === 'arrow') {
-    return {
-      ...toItem,
-      from: { x: lerp(fromItem.from.x, toItem.from.x, progress), y: lerp(fromItem.from.y, toItem.from.y, progress) },
-      to: { x: lerp(fromItem.to.x, toItem.to.x, progress), y: lerp(fromItem.to.y, toItem.to.y, progress) },
-    }
-  }
-  return toItem
 }
 
 export default function DiagramPlayer({ data }: Props) {
@@ -73,7 +42,7 @@ export default function DiagramPlayer({ data }: Props) {
     setActiveIndex(0)
   }
 
-  function animateToNext(keepPlaying: boolean) {
+  const animateToNext = useCallback((keepPlaying: boolean) => {
     if (activeIndex >= frames.length - 1) {
       setIsPlaying(false)
       setTransitionFromIndex(null)
@@ -102,7 +71,7 @@ export default function DiagramPlayer({ data }: Props) {
 
     raf = window.requestAnimationFrame(tick)
     return () => window.cancelAnimationFrame(raf)
-  }
+  }, [activeIndex, fps, frames.length])
 
   function goToNext() {
     if (isPlaying) return
@@ -124,7 +93,7 @@ export default function DiagramPlayer({ data }: Props) {
       return
     }
     return animateToNext(true)
-  }, [isPlaying, activeIndex, frames.length, fps])
+  }, [activeIndex, animateToNext, frames.length, isPlaying])
 
   const displayItems = useMemo(() => {
     const activeItems = frames[Math.min(activeIndex, frames.length - 1)]?.items || []
@@ -140,7 +109,7 @@ export default function DiagramPlayer({ data }: Props) {
       })
     }
     return interpolated
-  }, [activeIndex, frames, isPlaying, transitionFromIndex, transitionProgress])
+  }, [activeIndex, frames, transitionFromIndex, transitionProgress])
 
   if (frames.length === 0) return null
 

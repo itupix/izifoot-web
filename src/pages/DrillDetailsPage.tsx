@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import DiagramComposer, { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/DiagramComposer'
+import DiagramComposer from '../components/DiagramComposer'
 import DiagramPlayer from '../components/DiagramPlayer'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/diagramShared'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import type { Drill } from '../types/api'
@@ -37,7 +38,7 @@ export default function DrillDetailsPage() {
   const [description, setDescription] = useState('')
   const [diagramData, setDiagramData] = useState<DiagramData>(createEmptyDiagramData())
 
-  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadDrill = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const [rows, diagramRows] = await Promise.all([
       apiGet<{ items: Drill[] }>(apiRoutes.drills.list),
       apiGet<unknown>(apiRoutes.drills.diagrams(drillId)).catch(() => []),
@@ -48,6 +49,8 @@ export default function DrillDetailsPage() {
     const diagrams = normalizeDiagramList(diagramRows)
     setDiagram(diagrams[0] ?? null)
   }, [drillId])
+
+  const { loading, error } = useAsyncLoader(loadDrill)
 
   function openEditModal() {
     if (!drill) return

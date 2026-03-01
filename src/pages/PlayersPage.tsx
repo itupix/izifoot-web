@@ -1,6 +1,6 @@
 
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import FloatingPlusButton from '../components/FloatingPlusButton'
 import SearchSelectBar from '../components/SearchSelectBar'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
@@ -31,10 +31,12 @@ export default function PlayersPage() {
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
 
-  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadPlayers = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const list = await apiGet<Player[]>(apiRoutes.players.list)
     if (!isCancelled()) setPlayers(list)
   }, [])
+
+  const { loading, error } = useAsyncLoader(loadPlayers)
 
   const filtered = useMemo(() => {
     let items = players

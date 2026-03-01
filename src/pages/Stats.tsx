@@ -1,6 +1,6 @@
 
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { apiGet } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
@@ -35,7 +35,7 @@ export default function StatsPage() {
   const [viewMode, setViewMode] = useState<'match' | 'plateau'>('match')
   const [rankTab, setRankTab] = useState<'buteurs' | 'entrainements' | 'plateaux'>('buteurs')
 
-  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadStats = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const [rows, plist, plats, attends] = await Promise.all([
       apiGet<MatchLite[]>(apiRoutes.matches.list),
       apiGet<Player[]>(apiRoutes.players.list),
@@ -48,6 +48,8 @@ export default function StatsPage() {
     setPlateaus(plats)
     setAttendance(attends)
   }, [])
+
+  const { loading, error } = useAsyncLoader(loadStats)
 
   const ordered = useMemo(() => sortByDateAsc(matches), [matches])
 

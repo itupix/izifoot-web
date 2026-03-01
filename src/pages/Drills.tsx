@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-import DiagramComposer, { createEmptyDiagramData, hasDiagramContent, type DiagramData } from '../components/DiagramComposer'
+import DiagramComposer from '../components/DiagramComposer'
 import FloatingPlusButton from '../components/FloatingPlusButton'
 import SearchSelectBar from '../components/SearchSelectBar'
+import { createEmptyDiagramData, hasDiagramContent, type DiagramData } from '../components/diagramShared'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import type { Drill, DrillsResponse } from '../types/api'
@@ -24,10 +25,12 @@ export default function DrillsPage() {
   const [creating, setCreating] = useState(false)
   const [createErr, setCreateErr] = useState<string | null>(null)
 
-  const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadDrills = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
     if (!isCancelled()) setData(res)
   }, [])
+
+  const { loading, error } = useAsyncLoader(loadDrills)
 
   const filtered = useMemo(() => {
     let items = data.items

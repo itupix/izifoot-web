@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-import DiagramComposer, { createEmptyDiagramData, normalizeDiagramData, type DiagramData } from '../components/DiagramComposer'
+import DiagramComposer from '../components/DiagramComposer'
+import { createEmptyDiagramData, normalizeDiagramData, type DiagramData } from '../components/diagramShared'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { uiAlert } from '../ui'
@@ -21,12 +22,14 @@ export default function DiagramEditor() {
   const trainingDrillId = qs('trainingDrillId')
 
   // load if editing
-  const { loading, error, setError } = useAsyncLoader(async ({ isCancelled }) => {
+  const loadDiagram = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!diagramId) return
     const d = await apiGet<Diagram>(apiRoutes.diagrams.byId(diagramId))
     if (isCancelled()) return
     setData(normalizeDiagramData(d.data))
   }, [diagramId])
+
+  const { loading, error, setError } = useAsyncLoader(loadDiagram)
 
   async function save() {
     try {
