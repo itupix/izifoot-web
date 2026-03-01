@@ -1,11 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import React, { useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import AttendanceAccordion from '../components/AttendanceAccordion'
+import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
+import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
+import './TrainingDetailsPage.css'
+
+function getFirstName(fullName: string) {
+  return fullName.trim().split(/\s+/)[0] || fullName
+}
 
 export default function PlateauDetailsPage() {
   const { id } = useParams<{ id: string }>()
@@ -14,15 +22,16 @@ export default function PlateauDetailsPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
   const [plateauMatches, setPlateauMatches] = useState<MatchLite[]>([])
-  const [matchEdits, setMatchEdits] = useState<Record<string, { home: number; away: number; opponentName: string }>>({})
+  const [playersOpen, setPlayersOpen] = useState(false)
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+  const [isMatchModalOpen, setIsMatchModalOpen] = useState(false)
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
 
-  const [homeStarters, setHomeStarters] = useState<string[]>([])
-  const [awayStarters, setAwayStarters] = useState<string[]>([])
   const [homeScore, setHomeScore] = useState<number>(0)
   const [awayScore, setAwayScore] = useState<number>(0)
-  const [scorers, setScorers] = useState<{ playerId: string; side: 'home' | 'away' }[]>([])
+  const [matchResult, setMatchResult] = useState<'WIN' | 'LOSS' | 'DRAW'>('WIN')
+  const [scorers, setScorers] = useState<string[]>([])
   const [newScorerPlayerId, setNewScorerPlayerId] = useState<string>('')
-  const [newScorerSide, setNewScorerSide] = useState<'home' | 'away'>('home')
   const [opponentName, setOpponentName] = useState<string>('')
 
   const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
@@ -39,20 +48,6 @@ export default function PlateauDetailsPage() {
     setPlateauMatches(matches)
     setPlateauAttendance(new Set(attends.map(a => a.playerId)))
   }, [id])
-
-  useEffect(() => {
-    setMatchEdits(prev => {
-      const next = { ...prev }
-      for (const m of plateauMatches) {
-        if (!next[m.id]) {
-          const home = m.teams.find(t => t.side === 'home')?.score ?? 0
-          const away = m.teams.find(t => t.side === 'away')?.score ?? 0
-          next[m.id] = { home, away, opponentName: m.opponentName || '' }
-        }
-      }
-      return next
-    })
-  }, [plateauMatches])
 
   const dateLabel = useMemo(() => {
     if (!plateau?.date) return ''
@@ -78,26 +73,11 @@ export default function PlateauDetailsPage() {
     }
   }
 
-  async function saveMatchEdits(matchId: string) {
-    const e = matchEdits[matchId]
-    if (!e) return
-    try {
-      const updated = await apiPut<MatchLite>(apiRoutes.matches.byId(matchId), {
-        score: { home: e.home, away: e.away },
-        opponentName: e.opponentName || undefined
-      })
-      setPlateauMatches(prev => prev.map(m => m.id === matchId ? updated : m))
-    } catch (err: unknown) {
-      uiAlert(`Erreur mise à jour du match: ${toErrorMessage(err)}`)
-    }
-  }
-
   async function deleteMatch(matchId: string) {
     if (!uiConfirm('Supprimer définitivement ce match ?')) return
     try {
       await apiDelete(apiRoutes.matches.byId(matchId))
       setPlateauMatches(prev => prev.filter(m => m.id !== matchId))
-      setMatchEdits(prev => { const n = { ...prev }; delete n[matchId]; return n })
     } catch (err: unknown) {
       uiAlert(`Erreur suppression du match: ${toErrorMessage(err)}`)
     }
@@ -114,13 +94,9 @@ export default function PlateauDetailsPage() {
     }
   }
 
-  function readMultiSelect(sel: HTMLSelectElement): string[] {
-    return Array.from(sel.selectedOptions).map(o => o.value)
-  }
-
   function addScorer() {
     if (!newScorerPlayerId) return
-    setScorers(prev => [...prev, { playerId: newScorerPlayerId, side: newScorerSide }])
+    setScorers(prev => [...prev, newScorerPlayerId])
     setNewScorerPlayerId('')
   }
 
@@ -128,197 +104,362 @@ export default function PlateauDetailsPage() {
     setScorers(prev => prev.filter((_, idx) => idx !== i))
   }
 
-  async function createPlateauMatch(e: React.FormEvent) {
+  function resetMatchForm() {
+    setEditingMatchId(null)
+    setHomeScore(0)
+    setAwayScore(0)
+    setMatchResult('WIN')
+    setScorers([])
+    setNewScorerPlayerId('')
+    setOpponentName('')
+  }
+
+  function closeMatchModal() {
+    setIsMatchModalOpen(false)
+    resetMatchForm()
+  }
+
+  function openCreateMatchModal() {
+    resetMatchForm()
+    setIsMatchModalOpen(true)
+  }
+
+  function openEditMatchModal(match: MatchLite) {
+    const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
+    const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
+    setEditingMatchId(match.id)
+    setHomeScore(home)
+    setAwayScore(away)
+    setMatchResult(home > away ? 'WIN' : home < away ? 'LOSS' : 'DRAW')
+    setScorers(match.scorers.filter((s) => s.side === 'home').map((s) => s.playerId))
+    setNewScorerPlayerId('')
+    setOpponentName(match.opponentName || '')
+    setIsMatchModalOpen(true)
+  }
+
+  async function submitMatchForm(e: React.FormEvent) {
     e.preventDefault()
     if (!id) return
+    if (!opponentName.trim()) {
+      uiAlert('Merci de renseigner le nom de l’adversaire.')
+      return
+    }
+    if (matchResult === 'WIN' && homeScore <= awayScore) {
+      uiAlert('Le score doit refléter une victoire.')
+      return
+    }
+    if (matchResult === 'LOSS' && homeScore >= awayScore) {
+      uiAlert('Le score doit refléter une défaite.')
+      return
+    }
+    if (matchResult === 'DRAW' && homeScore !== awayScore) {
+      uiAlert('Le score doit refléter un match nul.')
+      return
+    }
     try {
       const payload = {
         type: 'PLATEAU' as const,
         plateauId: id,
         sides: {
-          home: { starters: homeStarters, subs: [] },
-          away: { starters: awayStarters, subs: [] },
+          home: { starters: [], subs: [] },
+          away: { starters: [], subs: [] },
         },
         score: { home: homeScore, away: awayScore },
-        buteurs: scorers,
-        opponentName: opponentName || undefined,
+        buteurs: scorers.map((playerId) => ({ playerId, side: 'home' as const })),
+        opponentName: opponentName.trim(),
       }
-      const created = await apiPost<MatchLite>(apiRoutes.matches.list, payload)
-      setPlateauMatches(prev => [created, ...prev])
-      setHomeStarters([]); setAwayStarters([]); setHomeScore(0); setAwayScore(0); setScorers([]); setNewScorerPlayerId(''); setNewScorerSide('home'); setOpponentName('')
+      if (editingMatchId) {
+        const updated = await apiPut<MatchLite>(apiRoutes.matches.byId(editingMatchId), payload)
+        setPlateauMatches(prev => prev.map((m) => (m.id === editingMatchId ? updated : m)))
+      } else {
+        const created = await apiPost<MatchLite>(apiRoutes.matches.list, payload)
+        setPlateauMatches(prev => [created, ...prev])
+      }
+      closeMatchModal()
     } catch (err: unknown) {
-      uiAlert(`Erreur création match: ${toErrorMessage(err)}`)
+      uiAlert(`Erreur ${editingMatchId ? 'mise à jour' : 'création'} match: ${toErrorMessage(err)}`)
     }
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <Link to="/planning">← Retour</Link>
-          <h2 style={{ margin: '4px 0' }}>Plateau</h2>
-          <div style={{ fontSize: 13, color: '#6b7280' }}>{dateLabel}</div>
+    <div className="training-details-page">
+      <header className="topbar">
+        <RoundIconButton ariaLabel="Revenir au planning" className="back-round-button" onClick={() => navigate('/planning')}>
+          <ChevronLeftIcon size={18} />
+        </RoundIconButton>
+        <div className="topbar-title">
+          <h2>Plateau</h2>
+          <p>{dateLabel}</p>
         </div>
-        <button onClick={deletePlateau} style={{ border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, background: '#fff', padding: '4px 8px' }}>Supprimer</button>
-      </div>
+        <div className="topbar-menu-wrap">
+          <RoundIconButton
+            ariaLabel="Ouvrir le menu d'actions"
+            className="menu-dots-button"
+            onClick={() => setActionsMenuOpen((prev) => !prev)}
+          >
+            <DotsHorizontalIcon size={18} />
+          </RoundIconButton>
+          {actionsMenuOpen && (
+            <>
+              <button
+                type="button"
+                className="menu-backdrop"
+                aria-label="Fermer le menu"
+                onClick={() => setActionsMenuOpen(false)}
+              />
+              <div className="floating-menu">
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => {
+                    setActionsMenuOpen(false)
+                    deletePlateau()
+                  }}
+                >
+                  Supprimer le plateau
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </header>
 
       {loading && <p>Chargement…</p>}
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      {error && <p className="error-text">{error}</p>}
 
       {plateau && (
         <>
-          <div style={{ color: '#374151' }}>Lieu : <strong>{plateau.lieu}</strong></div>
+          <div className="training-details-grid">
+            <section className="details-card">
+              <div className="card-head">
+                <h3>Informations</h3>
+              </div>
+              <div style={{ color: '#374151' }}>Lieu : <strong>{plateau.lieu}</strong></div>
+            </section>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: '#374151' }}>Présents: {plateauAttendance.size} / {players.length}</span>
+            <AttendanceAccordion
+              countLabel={`${plateauAttendance.size}/${players.length}`}
+              isOpen={playersOpen}
+              onToggle={() => setPlayersOpen((prev) => !prev)}
+              toggleLabel={playersOpen ? 'Réduire la liste des joueurs' : 'Ouvrir la liste des joueurs'}
+            >
+              <div className="attendance-list-simple">
+                {players.map((p) => {
+                  const present = plateauAttendance.has(p.id)
+                  return (
+                    <label key={p.id} className="attendance-row">
+                      <span>{getFirstName(p.name)}</span>
+                      <input
+                        type="checkbox"
+                        checked={present}
+                        onChange={(e) => togglePlateauPresence(p.id, e.target.checked)}
+                      />
+                    </label>
+                  )
+                })}
+              </div>
+            </AttendanceAccordion>
           </div>
-          <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 6, marginTop: 6, background: '#fff' }}>
-            {players.map(p => {
-              const present = plateauAttendance.has(p.id)
-              return (
-                <label key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{p.name}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280' }}>{p.primary_position}{p.secondary_position ? ` / ${p.secondary_position}` : ''}</div>
+
+          <section className="details-card" style={{ marginTop: 12 }}>
+            <div className="card-head">
+              <h3>Matchs</h3>
+              <div className="head-actions">
+                <span>{plateauMatches.length}</span>
+                <button
+                  type="button"
+                  className="add-button"
+                  onClick={openCreateMatchModal}
+                >
+                  Ajouter
+                </button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {plateauMatches.map(m => {
+                const home = m.teams.find(t => t.side === 'home')
+                const away = m.teams.find(t => t.side === 'away')
+                const homeScoreValue = home?.score ?? 0
+                const awayScoreValue = away?.score ?? 0
+                const outcome = homeScoreValue > awayScoreValue
+                  ? 'win'
+                  : homeScoreValue < awayScoreValue
+                    ? 'loss'
+                    : 'draw'
+                const outcomeLabel = outcome === 'win'
+                  ? 'Victoire'
+                  : outcome === 'loss'
+                    ? 'Défaite'
+                    : 'Nul'
+                const outcomeColor = outcome === 'win'
+                  ? '#16a34a'
+                  : outcome === 'loss'
+                    ? '#dc2626'
+                    : '#94a3b8'
+                const ourScorers = m.scorers
+                  .filter(s => s.side === 'home')
+                  .map(s => players.find(p => p.id === s.playerId)?.name || s.playerId)
+                return (
+                  <div
+                    key={m.id}
+                    style={{
+                      border: '1px solid #e5e7eb',
+                      borderLeft: `6px solid ${outcomeColor}`,
+                      borderRadius: 8,
+                      padding: 10,
+                      background: '#fff',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{m.opponentName || 'Adversaire'}</div>
+                        <div style={{ fontSize: 12, color: '#6b7280' }}>
+                          {outcomeLabel}
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: 18 }}>{homeScoreValue} - {awayScoreValue}</div>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 13, color: '#374151' }}>
+                      <strong>Buteurs:</strong> {ourScorers.length ? ourScorers.join(', ') : '—'}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => openEditMatchModal(m)}
+                        style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteMatch(m.id)}
+                        style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={present}
-                    onChange={(e) => togglePlateauPresence(p.id, e.target.checked)}
-                  />
-                </label>
-              )
-            })}
-          </div>
+                )
+              })}
+              {plateauMatches.length === 0 && (
+                <div style={{ color: '#6b7280' }}>Aucun match encore enregistré pour ce plateau.</div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
 
-          <h4 style={{ margin: '12px 0 6px' }}>➕ Nouveau match</h4>
-          <form onSubmit={createPlateauMatch} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#fcfcfc', marginBottom: 10 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginBottom: 8 }}>
+      {isMatchModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeMatchModal} />
+          <div className="drill-modal" role="dialog" aria-modal="true">
+            <div className="drill-modal-head">
+              <h3>{editingMatchId ? 'Modifier le match' : 'Ajouter un match'}</h3>
+              <button type="button" onClick={closeMatchModal}>✕</button>
+            </div>
+            <form onSubmit={submitMatchForm} style={{ display: 'grid', gap: 10 }}>
               <input
-                placeholder="Nom de l’adversaire (ex: FC Trifouillis)"
+                placeholder="Nom de l’adversaire"
                 value={opponentName}
                 onChange={e => setOpponentName(e.target.value)}
                 style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
               />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 1fr', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Home – titulaires</div>
-                <select multiple size={6}
-                  value={homeStarters}
-                  onChange={(e) => setHomeStarters(readMultiSelect(e.currentTarget))}
-                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6 }}>
-                  {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <input
+                  type="number"
+                  min={0}
+                  value={homeScore}
+                  onChange={e => setHomeScore(Number(e.target.value))}
+                  placeholder="Nos buts"
+                  style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={awayScore}
+                  onChange={e => setAwayScore(Number(e.target.value))}
+                  placeholder="Buts adverses"
+                  style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                />
               </div>
-              <div style={{ display: 'grid', gap: 8, alignContent: 'center', justifyItems: 'center' }}>
-                <input type="number" min={0} value={homeScore} onChange={e => setHomeScore(Number(e.target.value))} style={{ width: 50, textAlign: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: 4 }} />
-                <div style={{ fontWeight: 700 }}>Score</div>
-                <input type="number" min={0} value={awayScore} onChange={e => setAwayScore(Number(e.target.value))} style={{ width: 50, textAlign: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: 4 }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Away – titulaires</div>
-                <select multiple size={6}
-                  value={awayStarters}
-                  onChange={(e) => setAwayStarters(readMultiSelect(e.currentTarget))}
-                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6 }}>
-                  {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Buteurs</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: 8, alignItems: 'center' }}>
-                <select value={newScorerPlayerId} onChange={e => setNewScorerPlayerId(e.target.value)}
-                  style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}>
-                  <option value="">— Choisir un joueur —</option>
-                  {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <select value={newScorerSide} onChange={e => setNewScorerSide(e.target.value as 'home' | 'away')}
-                  style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}>
-                  <option value="home">Home</option>
-                  <option value="away">Away</option>
-                </select>
-                <button type="button" onClick={addScorer}
-                  style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}>Ajouter</button>
-              </div>
-              {scorers.length > 0 && (
-                <ul style={{ listStyle: 'none', padding: 0, marginTop: 8, display: 'grid', gap: 6 }}>
-                  {scorers.map((s, i) => (
-                    <li key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', background: '#fff' }}>
-                      <span>
-                        {s.side === 'home' ? 'Home' : 'Away'} • {players.find(p => p.id === s.playerId)?.name || s.playerId}
-                      </span>
-                      <button type="button" onClick={() => removeScorer(i)}
-                        style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '2px 6px' }}>Retirer</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
-              <button type="submit"
-                style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}>
-                Créer le match
-              </button>
-            </div>
-          </form>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <h4 style={{ margin: '8px 0' }}>🏟️ Matchs joués</h4>
-            <small style={{ color: '#6b7280' }}>{plateauMatches.length} match(es)</small>
-          </div>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {plateauMatches.map(m => {
-              const home = m.teams.find(t => t.side === 'home')
-              const away = m.teams.find(t => t.side === 'away')
-              return (
-                <div key={m.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <div><strong>Home</strong> {home ? `(${home.players?.map(p => p.player.name).join(', ') || ''})` : ''}</div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontWeight: 700 }}>{home?.score ?? 0} - {away?.score ?? 0}</div>
-                      {m.opponentName && <div style={{ fontSize: 12, color: '#6b7280' }}>vs {m.opponentName}</div>}
-                    </div>
-                    <div><strong>Away</strong> {away ? `(${away.players?.map(p => p.player.name).join(', ') || ''})` : ''}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                    <label style={{ fontSize: 12, color: '#6b7280' }}>Score</label>
-                    <input type="number" min={0} style={{ width: 60, padding: 4, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                      value={(matchEdits[m.id]?.home ?? m.teams.find(t => t.side === 'home')?.score ?? 0)}
-                      onChange={e => setMatchEdits(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { home: 0, away: 0, opponentName: '' }), home: Number(e.target.value) } }))}
-                    />
-                    <span>:</span>
-                    <input type="number" min={0} style={{ width: 60, padding: 4, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                      value={(matchEdits[m.id]?.away ?? m.teams.find(t => t.side === 'away')?.score ?? 0)}
-                      onChange={e => setMatchEdits(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { home: 0, away: 0, opponentName: '' }), away: Number(e.target.value) } }))}
-                    />
-                    <input placeholder="Adversaire" style={{ flex: 1, padding: 4, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                      value={(matchEdits[m.id]?.opponentName ?? m.opponentName ?? '')}
-                      onChange={e => setMatchEdits(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || { home: 0, away: 0, opponentName: '' }), opponentName: e.target.value } }))}
-                    />
-                    <button onClick={() => saveMatchEdits(m.id)} style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}>Enregistrer</button>
-                    <button onClick={() => deleteMatch(m.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>Supprimer</button>
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: 13, color: '#374151' }}>
-                    {(() => {
-                      const name = (pid: string) => players.find(p => p.id === pid)?.name || pid
-                      const sh = m.scorers.filter(s => s.side === 'home').map(s => name(s.playerId))
-                      const sa = m.scorers.filter(s => s.side === 'away').map(s => name(s.playerId))
-                      return (
-                        <div>
-                          <div><strong>Buteurs Home:</strong> {sh.length ? sh.join(', ') : '—'}</div>
-                          <div><strong>Buteurs Away:</strong> {sa.length ? sa.join(', ') : '—'}</div>
-                        </div>
-                      )
-                    })()}
-                  </div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>Résultat</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setMatchResult('WIN')}
+                    style={{ border: '1px solid #d1d5db', borderRadius: 999, padding: '6px 10px', background: matchResult === 'WIN' ? '#dcfce7' : '#fff' }}
+                  >
+                    Victoire
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchResult('LOSS')}
+                    style={{ border: '1px solid #d1d5db', borderRadius: 999, padding: '6px 10px', background: matchResult === 'LOSS' ? '#fee2e2' : '#fff' }}
+                  >
+                    Défaite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchResult('DRAW')}
+                    style={{ border: '1px solid #d1d5db', borderRadius: 999, padding: '6px 10px', background: matchResult === 'DRAW' ? '#e2e8f0' : '#fff' }}
+                  >
+                    Nul
+                  </button>
                 </div>
-              )
-            })}
-            {plateauMatches.length === 0 && (
-              <div style={{ color: '#6b7280' }}>Aucun match encore enregistré pour ce plateau.</div>
-            )}
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>Buteurs</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                  <select
+                    value={newScorerPlayerId}
+                    onChange={e => setNewScorerPlayerId(e.target.value)}
+                    style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                  >
+                    <option value="">— Choisir un joueur —</option>
+                    {players.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={addScorer}
+                    style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}
+                  >
+                    Ajouter
+                  </button>
+                </div>
+                {scorers.length > 0 && (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
+                    {scorers.map((playerId, i) => (
+                      <li key={`${playerId}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', background: '#fff' }}>
+                        <span>{players.find(p => p.id === playerId)?.name || playerId}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeScorer(i)}
+                          style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '2px 6px' }}
+                        >
+                          Retirer
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={closeMatchModal}
+                  style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', padding: '6px 10px' }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}
+                >
+                  {editingMatchId ? 'Enregistrer' : 'Créer le match'}
+                </button>
+              </div>
+            </form>
           </div>
         </>
       )}

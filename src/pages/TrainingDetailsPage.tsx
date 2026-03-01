@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DotsHorizontalIcon } from '../components/icons'
+import AttendanceAccordion from '../components/AttendanceAccordion'
+import { ChevronLeftIcon, CloseIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
@@ -225,51 +226,30 @@ export default function TrainingDetailsPage() {
 
       {training && (
         <div className="training-details-grid">
-          <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
-            {!isCancelled ? (
-              <button
-                type="button"
-                className="card-head-button"
-                onClick={() => setPlayersOpen((prev) => !prev)}
-                aria-expanded={playersOpen}
-                aria-label={playersOpen ? 'Réduire la liste des joueurs' : 'Ouvrir la liste des joueurs'}
-              >
-                <div className="card-head">
-                  <h3>Présents</h3>
-                  <div className="head-actions">
-                    <span>{attendance.size}/{players.length}</span>
-                    <ChevronRightIcon size={18} style={{ transform: playersOpen ? 'rotate(90deg)' : 'rotate(0deg)' }} />
-                  </div>
-                </div>
-              </button>
-            ) : (
-              <div className="card-head">
-                <h3>Présents</h3>
-                <div className="head-actions">
-                  <span>{attendance.size}/{players.length}</span>
-                </div>
-              </div>
-            )}
-            {isCancelled ? (
-              <p className="muted-line">Séance annulée: présences indisponibles.</p>
-            ) : playersOpen && (
-              <div className="attendance-list-simple">
-                {players.map((player) => {
-                  const present = attendance.has(player.id)
-                  return (
-                    <label key={player.id} className="attendance-row">
-                      <span>{getFirstName(player.name)}</span>
-                      <input
-                        type="checkbox"
-                        checked={present}
-                        onChange={(e) => togglePresence(player.id, e.target.checked)}
-                      />
-                    </label>
-                  )
-                })}
-              </div>
-            )}
-          </section>
+          <AttendanceAccordion
+            countLabel={`${attendance.size}/${players.length}`}
+            isOpen={playersOpen}
+            onToggle={() => setPlayersOpen((prev) => !prev)}
+            toggleLabel={playersOpen ? 'Réduire la liste des joueurs' : 'Ouvrir la liste des joueurs'}
+            disabled={isCancelled}
+            disabledMessage={<p className="muted-line">Séance annulée: présences indisponibles.</p>}
+          >
+            <div className="attendance-list-simple">
+              {players.map((player) => {
+                const present = attendance.has(player.id)
+                return (
+                  <label key={player.id} className="attendance-row">
+                    <span>{getFirstName(player.name)}</span>
+                    <input
+                      type="checkbox"
+                      checked={present}
+                      onChange={(e) => togglePresence(player.id, e.target.checked)}
+                    />
+                  </label>
+                )
+              })}
+            </div>
+          </AttendanceAccordion>
 
           <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
             <div className="card-head">
@@ -290,40 +270,38 @@ export default function TrainingDetailsPage() {
             {isCancelled ? (
               <p className="muted-line">Séance annulée: exercices indisponibles.</p>
             ) : (
-              <>
-                <div className="drill-cards-grid">
-                  {drills.map((row) => {
-                    const meta = row.meta || catalogById.get(row.drillId) || null
-                    return (
-                      <article
-                        key={row.id}
-                        className="drill-card"
-                        onClick={() => {
-                          if (meta) setSelectedDrill(meta)
-                        }}
-                      >
-                        <div className="drill-card-head">
-                          <h4>{meta?.title || 'Exercice'}</h4>
-                          <RoundIconButton
-                            ariaLabel="Supprimer l'exercice"
-                            className="icon-danger-button card-delete-button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              removeDrill(row.id)
-                            }}
-                          >
-                            <CloseIcon size={16} />
-                          </RoundIconButton>
-                        </div>
-                        <small>{meta?.category || '—'} · {row.duration ?? meta?.duration ?? '—'} min</small>
-                      </article>
-                    )
-                  })}
-                  {drills.length === 0 && (
-                    <p className="muted-line">Aucun exercice ajouté pour cette séance.</p>
-                  )}
-                </div>
-              </>
+              <div className="drill-cards-grid">
+                {drills.map((row) => {
+                  const meta = row.meta || catalogById.get(row.drillId) || null
+                  return (
+                    <article
+                      key={row.id}
+                      className="drill-card"
+                      onClick={() => {
+                        if (meta) setSelectedDrill(meta)
+                      }}
+                    >
+                      <div className="drill-card-head">
+                        <h4>{meta?.title || 'Exercice'}</h4>
+                        <RoundIconButton
+                          ariaLabel="Supprimer l'exercice"
+                          className="icon-danger-button card-delete-button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeDrill(row.id)
+                          }}
+                        >
+                          <CloseIcon size={16} />
+                        </RoundIconButton>
+                      </div>
+                      <small>{meta?.category || '—'} · {row.duration ?? meta?.duration ?? '—'} min</small>
+                    </article>
+                  )
+                })}
+                {drills.length === 0 && (
+                  <p className="muted-line">Aucun exercice ajouté pour cette séance.</p>
+                )}
+              </div>
             )}
           </section>
         </div>

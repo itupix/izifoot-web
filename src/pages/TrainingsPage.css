@@ -131,6 +131,122 @@
   gap: 14px;
 }
 
+.trainings-plateau-modal {
+  width: min(520px, 100%);
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 16px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.25);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.trainings-plateau-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trainings-modal-close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.trainings-plateau-form {
+  display: grid;
+  gap: 14px;
+}
+
+.trainings-field-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.trainings-text-input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.trainings-location-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.trainings-location-picker-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.trainings-location-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trainings-location-chip {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.trainings-location-chip--active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.trainings-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.trainings-secondary-btn,
+.trainings-primary-btn {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trainings-secondary-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.trainings-primary-btn {
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #fff;
+}
+
+.trainings-secondary-btn:disabled,
+.trainings-primary-btn:disabled,
+.trainings-location-chip:disabled,
+.trainings-modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .trainings-calendar-head {
   display: flex;
   align-items: center;

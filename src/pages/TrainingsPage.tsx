@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import CtaButton from '../components/CtaButton'
@@ -7,7 +7,7 @@ import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SoccerBallIcon, Trophy
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import { uiAlert, uiPrompt } from '../ui'
+import { uiAlert } from '../ui'
 import type { Plateau, Training } from '../types/api'
 import './TrainingsPage.css'
 
@@ -47,10 +47,14 @@ function formatDateTitle(d: Date) {
 }
 
 export default function TrainingsPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
   const [plateaus, setPlateaus] = useState<Plateau[]>([])
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
+  const [isPlateauModalOpen, setIsPlateauModalOpen] = useState(false)
+  const [plateauLocation, setPlateauLocation] = useState('')
+  const [isCreatingPlateau, setIsCreatingPlateau] = useState(false)
   const [pickerMonth, setPickerMonth] = useState<Date>(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -101,6 +105,14 @@ export default function TrainingsPage() {
   const plateauDayKeys = useMemo(() => {
     return new Set(plateaus.map((p) => yyyyMmDd(toDateOnly(p.date))))
   }, [plateaus])
+  const plateauLocations = useMemo(() => {
+    const uniqueLocations = new Set(
+      plateaus
+        .map((p) => p.lieu.trim())
+        .filter(Boolean),
+    )
+    return Array.from(uniqueLocations).sort((a, b) => a.localeCompare(b, 'fr-FR'))
+  }, [plateaus])
   const monthLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('fr-FR', {
@@ -118,14 +130,34 @@ export default function TrainingsPage() {
 
   // Auto-select not needed (details now on dedicated page)
 
-  async function createPlateauForDay(day: Date) {
-    const lieu = uiPrompt('Lieu du plateau ?') || ''
-    if (!lieu.trim()) return
+  function openPlateauModal() {
+    setPlateauLocation('')
+    setIsPlateauModalOpen(true)
+  }
+
+  function closePlateauModal() {
+    if (isCreatingPlateau) return
+    setPlateauLocation('')
+    setIsPlateauModalOpen(false)
+  }
+
+  async function createPlateauForDay(day: Date, lieu: string) {
+    const normalizedLieu = lieu.trim()
+    if (!normalizedLieu) return
+    setIsCreatingPlateau(true)
     try {
-      const created = await apiPost<Plateau>(apiRoutes.plateaus.list, { date: day.toISOString(), lieu: lieu.trim() })
+      const created = await apiPost<Plateau>(apiRoutes.plateaus.list, {
+        date: day.toISOString(),
+        lieu: normalizedLieu,
+      })
       setPlateaus(prev => [created, ...prev])
+      setPlateauLocation('')
+      setIsPlateauModalOpen(false)
+      navigate(`/plateau/${created.id}`)
     } catch (err: unknown) {
       uiAlert(`Erreur création plateau: ${toErrorMessage(err)}`)
+    } finally {
+      setIsCreatingPlateau(false)
     }
   }
 
@@ -227,7 +259,7 @@ export default function TrainingsPage() {
             ))
           )}
           <div className="trainings-block-footer">
-            <CtaButton onClick={() => createPlateauForDay(selectedDate)}>
+            <CtaButton onClick={openPlateauModal}>
               Ajouter un plateau
             </CtaButton>
           </div>
@@ -304,6 +336,89 @@ export default function TrainingsPage() {
                 Plateau
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isPlateauModalOpen && (
+        <div onClick={closePlateauModal} className="trainings-overlay">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="trainings-plateau-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="plateau-modal-title"
+          >
+            <div className="trainings-plateau-modal-head">
+              <strong id="plateau-modal-title">Créer un plateau</strong>
+              <button
+                type="button"
+                onClick={closePlateauModal}
+                className="trainings-modal-close"
+                aria-label="Fermer"
+                disabled={isCreatingPlateau}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                void createPlateauForDay(selectedDate, plateauLocation)
+              }}
+              className="trainings-plateau-form"
+            >
+              <label htmlFor="plateau-location" className="trainings-field-label">
+                Lieu du plateau
+              </label>
+              <input
+                id="plateau-location"
+                value={plateauLocation}
+                onChange={(e) => setPlateauLocation(e.target.value)}
+                placeholder="Ex. Stade municipal"
+                className="trainings-text-input"
+                autoFocus
+                disabled={isCreatingPlateau}
+              />
+
+              {plateauLocations.length > 0 && (
+                <div className="trainings-location-picker">
+                  <span className="trainings-location-picker-label">Lieux déjà utilisés</span>
+                  <div className="trainings-location-chips">
+                    {plateauLocations.map((location) => (
+                      <button
+                        key={location}
+                        type="button"
+                        onClick={() => setPlateauLocation(location)}
+                        className={`trainings-location-chip ${plateauLocation.trim() === location ? 'trainings-location-chip--active' : ''}`}
+                        disabled={isCreatingPlateau}
+                      >
+                        {location}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="trainings-modal-actions">
+                <button
+                  type="button"
+                  onClick={closePlateauModal}
+                  className="trainings-secondary-btn"
+                  disabled={isCreatingPlateau}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="trainings-primary-btn"
+                  disabled={isCreatingPlateau || !plateauLocation.trim()}
+                >
+                  {isCreatingPlateau ? 'Création…' : 'Continuer'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
