@@ -2,9 +2,6 @@
 import React from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import AccountPage from './pages/AccountPage';
-import PlanningsListPage from './pages/PlanningsListPage';
-import PlanningDetailPage from './pages/PlanningDetailsPage';
-import CreatePlanningPage from './pages/CreatePlanningPage';
 import Home from './pages/Home';
 import { useAuth } from './useAuth';
 import style from './App.module.css'
@@ -124,13 +121,6 @@ export default function App() {
               ))}
             </nav>
             <div className={style.sidebarFooter}>
-              <Link
-                to="/plannings/new"
-                onClick={() => setMenuOpen(false)}
-                className={style.sidebarPrimaryAction}
-              >
-                Organiser un plateau
-              </Link>
               {me ? (
                 <button className={style.logoutButton} onClick={handleLogout}>
                   Se déconnecter
@@ -159,9 +149,6 @@ export default function App() {
             <Route path="/exercices/:id" element={<Protected><DrillDetailsPage /></Protected>} />
             <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
             <Route path="/effectif" element={<Protected><PlayersPage /></Protected>} />
-            <Route path="/plannings" element={<Protected><PlanningsListPage /></Protected>} />
-            <Route path="/plannings/new" element={<Protected><CreatePlanningPage /></Protected>} />
-            <Route path="/plannings/:id" element={<Protected><PlanningDetailPage /></Protected>} />
             <Route path="/stats" element={<Protected><StatsPage /></Protected>} />
             <Route path="/match-day/:id" element={<Protected><MatchDay /></Protected>} />
             <Route path="*" element={<Navigate to={me ? "/planning" : "/"} replace />} />

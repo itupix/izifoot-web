@@ -165,7 +165,7 @@ export default function Home() {
           <h1 style={title}>izifoot</h1>
           <div style={ctaRow}>
             {me ? (
-              <CtaButton to="/plannings">Voir mes plannings</CtaButton>
+              <CtaButton to="/planning">Ouvrir le planning</CtaButton>
             ) : null}
           </div>
           <div style={visualWrap}>

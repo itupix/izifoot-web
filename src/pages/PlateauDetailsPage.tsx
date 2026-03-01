@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { api, type Planning } from '../api'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import AttendanceAccordion from '../components/AttendanceAccordion'
+import type { PlanningData } from '../components/PlanningEditor'
+import PlanningModal from '../components/PlanningModal'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
@@ -15,6 +18,13 @@ function getFirstName(fullName: string) {
   return fullName.trim().split(/\s+/)[0] || fullName
 }
 
+function toDateKey(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
 export default function PlateauDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -22,10 +32,14 @@ export default function PlateauDetailsPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
   const [plateauMatches, setPlateauMatches] = useState<MatchLite[]>([])
+  const [plateauPlannings, setPlateauPlannings] = useState<Planning[]>([])
   const [playersOpen, setPlayersOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false)
+  const [isPlanningModalOpen, setIsPlanningModalOpen] = useState(false)
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
+  const [editingPlanning, setEditingPlanning] = useState<Planning | null>(null)
+  const [selectedPlanningTeam, setSelectedPlanningTeam] = useState('')
 
   const [homeScore, setHomeScore] = useState<number>(0)
   const [awayScore, setAwayScore] = useState<number>(0)
@@ -36,23 +50,58 @@ export default function PlateauDetailsPage() {
 
   const { loading, error } = useAsyncLoader(async ({ isCancelled }) => {
     if (!id) return
-    const [p, ps, matches, attends] = await Promise.all([
+    const [p, ps, matches, attends, plannings] = await Promise.all([
       apiGet<Plateau>(apiRoutes.plateaus.byId(id)),
       apiGet<Player[]>(apiRoutes.players.list),
       apiGet<MatchLite[]>(apiRoutes.matches.byPlateau(id)),
       apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', id)),
+      api.listPlannings(),
     ])
     if (isCancelled()) return
     setPlateau(p)
     setPlayers(ps)
     setPlateauMatches(matches)
     setPlateauAttendance(new Set(attends.map(a => a.playerId)))
+    setPlateauPlannings(
+      plannings
+        .filter((planning) => toDateKey(planning.date) === toDateKey(p.date))
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 1)
+    )
   }, [id])
 
   const dateLabel = useMemo(() => {
     if (!plateau?.date) return ''
     return new Date(plateau.date).toLocaleDateString()
   }, [plateau])
+
+  const plateauPlanning = useMemo(() => plateauPlannings[0] ?? null, [plateauPlannings])
+  const plateauPlanningData = useMemo(
+    () => (plateauPlanning?.data as PlanningData | undefined) ?? null,
+    [plateauPlanning]
+  )
+  const plateauPlanningTeams = useMemo(() => {
+    if (!plateauPlanningData?.slots?.length) return [] as string[]
+    const labels = new Set<string>()
+    for (const slot of plateauPlanningData.slots) {
+      for (const game of slot.games) {
+        labels.add(game.A)
+        labels.add(game.B)
+      }
+    }
+    return Array.from(labels).sort((a, b) => a.localeCompare(b))
+  }, [plateauPlanningData])
+  const visiblePlanningSlots = useMemo(() => {
+    if (!plateauPlanningData?.slots?.length) return []
+    return plateauPlanningData.slots
+      .map((slot) => {
+        const games = selectedPlanningTeam
+          ? slot.games.filter((game) => game.A === selectedPlanningTeam || game.B === selectedPlanningTeam)
+          : slot.games
+        return { ...slot, games }
+      })
+      .filter((slot) => slot.games.length > 0)
+  }, [plateauPlanningData, selectedPlanningTeam])
 
   async function togglePlateauPresence(playerId: string, present: boolean) {
     if (!id) return
@@ -122,6 +171,38 @@ export default function PlateauDetailsPage() {
   function openCreateMatchModal() {
     resetMatchForm()
     setIsMatchModalOpen(true)
+  }
+
+  function openCreatePlanningModal() {
+    if (plateauPlanning) return
+    setEditingPlanning(null)
+    setIsPlanningModalOpen(true)
+  }
+
+  function openEditPlanningModal(planning: Planning) {
+    setEditingPlanning(planning)
+    setIsPlanningModalOpen(true)
+  }
+
+  function closePlanningModal() {
+    setIsPlanningModalOpen(false)
+    setEditingPlanning(null)
+  }
+
+  function upsertPlanning(savedPlanning: Planning) {
+    setPlateauPlannings([savedPlanning])
+    setSelectedPlanningTeam('')
+  }
+
+  async function deletePlanningItem(planningId: string) {
+    if (!uiConfirm('Supprimer cette rotation ?')) return
+    try {
+      await api.deletePlanning(planningId)
+      setPlateauPlannings([])
+      setSelectedPlanningTeam('')
+    } catch (err: unknown) {
+      uiAlert(`Erreur suppression rotation: ${toErrorMessage(err)}`)
+    }
   }
 
   function openEditMatchModal(match: MatchLite) {
@@ -260,6 +341,110 @@ export default function PlateauDetailsPage() {
               </div>
             </AttendanceAccordion>
           </div>
+
+          <section className="details-card">
+            <div className="card-head">
+              <h3>Rotation</h3>
+              <div className="head-actions">
+                <span>{plateauPlanning ? '1' : '0'}</span>
+                {!plateauPlanning && (
+                  <button
+                    type="button"
+                    className="add-button"
+                    onClick={openCreatePlanningModal}
+                    disabled={!plateau?.date}
+                  >
+                    Créer une rotation
+                  </button>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {plateauPlanning ? (
+                <>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: '#6b7280' }}>
+                        Mise à jour le {new Date(plateauPlanning.updatedAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => openEditPlanningModal(plateauPlanning)}
+                        style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deletePlanningItem(plateauPlanning.id)}
+                        style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </div>
+                  {plateauPlanningTeams.length > 0 && (
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: '#64748b' }}>Filtrer par équipe</span>
+                      <select
+                        value={selectedPlanningTeam}
+                        onChange={(e) => setSelectedPlanningTeam(e.target.value)}
+                        style={{ padding: 8, border: '1px solid #dbe5f1', borderRadius: 8 }}
+                      >
+                        <option value="">Toutes les équipes</option>
+                        {plateauPlanningTeams.map((teamLabel) => (
+                          <option key={teamLabel} value={teamLabel}>{teamLabel}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {visiblePlanningSlots.map((slot) => (
+                      <div
+                        key={slot.time}
+                        style={{
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 10,
+                          padding: 10,
+                          background: '#fff',
+                          display: 'grid',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{slot.time}</div>
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {slot.games.map((game) => (
+                            <div
+                              key={`${slot.time}-${game.pitch}-${game.A}-${game.B}`}
+                              style={{
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                padding: '8px 10px',
+                                background: '#f8fafc',
+                                display: 'grid',
+                                gap: 6,
+                              }}
+                            >
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Terrain {game.pitch}</div>
+                              <div style={{ fontWeight: 600 }}>{game.A}</div>
+                              <div style={{ fontWeight: 600 }}>{game.B}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {selectedPlanningTeam && visiblePlanningSlots.length === 0 && (
+                      <div style={{ color: '#6b7280' }}>Aucun créneau pour cette équipe.</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{ color: '#6b7280' }}>Aucune rotation enregistrée pour ce plateau.</div>
+              )}
+            </div>
+          </section>
 
           <section className="details-card" style={{ marginTop: 12 }}>
             <div className="card-head">
@@ -462,6 +647,15 @@ export default function PlateauDetailsPage() {
             </form>
           </div>
         </>
+      )}
+
+      {isPlanningModalOpen && plateau?.date && (
+        <PlanningModal
+          dateISO={plateau.date}
+          planning={editingPlanning}
+          onClose={closePlanningModal}
+          onSaved={upsertPlanning}
+        />
       )}
     </div>
   )

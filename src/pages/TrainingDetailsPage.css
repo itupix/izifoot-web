@@ -321,6 +321,14 @@
   overflow: auto;
 }
 
+.planning-modal {
+  top: 5vh;
+  transform: translateX(-50%);
+  width: min(1120px, calc(100vw - 24px));
+  max-height: 90vh;
+  overflow: auto;
+}
+
 .modal-meta-grid {
   display: grid;
   gap: 10px;
