@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import CtaButton from '../components/CtaButton'
@@ -28,6 +28,15 @@ function addDays(d: Date, amount: number) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + amount)
 }
 
+function parseDateParam(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(year, month - 1, day)
+  if (Number.isNaN(parsed.getTime())) return null
+  if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null
+  return parsed
+}
+
 function formatDateTitle(d: Date) {
   return new Intl.DateTimeFormat('fr-FR', {
     weekday: 'long',
@@ -38,9 +47,9 @@ function formatDateTitle(d: Date) {
 }
 
 export default function TrainingsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
   const [plateaus, setPlateaus] = useState<Plateau[]>([])
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [pickerMonth, setPickerMonth] = useState<Date>(() => {
     const now = new Date()
@@ -59,9 +68,27 @@ export default function TrainingsPage() {
     setPlateaus(pls)
   }, [])
   // Derived data for selected day
+  const selectedDate = useMemo(() => parseDateParam(searchParams.get('date')) ?? new Date(), [searchParams])
   const selectedDayKey = useMemo(() => yyyyMmDd(selectedDate), [selectedDate])
   const todayKey = useMemo(() => yyyyMmDd(new Date()), [])
   const isTodaySelected = selectedDayKey === todayKey
+
+  useEffect(() => {
+    const currentParam = searchParams.get('date')
+    if (currentParam === selectedDayKey) return
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('date', selectedDayKey)
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParams, selectedDayKey, setSearchParams])
+
+  function setSelectedDay(nextDate: Date) {
+    const nextDayKey = yyyyMmDd(nextDate)
+    if (nextDayKey === selectedDayKey) return
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('date', nextDayKey)
+    setSearchParams(nextParams)
+  }
+
   const dayTrainings = useMemo(() => {
     return trainings.filter(t => yyyyMmDd(toDateOnly(t.date)) === selectedDayKey)
   }, [trainings, selectedDayKey])
@@ -118,19 +145,19 @@ export default function TrainingsPage() {
       <div className="trainings-main">
         <header className="trainings-date-header">
           <div className="trainings-date-row">
-            <RoundIconButton ariaLabel="Jour précédent" onClick={() => setSelectedDate((prev) => addDays(prev, -1))}>
+            <RoundIconButton ariaLabel="Jour précédent" onClick={() => setSelectedDay(addDays(selectedDate, -1))}>
               <ChevronLeftIcon size={18} />
             </RoundIconButton>
             <button
               type="button"
-              onClick={() => setSelectedDate(new Date())}
+              onClick={() => setSelectedDay(new Date())}
               aria-label="Revenir à aujourd'hui"
               className="trainings-date-title-btn"
             >
               {isTodaySelected ? "Aujourd'hui" : formatDateTitle(selectedDate)}
             </button>
             <div className="trainings-date-actions">
-              <RoundIconButton ariaLabel="Jour suivant" onClick={() => setSelectedDate((prev) => addDays(prev, 1))}>
+              <RoundIconButton ariaLabel="Jour suivant" onClick={() => setSelectedDay(addDays(selectedDate, 1))}>
                 <ChevronRightIcon size={18} />
               </RoundIconButton>
               <RoundIconButton
@@ -154,7 +181,7 @@ export default function TrainingsPage() {
             dayTrainings.map((t) => (
               <Link
                 key={t.id}
-                to={`/training/${t.id}`}
+                to={`/training/${t.id}?date=${selectedDayKey}`}
                 className="trainings-item"
               >
                 <span className="trainings-item-row">
@@ -252,7 +279,7 @@ export default function TrainingsPage() {
                     key={`${pickerMonth.getFullYear()}-${pickerMonth.getMonth()}-${day}`}
                     type="button"
                     onClick={() => {
-                      setSelectedDate(candidate)
+                      setSelectedDay(candidate)
                       setIsDatePickerOpen(false)
                     }}
                     className={`trainings-day-btn ${isSelected ? 'trainings-day-btn--selected' : 'trainings-day-btn--default'}`}

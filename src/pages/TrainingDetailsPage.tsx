@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, DotsHorizontalIcon } from '../components/icons'
@@ -14,9 +14,26 @@ function getFirstName(fullName: string) {
   return fullName.trim().split(/\s+/)[0] || fullName
 }
 
+function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
+  const date = dateISO ? new Date(dateISO) : null
+  if (date && !Number.isNaN(date.getTime())) {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `/planning?date=${y}-${m}-${day}`
+  }
+
+  if (fallbackDate && /^\d{4}-\d{2}-\d{2}$/.test(fallbackDate)) {
+    return `/planning?date=${fallbackDate}`
+  }
+
+  return '/planning'
+}
+
 export default function TrainingDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const [training, setTraining] = useState<Training | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
@@ -59,6 +76,10 @@ export default function TrainingDetailsPage() {
 
   const drillIdsInSession = useMemo(() => new Set(drills.map((d) => d.drillId)), [drills])
   const catalogById = useMemo(() => new Map(catalog.map((d) => [d.id, d])), [catalog])
+  const backToPlanningUrl = useMemo(
+    () => toPlanningUrl(training?.date, searchParams.get('date')),
+    [searchParams, training?.date],
+  )
 
   const filteredCatalog = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -93,7 +114,7 @@ export default function TrainingDetailsPage() {
     if (!uiConfirm('Supprimer définitivement cet entraînement ?')) return
     try {
       await apiDelete(apiRoutes.trainings.byId(training.id))
-      navigate('/planning')
+      navigate(backToPlanningUrl)
     } catch (err: unknown) {
       uiAlert(`Erreur suppression: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
@@ -145,7 +166,7 @@ export default function TrainingDetailsPage() {
   return (
     <div className="training-details-page">
       <header className="topbar">
-        <RoundIconButton ariaLabel="Revenir à la page précédente" className="back-round-button" onClick={() => navigate(-1)}>
+        <RoundIconButton ariaLabel="Revenir au planning" className="back-round-button" onClick={() => navigate(backToPlanningUrl)}>
           <ChevronLeftIcon size={18} />
         </RoundIconButton>
         <div className="topbar-title">
