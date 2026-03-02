@@ -112,6 +112,16 @@ export default function DiagramPlayer({ data }: Props) {
     return interpolated
   }, [activeIndex, frames, transitionFromIndex, transitionProgress])
 
+  const progressRatio = frames.length <= 1
+    ? 1
+    : Math.min(
+        1,
+        Math.max(
+          0,
+          ((transitionFromIndex ?? activeIndex) + (transitionFromIndex === null ? 0 : transitionProgress)) / (frames.length - 1),
+        ),
+      )
+
   if (frames.length === 0) return null
 
   return (
@@ -185,25 +195,28 @@ export default function DiagramPlayer({ data }: Props) {
           )
         })}
       </svg>
+      <div style={progressTrackStyle} aria-hidden="true">
+        <div style={{ ...progressFillStyle, width: `${Math.round(progressRatio * 100)}%` }} />
+      </div>
       <div style={playerBarStyle}>
         <button type="button" onClick={restart} disabled={activeIndex === 0 && !isPlaying} style={playerButtonStyle} aria-label="Début" title="Début">
-          <SkipBackIcon size={18} />
+          <SkipBackIcon size={28} />
         </button>
         <button type="button" onClick={goToPrevious} disabled={activeIndex === 0} style={playerButtonStyle} aria-label="Précédent" title="Précédent">
-          <StepBackIcon size={18} />
+          <StepBackIcon size={28} />
         </button>
         <button
           type="button"
           onClick={togglePlayback}
           disabled={frames.length <= 1}
-          style={{ ...playerButtonStyle, width: 56, height: 56, fontSize: 24 }}
+          style={playerButtonStyle}
           aria-label={isPlaying ? 'Pause' : 'Lecture'}
           title={isPlaying ? 'Pause' : 'Lecture'}
         >
-          {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} style={{ marginLeft: 2 }} />}
+          {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
         </button>
         <button type="button" onClick={goToNext} disabled={activeIndex >= frames.length - 1} style={playerButtonStyle} aria-label="Suivant" title="Suivant">
-          <StepForwardIcon size={18} />
+          <StepForwardIcon size={28} />
         </button>
       </div>
     </div>
@@ -211,13 +224,13 @@ export default function DiagramPlayer({ data }: Props) {
 }
 
 const playerButtonStyle: React.CSSProperties = {
-  width: 46,
-  height: 46,
+  width: 56,
+  height: 56,
   borderRadius: 999,
   border: '1px solid #cbd5e1',
   background: '#fff',
   color: '#334155',
-  fontSize: 20,
+  fontSize: 24,
   fontWeight: 600,
   display: 'inline-flex',
   alignItems: 'center',
@@ -230,4 +243,19 @@ const playerBarStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 10,
+}
+
+const progressTrackStyle: React.CSSProperties = {
+  width: '100%',
+  height: 8,
+  borderRadius: 999,
+  background: '#e2e8f0',
+  overflow: 'hidden',
+}
+
+const progressFillStyle: React.CSSProperties = {
+  height: '100%',
+  borderRadius: 999,
+  background: 'linear-gradient(90deg, #16a34a 0%, #22c55e 100%)',
+  transition: 'width 140ms linear',
 }

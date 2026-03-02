@@ -102,8 +102,8 @@ export function CloseIcon({ size, style }: IconProps) {
 export function SkipBackIcon({ size, style }: IconProps) {
   return (
     <IconBase size={size} style={style}>
-      <path d="M7 6.5v11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M16.5 7.5L10.5 12l6 4.5V7.5Z" fill="currentColor" />
+      <path d="M8 6.5v11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M16 7.5 10 12l6 4.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
     </IconBase>
   )
 }
@@ -111,8 +111,8 @@ export function SkipBackIcon({ size, style }: IconProps) {
 export function StepBackIcon({ size, style }: IconProps) {
   return (
     <IconBase size={size} style={style}>
-      <path d="M14.8 7.5L8.8 12l6 4.5V7.5Z" fill="currentColor" />
-      <path d="M16.8 7.5L10.8 12l6 4.5V7.5Z" fill="currentColor" opacity="0.38" />
+      <path d="M8 6.5v11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M16.5 7.5 10.5 12l6 4.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
     </IconBase>
   )
 }
@@ -120,7 +120,7 @@ export function StepBackIcon({ size, style }: IconProps) {
 export function PlayIcon({ size, style }: IconProps) {
   return (
     <IconBase size={size} style={style}>
-      <path d="M9 7.5v9l7-4.5-7-4.5Z" fill="currentColor" />
+      <path d="M9 7.5v9l7-4.5-7-4.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="none" />
     </IconBase>
   )
 }
@@ -128,8 +128,7 @@ export function PlayIcon({ size, style }: IconProps) {
 export function PauseIcon({ size, style }: IconProps) {
   return (
     <IconBase size={size} style={style}>
-      <rect x="8" y="7.5" width="3" height="9" rx="1" fill="currentColor" />
-      <rect x="13" y="7.5" width="3" height="9" rx="1" fill="currentColor" />
+      <path d="M9 7.5v9M15 7.5v9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
     </IconBase>
   )
 }
@@ -137,8 +136,8 @@ export function PauseIcon({ size, style }: IconProps) {
 export function StepForwardIcon({ size, style }: IconProps) {
   return (
     <IconBase size={size} style={style}>
-      <path d="M9.2 7.5L15.2 12l-6 4.5V7.5Z" fill="currentColor" opacity="0.38" />
-      <path d="M7.2 7.5L13.2 12l-6 4.5V7.5Z" fill="currentColor" />
+      <path d="M16 6.5v11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M8.5 7.5 14.5 12l-6 4.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
     </IconBase>
   )
 }
