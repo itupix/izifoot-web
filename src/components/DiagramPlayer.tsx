@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getPlayerFill, interpolateItem, normalizeDiagramData } from './diagramShared'
+import { PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
 
 interface Props {
   data: unknown
@@ -186,10 +187,10 @@ export default function DiagramPlayer({ data }: Props) {
       </svg>
       <div style={playerBarStyle}>
         <button type="button" onClick={restart} disabled={activeIndex === 0 && !isPlaying} style={playerButtonStyle} aria-label="Début" title="Début">
-          {'⏮'}
+          <SkipBackIcon size={18} />
         </button>
         <button type="button" onClick={goToPrevious} disabled={activeIndex === 0} style={playerButtonStyle} aria-label="Précédent" title="Précédent">
-          {'⏪'}
+          <StepBackIcon size={18} />
         </button>
         <button
           type="button"
@@ -199,10 +200,10 @@ export default function DiagramPlayer({ data }: Props) {
           aria-label={isPlaying ? 'Pause' : 'Lecture'}
           title={isPlaying ? 'Pause' : 'Lecture'}
         >
-          {isPlaying ? '⏸' : '▶'}
+          {isPlaying ? <PauseIcon size={22} /> : <PlayIcon size={22} style={{ marginLeft: 2 }} />}
         </button>
         <button type="button" onClick={goToNext} disabled={activeIndex >= frames.length - 1} style={playerButtonStyle} aria-label="Suivant" title="Suivant">
-          {'⏩'}
+          <StepForwardIcon size={18} />
         </button>
       </div>
     </div>

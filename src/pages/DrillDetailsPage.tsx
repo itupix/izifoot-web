@@ -1,13 +1,16 @@
 import { useCallback, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import DiagramComposer from '../components/DiagramComposer'
 import DiagramPlayer from '../components/DiagramPlayer'
+import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
+import RoundIconButton from '../components/RoundIconButton'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/diagramShared'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import type { Drill } from '../types/api'
+import './DrillDetailsPage.css'
 
 interface Diagram {
   id: string
@@ -26,12 +29,16 @@ function normalizeDiagramList(input: unknown): Diagram[] {
 export default function DrillDetailsPage() {
   const params = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const drillId = params.id ?? ''
+  const fromTrainingId = searchParams.get('fromTraining')
+  const backTarget = fromTrainingId ? `/training/${fromTrainingId}` : '/exercices'
   const [drill, setDrill] = useState<Drill | null>(null)
   const [diagram, setDiagram] = useState<Diagram | null>(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
@@ -54,6 +61,7 @@ export default function DrillDetailsPage() {
 
   function openEditModal() {
     if (!drill) return
+    setActionsMenuOpen(false)
     setTitle(drill.title)
     setCategory(drill.category)
     setDescription(drill.description)
@@ -105,11 +113,12 @@ export default function DrillDetailsPage() {
 
   async function deleteDrill() {
     if (!drill || deleting) return
+    setActionsMenuOpen(false)
     if (!window.confirm('Supprimer cet exercice ?')) return
     try {
       setDeleting(true)
       await apiDelete(apiRoutes.drills.byId(drill.id))
-      navigate('/exercices')
+      navigate(backTarget)
     } catch (err: unknown) {
       setEditError(toErrorMessage(err))
     } finally {
@@ -124,38 +133,69 @@ export default function DrillDetailsPage() {
   const materials = diagram ? summarizeDiagramMaterials(diagram.data) : []
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div>
-        <Link to="/exercices" style={{ fontSize: 14, color: '#2563eb' }}>← Retour aux exercices</Link>
-      </div>
-
-      <article style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, background: '#fff' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0 }}>{drill.title}</h2>
-          <span style={{ fontSize: 13, color: '#6b7280' }}>{drill.category}</span>
-        </header>
-        {materials.length > 0 && (
-          <div style={{ display: 'grid', gap: 4, marginBottom: 8 }}>
-            <strong style={{ fontSize: 13, color: '#475569' }}>Matériel</strong>
-            <div style={{ fontSize: 13, color: '#334155' }}>{materials.join(', ')}</div>
-          </div>
-        )}
-        {!!drill.description && <p style={{ margin: 0, color: '#334155', lineHeight: 1.5 }}>{drill.description}</p>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <button type="button" onClick={openEditModal} style={secondaryButtonStyle}>Modifier</button>
-          <button type="button" onClick={deleteDrill} disabled={deleting} style={dangerButtonStyle}>
-            {deleting ? 'Suppression…' : 'Supprimer'}
-          </button>
+    <div className="drill-details-page">
+      <header className="drill-topbar">
+        <RoundIconButton
+          ariaLabel={fromTrainingId ? "Revenir a l'entrainement" : 'Revenir aux exercices'}
+          className="drill-back-button"
+          onClick={() => navigate(backTarget)}
+        >
+          <ChevronLeftIcon size={18} />
+        </RoundIconButton>
+        <div className="drill-topbar-title">
+          <h2>{drill.title}</h2>
+          <p>{drill.category}</p>
         </div>
-        {editError && !editing && <div style={{ color: 'crimson', marginTop: 8 }}>{editError}</div>}
-      </article>
+        <div className="drill-menu-wrap">
+          <RoundIconButton
+            ariaLabel="Ouvrir le menu d'actions"
+            className="drill-menu-button"
+            onClick={() => setActionsMenuOpen((prev) => !prev)}
+          >
+            <DotsHorizontalIcon size={18} />
+          </RoundIconButton>
+          {actionsMenuOpen && (
+            <>
+              <button
+                type="button"
+                className="drill-menu-backdrop"
+                aria-label="Fermer le menu"
+                onClick={() => setActionsMenuOpen(false)}
+              />
+              <div className="drill-floating-menu">
+                <button type="button" onClick={openEditModal}>Modifier l'exercice</button>
+                <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
+                  {deleting ? 'Suppression…' : "Supprimer l'exercice"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </header>
 
-      {diagram && (
-        <section style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, background: '#fff', display: 'grid', gap: 10 }}>
-          <h3 style={{ margin: 0 }}>Diagramme</h3>
-          <DiagramPlayer data={diagram.data} />
+      <div className="drill-details-grid">
+        <section className="drill-card">
+          <h3>Description</h3>
+          {!!drill.description && <p className="drill-description-text">{drill.description}</p>}
+          {!drill.description && <p className="drill-empty-text">Aucune description renseignée.</p>}
+          {diagram ? <DiagramPlayer data={diagram.data} /> : <p className="drill-empty-text">Aucun diagramme disponible.</p>}
         </section>
-      )}
+
+        <section className="drill-card">
+          <h3>Matériel</h3>
+          {materials.length > 0 ? (
+            <ul className="drill-materials-list">
+              {materials.map((material) => (
+                <li key={material}>{material}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="drill-empty-text">Aucun matériel renseigné.</p>
+          )}
+        </section>
+
+        {editError && !editing && <div style={{ color: 'crimson' }}>{editError}</div>}
+      </div>
 
       {editing && (
         <div
@@ -259,14 +299,5 @@ const secondaryButtonStyle: React.CSSProperties = {
   borderRadius: 6,
   border: '1px solid #d1d5db',
   background: '#fff',
-  cursor: 'pointer',
-}
-
-const dangerButtonStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  borderRadius: 6,
-  border: '1px solid #ef4444',
-  background: '#fff',
-  color: '#ef4444',
   cursor: 'pointer',
 }

@@ -42,7 +42,6 @@ export default function TrainingDetailsPage() {
   const [drills, setDrills] = useState<TrainingDrill[]>([])
   const [catalog, setCatalog] = useState<Drill[]>([])
   const [query, setQuery] = useState('')
-  const [selectedDrill, setSelectedDrill] = useState<Drill | null>(null)
   const [playersOpen, setPlayersOpen] = useState(false)
   const [manageDrillsOpen, setManageDrillsOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
@@ -164,6 +163,11 @@ export default function TrainingDetailsPage() {
     }
   }
 
+  function openDrill(drillId: string) {
+    if (!training) return
+    navigate(`/exercices/${drillId}?fromTraining=${training.id}`)
+  }
+
   if (!id) return <div>Entraînement introuvable.</div>
 
   return (
@@ -279,9 +283,7 @@ export default function TrainingDetailsPage() {
                     <article
                       key={row.id}
                       className="drill-card"
-                      onClick={() => {
-                        if (meta) setSelectedDrill(meta)
-                      }}
+                      onClick={() => openDrill(row.drillId)}
                     >
                       <div className="drill-card-head">
                         <h4>{meta?.title || 'Exercice'}</h4>
@@ -338,7 +340,15 @@ export default function TrainingDetailsPage() {
                     <div className="drill-card-head">
                       <h4>{item.title}</h4>
                       <div className="card-actions">
-                        <button type="button" className="add-text" onClick={() => setSelectedDrill(item)}>
+                        <button
+                          type="button"
+                          className="add-text"
+                          onClick={() => {
+                            setManageDrillsOpen(false)
+                            setQuery('')
+                            openDrill(item.id)
+                          }}
+                        >
                           Détails
                         </button>
                         <button
@@ -364,40 +374,6 @@ export default function TrainingDetailsPage() {
         </>
       )}
 
-      {selectedDrill && (
-        <>
-          <div className="modal-overlay" onClick={() => setSelectedDrill(null)} />
-          <div className="drill-modal" role="dialog" aria-modal="true">
-            <div className="drill-modal-head">
-              <h3>{selectedDrill.title}</h3>
-              <button type="button" onClick={() => setSelectedDrill(null)}>✕</button>
-            </div>
-            <p>{selectedDrill.description || 'Aucune description.'}</p>
-            <div className="modal-meta-grid">
-              <div>
-                <strong>Catégorie</strong>
-                <span>{selectedDrill.category || '—'}</span>
-              </div>
-              <div>
-                <strong>Joueurs</strong>
-                <span>{selectedDrill.players || '—'}</span>
-              </div>
-              <div>
-                <strong>Durée</strong>
-                <span>{selectedDrill.duration ?? '—'} min</span>
-              </div>
-              <div>
-                <strong>Tags</strong>
-                <span>{selectedDrill.tags.length ? selectedDrill.tags.join(', ') : '—'}</span>
-              </div>
-              <div>
-                <strong>Statut séance</strong>
-                <span>{drillIdsInSession.has(selectedDrill.id) ? 'Ajouté' : 'Non ajouté'}</span>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   )
 }

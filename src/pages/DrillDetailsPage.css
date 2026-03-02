@@ -1,0 +1,122 @@
+.drill-details-page {
+  display: grid;
+  gap: 16px;
+}
+
+.drill-topbar {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.drill-topbar-title h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.drill-topbar-title p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.drill-back-button,
+.drill-menu-button {
+  font: inherit;
+  color: #334155;
+}
+
+.drill-menu-wrap {
+  position: relative;
+}
+
+.drill-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  border: none;
+  background: transparent;
+  z-index: 940;
+}
+
+.drill-floating-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 950;
+  min-width: 210px;
+  border: 1px solid #dbe5f1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.drill-floating-menu button {
+  font: inherit;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #1e293b;
+}
+
+.drill-floating-menu button:hover {
+  background: #f8fafc;
+}
+
+.drill-floating-menu button.danger {
+  color: #b91c1c;
+}
+
+.drill-details-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.drill-card {
+  border: 1px solid #dbe5f1;
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.drill-card h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.drill-description-text {
+  margin: 0;
+  color: #334155;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.drill-empty-text {
+  margin: 0;
+  color: #64748b;
+}
+
+.drill-materials-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  display: grid;
+  gap: 6px;
+}
