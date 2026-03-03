@@ -11,6 +11,7 @@ import { uiAlert } from '../ui'
 import type { Plateau, Training } from '../types/api'
 import './TrainingsPage.css'
 
+const LAST_PLANNING_DATE_KEY = 'izifoot.planning.lastDate'
 
 function yyyyMmDd(d: Date) {
   const y = d.getFullYear()
@@ -35,6 +36,11 @@ function parseDateParam(value: string | null) {
   if (Number.isNaN(parsed.getTime())) return null
   if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null
   return parsed
+}
+
+function readStoredPlanningDate() {
+  if (typeof window === 'undefined') return null
+  return parseDateParam(window.localStorage.getItem(LAST_PLANNING_DATE_KEY))
 }
 
 function formatDateTitle(d: Date) {
@@ -74,10 +80,17 @@ export default function TrainingsPage() {
 
   const { loading, error } = useAsyncLoader(loadTrainings)
   // Derived data for selected day
-  const selectedDate = useMemo(() => parseDateParam(searchParams.get('date')) ?? new Date(), [searchParams])
+  const selectedDate = useMemo(
+    () => parseDateParam(searchParams.get('date')) ?? readStoredPlanningDate() ?? new Date(),
+    [searchParams]
+  )
   const selectedDayKey = useMemo(() => yyyyMmDd(selectedDate), [selectedDate])
   const todayKey = useMemo(() => yyyyMmDd(new Date()), [])
   const isTodaySelected = selectedDayKey === todayKey
+
+  useEffect(() => {
+    window.localStorage.setItem(LAST_PLANNING_DATE_KEY, selectedDayKey)
+  }, [selectedDayKey])
 
   useEffect(() => {
     const currentParam = searchParams.get('date')
@@ -155,7 +168,7 @@ export default function TrainingsPage() {
       setPlateaus(prev => [created, ...prev])
       setPlateauLocation('')
       setIsPlateauModalOpen(false)
-      navigate(`/plateau/${created.id}`)
+      navigate(`/plateau/${created.id}?date=${selectedDayKey}`)
     } catch (err: unknown) {
       uiAlert(`Erreur création plateau: ${toErrorMessage(err)}`)
     } finally {
@@ -245,7 +258,7 @@ export default function TrainingsPage() {
             dayPlateaus.map((p) => (
               <Link
                 key={p.id}
-                to={`/plateau/${p.id}`}
+                to={`/plateau/${p.id}?date=${selectedDayKey}`}
                 className="trainings-item"
               >
                 <span className="trainings-item-row">

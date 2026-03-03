@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Planning } from '../api'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -25,9 +25,26 @@ function toDateKey(value?: string | null) {
   return date.toISOString().slice(0, 10)
 }
 
+function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
+  const date = dateISO ? new Date(dateISO) : null
+  if (date && !Number.isNaN(date.getTime())) {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `/planning?date=${y}-${m}-${day}`
+  }
+
+  if (fallbackDate && /^\d{4}-\d{2}-\d{2}$/.test(fallbackDate)) {
+    return `/planning?date=${fallbackDate}`
+  }
+
+  return '/planning'
+}
+
 export default function PlateauDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [plateau, setPlateau] = useState<Plateau | null>(null)
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
@@ -76,6 +93,10 @@ export default function PlateauDetailsPage() {
     if (!plateau?.date) return ''
     return new Date(plateau.date).toLocaleDateString()
   }, [plateau])
+  const backToPlanningUrl = useMemo(
+    () => toPlanningUrl(plateau?.date, searchParams.get('date')),
+    [plateau?.date, searchParams]
+  )
 
   const plateauPlanning = useMemo(() => plateauPlannings[0] ?? null, [plateauPlannings])
   const plateauPlanningData = useMemo(
@@ -139,7 +160,7 @@ export default function PlateauDetailsPage() {
     if (!uiConfirm('Supprimer définitivement ce plateau (et tous ses matchs) ?')) return
     try {
       await apiDelete(apiRoutes.plateaus.byId(id))
-      navigate('/planning')
+      navigate(backToPlanningUrl)
     } catch (err: unknown) {
       uiAlert(`Erreur suppression plateau: ${toErrorMessage(err)}`)
     }
@@ -267,7 +288,7 @@ export default function PlateauDetailsPage() {
   return (
     <div className="training-details-page">
       <header className="topbar">
-        <RoundIconButton ariaLabel="Revenir au planning" className="back-round-button" onClick={() => navigate('/planning')}>
+        <RoundIconButton ariaLabel="Revenir au planning" className="back-round-button" onClick={() => navigate(backToPlanningUrl)}>
           <ChevronLeftIcon size={18} />
         </RoundIconButton>
         <div className="topbar-title">
