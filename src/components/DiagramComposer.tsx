@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './DiagramComposer.css'
+import { PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
 import {
   MAX_STEPS,
   createEmptyDiagramData,
@@ -289,7 +290,7 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
   }
 
   const displayItems = useMemo(() => {
-    if (!isPlaying || transitionFromIndex === null || transitionFromIndex >= frames.length - 1) return activeFrame.items
+    if (transitionFromIndex === null || transitionFromIndex >= frames.length - 1) return activeFrame.items
     const fromItems = frames[transitionFromIndex]?.items || []
     const toItems = frames[transitionFromIndex + 1]?.items || activeFrame.items
     const fromMap = new Map(fromItems.map((item) => [item.id, item]))
@@ -301,9 +302,18 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
       })
     }
     return interpolated
-  }, [activeFrame.items, frames, isPlaying, transitionFromIndex, transitionProgress])
+  }, [activeFrame.items, frames, transitionFromIndex, transitionProgress])
 
   const selected = useMemo(() => activeFrame.items.find((it) => it.id === selectedId) || null, [activeFrame.items, selectedId])
+  const progressRatio = frames.length <= 1
+    ? 1
+    : Math.min(
+        1,
+        Math.max(
+          0,
+          ((transitionFromIndex ?? activeFrameIndex) + (transitionFromIndex === null ? 0 : transitionProgress)) / (frames.length - 1),
+        ),
+      )
 
   return (
     <div className={`diagram-composer ${className || ''}`}>
@@ -348,9 +358,12 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
       </div>
 
       <div className="diagram-step-bar">
+        <div className="diagram-progress-track" aria-hidden="true">
+          <div className="diagram-progress-fill" style={{ width: `${Math.round(progressRatio * 100)}%` }} />
+        </div>
         <div className="frames-actions">
           <button type="button" className="ghost-btn control-btn" onClick={goToPreviousStep} disabled={activeFrameIndex === 0} aria-label="Précédente" title="Précédente">
-            {'⏮'}
+            <StepBackIcon size={28} />
           </button>
           <button
             type="button"
@@ -360,10 +373,13 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
             aria-label={isPlaying ? 'Pause' : 'Lecture'}
             title={isPlaying ? 'Pause' : 'Lecture'}
           >
-            {isPlaying ? '⏸' : '▶'}
+            {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
           </button>
           <button type="button" className="ghost-btn control-btn" onClick={goToNextStep} disabled={activeFrameIndex >= frames.length - 1} aria-label="Suivante" title="Suivante">
-            {'⏭'}
+            <StepForwardIcon size={28} />
+          </button>
+          <button type="button" className="ghost-btn control-btn" onClick={() => goToStep(0)} disabled={activeFrameIndex === 0 && !isPlaying} aria-label="Début" title="Début">
+            <SkipBackIcon size={28} />
           </button>
         </div>
       </div>
@@ -397,6 +413,12 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
           </button>
         ))}
       </div>
+
+      {selected && !isPlaying && (
+        <div className="selected-indicator">
+          Élément sélectionné : {getItemLabel(selected)}
+        </div>
+      )}
 
       {selected && selected.type === 'player' && !isPlaying && (
         <div className="diagram-properties">
@@ -437,6 +459,7 @@ function renderItem(
   setSelectedId: (id: string | null) => void,
 ) {
   if (item.type === 'arrow') {
+    const isSelected = selectedId === item.id
     return (
       <g key={item.id}>
         <defs>
@@ -449,65 +472,97 @@ function renderItem(
           y1={item.from.y}
           x2={item.to.x}
           y2={item.to.y}
-          stroke="#111827"
-          strokeWidth={2}
+          stroke={isSelected ? '#0284c7' : '#111827'}
+          strokeWidth={isSelected ? 3 : 2}
           markerEnd={`url(#arrow-${item.id})`}
           onPointerDown={(e) => {
             e.stopPropagation()
             setSelectedId(item.id)
           }}
         />
+        {isSelected && (
+          <line
+            x1={item.from.x}
+            y1={item.from.y}
+            x2={item.to.x}
+            y2={item.to.y}
+            stroke="#7dd3fc"
+            strokeWidth={8}
+            strokeOpacity={0.28}
+            strokeLinecap="round"
+            pointerEvents="none"
+          />
+        )}
       </g>
     )
   }
 
   if (item.type === 'cone') {
+    const isSelected = selectedId === item.id
     return (
-      <polygon
-        key={item.id}
-        points={`${item.x},${item.y - 10} ${item.x - 10},${item.y + 10} ${item.x + 10},${item.y + 10}`}
-        fill="#f97316"
-        stroke="#7c2d12"
-        onPointerDown={(e) => startDrag(item, e)}
-        opacity={selectedId === item.id ? 0.8 : 1}
-      />
+      <g key={item.id} onPointerDown={(e) => startDrag(item, e)}>
+        {isSelected && <circle cx={item.x} cy={item.y + 2} r={18} fill="#7dd3fc" fillOpacity={0.26} />}
+        <polygon
+          points={`${item.x},${item.y - 10} ${item.x - 10},${item.y + 10} ${item.x + 10},${item.y + 10}`}
+          fill="#f97316"
+          stroke={isSelected ? '#0284c7' : '#7c2d12'}
+          strokeWidth={isSelected ? 2.4 : 1}
+        />
+      </g>
     )
   }
 
   if (item.type === 'cup') {
+    const isSelected = selectedId === item.id
     return (
-      <g key={item.id} onPointerDown={(e) => startDrag(item, e)} opacity={selectedId === item.id ? 0.8 : 1}>
-        <circle cx={item.x} cy={item.y} r={10} fill="#fde047" stroke="#a16207" />
-        <circle cx={item.x} cy={item.y} r={4} fill="#fffbeb" stroke="#a16207" />
+      <g key={item.id} onPointerDown={(e) => startDrag(item, e)}>
+        {isSelected && <circle cx={item.x} cy={item.y} r={18} fill="#7dd3fc" fillOpacity={0.26} />}
+        <circle cx={item.x} cy={item.y} r={10} fill="#fde047" stroke={isSelected ? '#0284c7' : '#a16207'} strokeWidth={isSelected ? 2.4 : 1} />
+        <circle cx={item.x} cy={item.y} r={4} fill="#fffbeb" stroke={isSelected ? '#0284c7' : '#a16207'} strokeWidth={isSelected ? 1.8 : 1} />
       </g>
     )
   }
 
   if (item.type === 'ball') {
+    const isSelected = selectedId === item.id
     return (
-      <g key={item.id} onPointerDown={(e) => startDrag(item, e)} opacity={selectedId === item.id ? 0.8 : 1}>
-        <circle cx={item.x} cy={item.y} r={10} fill="#ffffff" stroke="#111827" />
+      <g key={item.id} onPointerDown={(e) => startDrag(item, e)}>
+        {isSelected && <circle cx={item.x} cy={item.y} r={18} fill="#7dd3fc" fillOpacity={0.26} />}
+        <circle cx={item.x} cy={item.y} r={10} fill="#ffffff" stroke={isSelected ? '#0284c7' : '#111827'} strokeWidth={isSelected ? 2.4 : 1} />
         <path d={`M${item.x - 5},${item.y} L${item.x + 5},${item.y} M${item.x},${item.y - 5} L${item.x},${item.y + 5}`} stroke="#111827" strokeWidth={1.2} />
       </g>
     )
   }
 
   if (item.type === 'post') {
+    const isSelected = selectedId === item.id
     return (
-      <g key={item.id} onPointerDown={(e) => startDrag(item, e)} opacity={selectedId === item.id ? 0.8 : 1}>
-        <rect x={item.x - 4} y={item.y - 16} width={8} height={32} rx={2} fill="#94a3b8" stroke="#334155" />
+      <g key={item.id} onPointerDown={(e) => startDrag(item, e)}>
+        {isSelected && <circle cx={item.x} cy={item.y} r={20} fill="#7dd3fc" fillOpacity={0.26} />}
+        <rect x={item.x - 4} y={item.y - 16} width={8} height={32} rx={2} fill="#94a3b8" stroke={isSelected ? '#0284c7' : '#334155'} strokeWidth={isSelected ? 2.4 : 1} />
       </g>
     )
   }
 
+  const isSelected = selectedId === item.id
   return (
-    <g key={item.id} onPointerDown={(e) => startDrag(item, e)} opacity={selectedId === item.id ? 0.85 : 1}>
-      <circle cx={item.x} cy={item.y} r={14} fill={getPlayerFill(item.color)} stroke="#111827" />
+    <g key={item.id} onPointerDown={(e) => startDrag(item, e)}>
+      {isSelected && <circle cx={item.x} cy={item.y} r={21} fill="#7dd3fc" fillOpacity={0.28} />}
+      <circle cx={item.x} cy={item.y} r={14} fill={getPlayerFill(item.color)} stroke={isSelected ? '#0284c7' : '#111827'} strokeWidth={isSelected ? 2.6 : 1} />
       <text x={item.x} y={item.y + 4} textAnchor="middle" fontSize="12" fill="white" fontWeight={700}>
         {item.label || ''}
       </text>
     </g>
   )
+}
+
+function getItemLabel(item: Item): string {
+  if (item.type === 'player') return 'Joueur'
+  if (item.type === 'cone') return 'Cône'
+  if (item.type === 'cup') return 'Coupelle'
+  if (item.type === 'ball') return 'Ballon'
+  if (item.type === 'post') return 'Poteau'
+  return 'Flèche'
 }
 
 function IconButton({

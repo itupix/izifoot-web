@@ -168,7 +168,7 @@ export function summarizeDiagramMaterials(input: unknown): string[] {
   if (maxCounts.cone > 0) lines.push(`${maxCounts.cone} cône${maxCounts.cone > 1 ? 's' : ''}`)
   if (maxCounts.ball > 0) lines.push(`${maxCounts.ball} ballon${maxCounts.ball > 1 ? 's' : ''}`)
   if (maxCounts.post > 0) lines.push(`${maxCounts.post} poteau${maxCounts.post > 1 ? 'x' : ''}`)
-  if (colors.size >= 2 && maxCounts.players > 0) lines.push(`${maxCounts.players} chasuble${maxCounts.players > 1 ? 's' : ''}`)
+  if (colors.size >= 2 && maxCounts.players > 0) lines.push('chasubles')
   return lines
 }
 
