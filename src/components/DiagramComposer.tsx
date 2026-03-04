@@ -56,6 +56,8 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null)
   const arrowRef = useRef<{ id: string } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
+  const effectiveFullscreen = isFullscreen || isPseudoFullscreen
 
   const frames = value.frames.length ? value.frames : createEmptyDiagramData().frames
   const fps = Math.max(1, Math.min(8, Math.round(value.fps || 2)))
@@ -216,11 +218,24 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
   async function toggleFullscreen() {
     const stage = stageRef.current
     if (!stage) return
-    if (document.fullscreenElement === stage) {
-      await document.exitFullscreen()
+    if (effectiveFullscreen) {
+      if (document.fullscreenElement === stage) {
+        await document.exitFullscreen()
+      } else {
+        setIsPseudoFullscreen(false)
+      }
       return
     }
-    await stage.requestFullscreen()
+    if (typeof stage.requestFullscreen === 'function') {
+      try {
+        await stage.requestFullscreen()
+        return
+      } catch {
+        setIsPseudoFullscreen(true)
+        return
+      }
+    }
+    setIsPseudoFullscreen(true)
   }
 
   useEffect(() => {
@@ -230,6 +245,15 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
     document.addEventListener('fullscreenchange', onFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
   }, [])
+
+  useEffect(() => {
+    if (!effectiveFullscreen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [effectiveFullscreen])
 
   useEffect(() => {
     if (!isPlaying || frames.length <= 1) return
@@ -395,7 +419,7 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
         </div>
       </div>
 
-      <div className={`diagram-stage ${isFullscreen ? 'fullscreen' : ''}`} ref={stageRef}>
+      <div className={`diagram-stage ${effectiveFullscreen ? 'fullscreen' : ''}`} ref={stageRef}>
         <div className="diagram-step-bar">
           <div className="diagram-progress-track" aria-hidden="true">
             <div className="diagram-progress-fill" style={{ width: `${Math.round(progressRatio * 100)}%` }} />
@@ -432,15 +456,15 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
               >
                 <OrientationIcon size={24} />
               </button>
-              <button
-                type="button"
-                className="ghost-btn control-btn"
-                onClick={toggleFullscreen}
-                aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
-                title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
-              >
-                <FullscreenIcon size={24} />
-              </button>
+                <button
+                  type="button"
+                  className="ghost-btn control-btn"
+                  onClick={toggleFullscreen}
+                  aria-label={effectiveFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                  title={effectiveFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                >
+                  <FullscreenIcon size={24} />
+                </button>
             </div>
           </div>
         </div>
@@ -449,7 +473,7 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
           ref={svgRef}
           viewBox={`0 0 ${fieldWidth} ${fieldHeight}`}
           className="diagram-canvas"
-          style={{ minHeight: isFullscreen ? 'calc(100vh - 190px)' : minHeight }}
+          style={{ minHeight: effectiveFullscreen ? 'calc(100vh - 190px)' : minHeight }}
           onPointerDown={onCanvasDown}
           onPointerMove={onCanvasMove}
           onPointerUp={onCanvasUp}

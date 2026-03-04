@@ -32,7 +32,9 @@ export default function DiagramPlayer({ data }: Props) {
   const [transitionFromIndex, setTransitionFromIndex] = useState<number | null>(null)
   const [transitionProgress, setTransitionProgress] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
   const stageRef = useRef<HTMLDivElement | null>(null)
+  const effectiveFullscreen = isFullscreen || isPseudoFullscreen
   const fieldSize = getFieldSizeForQuarterTurns(rotationQuarterTurns)
   const isPortrait = rotationQuarterTurns % 2 === 1
   const fieldWidth = fieldSize.width
@@ -118,11 +120,24 @@ export default function DiagramPlayer({ data }: Props) {
   async function toggleFullscreen() {
     const stage = stageRef.current
     if (!stage) return
-    if (document.fullscreenElement === stage) {
-      await document.exitFullscreen()
+    if (effectiveFullscreen) {
+      if (document.fullscreenElement === stage) {
+        await document.exitFullscreen()
+      } else {
+        setIsPseudoFullscreen(false)
+      }
       return
     }
-    await stage.requestFullscreen()
+    if (typeof stage.requestFullscreen === 'function') {
+      try {
+        await stage.requestFullscreen()
+        return
+      } catch {
+        setIsPseudoFullscreen(true)
+        return
+      }
+    }
+    setIsPseudoFullscreen(true)
   }
 
   useEffect(() => {
@@ -132,6 +147,15 @@ export default function DiagramPlayer({ data }: Props) {
     document.addEventListener('fullscreenchange', onFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
   }, [])
+
+  useEffect(() => {
+    if (!effectiveFullscreen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [effectiveFullscreen])
 
   useEffect(() => {
     if (!isPlaying || frames.length <= 1) return
@@ -173,14 +197,25 @@ export default function DiagramPlayer({ data }: Props) {
   const stageStyle: React.CSSProperties = {
     display: 'grid',
     gap: 12,
-    ...(isFullscreen ? { background: '#fff', padding: 12, minHeight: '100vh', boxSizing: 'border-box' } : {}),
+    ...(effectiveFullscreen
+      ? {
+          background: '#fff',
+          padding: 12,
+          minHeight: '100vh',
+          boxSizing: 'border-box',
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1000,
+          overflow: 'auto',
+        }
+      : {}),
   }
 
   return (
     <div style={stageStyle} ref={stageRef}>
       <svg
         viewBox={`0 0 ${fieldWidth} ${fieldHeight}`}
-        style={{ width: '100%', minHeight: isFullscreen ? 'calc(100vh - 190px)' : 320, border: '1px solid #e5e7eb', borderRadius: 12, background: '#f8fff8' }}
+        style={{ width: '100%', minHeight: effectiveFullscreen ? 'calc(100vh - 190px)' : 320, border: '1px solid #e5e7eb', borderRadius: 12, background: '#f8fff8' }}
       >
         <rect x={5} y={5} width={innerWidth} height={innerHeight} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
         {!isPortrait ? (
@@ -299,8 +334,8 @@ export default function DiagramPlayer({ data }: Props) {
             type="button"
             onClick={toggleFullscreen}
             style={playerButtonStyle}
-            aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
-            title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+            aria-label={effectiveFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+            title={effectiveFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
           >
             <FullscreenIcon size={24} />
           </button>

@@ -82,10 +82,18 @@
   gap: 10px;
 }
 
+.diagram-stage.fullscreen,
 .diagram-stage:fullscreen {
   background: #ffffff;
   padding: 12px;
   overflow: auto;
+  box-sizing: border-box;
+}
+
+.diagram-stage.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
 }
 
 .frames-actions {
