@@ -1,16 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './DiagramComposer.css'
-import { PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
+import { OrientationIcon, PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
 import {
   MAX_STEPS,
   createEmptyDiagramData,
+  LANDSCAPE_FIELD_SIZE,
+  PORTRAIT_FIELD_SIZE,
   type Arrow,
   getPlayerFill,
   interpolateItem,
   type Item,
   type DiagramData,
+  normalizeDiagramOrientation,
   PLAYER_COLOR_OPTIONS,
   type PlayerColor,
+  remapDiagramToOrientation,
 } from './diagramShared'
 
 export type Tool = 'select' | 'player' | 'cone' | 'cup' | 'ball' | 'post' | 'arrow'
@@ -54,6 +58,16 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
 
   const frames = value.frames.length ? value.frames : createEmptyDiagramData().frames
   const fps = Math.max(1, Math.min(8, Math.round(value.fps || 2)))
+  const orientation = normalizeDiagramOrientation(value.orientation)
+  const fieldSize = orientation === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+  const fieldWidth = fieldSize.width
+  const fieldHeight = fieldSize.height
+  const innerWidth = fieldWidth - 10
+  const innerHeight = fieldHeight - 10
+  const midX = fieldWidth / 2
+  const midY = fieldHeight / 2
+  const penaltyY = fieldHeight / 2 - 60
+  const penaltyX = fieldWidth / 2 - 60
   const activeFrame = frames[Math.min(activeFrameIndex, frames.length - 1)]
 
   useEffect(() => {
@@ -191,6 +205,11 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
     setTransitionProgress(0)
     if (activeFrameIndex >= frames.length - 1) setActiveFrameIndex(0)
     setIsPlaying((current) => !current)
+  }
+
+  function toggleOrientation() {
+    const target = orientation === 'landscape' ? 'portrait' : 'landscape'
+    onChange(remapDiagramToOrientation({ ...value, frames }, target))
   }
 
   useEffect(() => {
@@ -362,31 +381,42 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
           <div className="diagram-progress-fill" style={{ width: `${Math.round(progressRatio * 100)}%` }} />
         </div>
         <div className="frames-actions">
-          <button type="button" className="ghost-btn control-btn" onClick={goToPreviousStep} disabled={activeFrameIndex === 0} aria-label="Précédente" title="Précédente">
-            <StepBackIcon size={28} />
-          </button>
+          <div className="frames-controls">
+            <button type="button" className="ghost-btn control-btn" onClick={goToPreviousStep} disabled={activeFrameIndex === 0} aria-label="Précédente" title="Précédente">
+              <StepBackIcon size={28} />
+            </button>
+            <button
+              type="button"
+              className={`ghost-btn control-btn play ${isPlaying ? 'active' : ''}`}
+              disabled={frames.length <= 1}
+              onClick={startPlayback}
+              aria-label={isPlaying ? 'Pause' : 'Lecture'}
+              title={isPlaying ? 'Pause' : 'Lecture'}
+            >
+              {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
+            </button>
+            <button type="button" className="ghost-btn control-btn" onClick={goToNextStep} disabled={activeFrameIndex >= frames.length - 1} aria-label="Suivante" title="Suivante">
+              <StepForwardIcon size={28} />
+            </button>
+            <button type="button" className="ghost-btn control-btn" onClick={() => goToStep(0)} disabled={activeFrameIndex === 0 && !isPlaying} aria-label="Début" title="Début">
+              <SkipBackIcon size={28} />
+            </button>
+          </div>
           <button
             type="button"
-            className={`ghost-btn control-btn play ${isPlaying ? 'active' : ''}`}
-            disabled={frames.length <= 1}
-            onClick={startPlayback}
-            aria-label={isPlaying ? 'Pause' : 'Lecture'}
-            title={isPlaying ? 'Pause' : 'Lecture'}
+            className="ghost-btn control-btn orientation-btn"
+            onClick={toggleOrientation}
+            aria-label={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
+            title={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
           >
-            {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
-          </button>
-          <button type="button" className="ghost-btn control-btn" onClick={goToNextStep} disabled={activeFrameIndex >= frames.length - 1} aria-label="Suivante" title="Suivante">
-            <StepForwardIcon size={28} />
-          </button>
-          <button type="button" className="ghost-btn control-btn" onClick={() => goToStep(0)} disabled={activeFrameIndex === 0 && !isPlaying} aria-label="Début" title="Début">
-            <SkipBackIcon size={28} />
+            <OrientationIcon size={24} />
           </button>
         </div>
       </div>
 
       <svg
         ref={svgRef}
-        viewBox="0 0 600 380"
+        viewBox={`0 0 ${fieldWidth} ${fieldHeight}`}
         className="diagram-canvas"
         style={{ minHeight }}
         onPointerDown={onCanvasDown}
@@ -394,10 +424,20 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
         onPointerUp={onCanvasUp}
         onPointerCancel={onCanvasUp}
       >
-        <rect x={5} y={5} width={590} height={370} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
-        <line x1={300} y1={5} x2={300} y2={375} stroke="#c7e2c7" strokeDasharray="4 4" />
-        <rect x={5} y={130} width={40} height={120} fill="none" stroke="#c7e2c7" />
-        <rect x={555} y={130} width={40} height={120} fill="none" stroke="#c7e2c7" />
+        <rect x={5} y={5} width={innerWidth} height={innerHeight} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
+        {orientation === 'landscape' ? (
+          <>
+            <line x1={midX} y1={5} x2={midX} y2={fieldHeight - 5} stroke="#c7e2c7" strokeDasharray="4 4" />
+            <rect x={5} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
+            <rect x={fieldWidth - 45} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
+          </>
+        ) : (
+          <>
+            <line x1={5} y1={midY} x2={fieldWidth - 5} y2={midY} stroke="#c7e2c7" strokeDasharray="4 4" />
+            <rect x={penaltyX} y={5} width={120} height={40} fill="none" stroke="#c7e2c7" />
+            <rect x={penaltyX} y={fieldHeight - 45} width={120} height={40} fill="none" stroke="#c7e2c7" />
+          </>
+        )}
         {displayItems.map((item) => renderItem(item, selectedId, startDrag, setSelectedId))}
       </svg>
 

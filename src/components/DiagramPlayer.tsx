@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getPlayerFill, interpolateItem, normalizeDiagramData } from './diagramShared'
-import { PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
+import {
+  getPlayerFill,
+  interpolateItem,
+  LANDSCAPE_FIELD_SIZE,
+  normalizeDiagramData,
+  normalizeDiagramOrientation,
+  PORTRAIT_FIELD_SIZE,
+  remapDiagramToOrientation,
+  type DiagramOrientation,
+} from './diagramShared'
+import { OrientationIcon, PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
 
 interface Props {
   data: unknown
@@ -8,25 +17,37 @@ interface Props {
 
 export default function DiagramPlayer({ data }: Props) {
   const normalized = useMemo(() => normalizeDiagramData(data), [data])
+  const [orientation, setOrientation] = useState<DiagramOrientation>(normalizeDiagramOrientation(normalized.orientation))
   const frames = useMemo(() => {
-    const compressed = normalized.frames.filter((frame, index, list) => {
+    const oriented = remapDiagramToOrientation(normalized, orientation)
+    const compressed = oriented.frames.filter((frame, index, list) => {
       if (index === 0) return true
       return JSON.stringify(frame.items) !== JSON.stringify(list[index - 1].items)
     })
-    return compressed.length > 0 ? compressed : normalized.frames.slice(0, 1)
-  }, [normalized.frames])
+    return compressed.length > 0 ? compressed : oriented.frames.slice(0, 1)
+  }, [normalized, orientation])
   const fps = Math.max(1, Math.min(8, Math.round(normalized.fps || 2)))
   const [activeIndex, setActiveIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [transitionFromIndex, setTransitionFromIndex] = useState<number | null>(null)
   const [transitionProgress, setTransitionProgress] = useState(0)
+  const fieldSize = orientation === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+  const fieldWidth = fieldSize.width
+  const fieldHeight = fieldSize.height
+  const innerWidth = fieldWidth - 10
+  const innerHeight = fieldHeight - 10
+  const midX = fieldWidth / 2
+  const midY = fieldHeight / 2
+  const penaltyY = fieldHeight / 2 - 60
+  const penaltyX = fieldWidth / 2 - 60
 
   useEffect(() => {
     setActiveIndex(0)
     setIsPlaying(false)
     setTransitionFromIndex(null)
     setTransitionProgress(0)
-  }, [data])
+    setOrientation(normalizeDiagramOrientation(normalized.orientation))
+  }, [data, normalized.orientation])
 
   function goToPrevious() {
     if (activeIndex <= 0) return
@@ -87,6 +108,10 @@ export default function DiagramPlayer({ data }: Props) {
     setIsPlaying((current) => !current)
   }
 
+  function toggleOrientation() {
+    setOrientation((current) => (current === 'landscape' ? 'portrait' : 'landscape'))
+  }
+
   useEffect(() => {
     if (!isPlaying || frames.length <= 1) return
     if (activeIndex >= frames.length - 1) {
@@ -126,11 +151,21 @@ export default function DiagramPlayer({ data }: Props) {
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <svg viewBox="0 0 600 380" style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 12, background: '#f8fff8' }}>
-        <rect x={5} y={5} width={590} height={370} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
-        <line x1={300} y1={5} x2={300} y2={375} stroke="#c7e2c7" strokeDasharray="4 4" />
-        <rect x={5} y={130} width={40} height={120} fill="none" stroke="#c7e2c7" />
-        <rect x={555} y={130} width={40} height={120} fill="none" stroke="#c7e2c7" />
+      <svg viewBox={`0 0 ${fieldWidth} ${fieldHeight}`} style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 12, background: '#f8fff8' }}>
+        <rect x={5} y={5} width={innerWidth} height={innerHeight} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
+        {orientation === 'landscape' ? (
+          <>
+            <line x1={midX} y1={5} x2={midX} y2={fieldHeight - 5} stroke="#c7e2c7" strokeDasharray="4 4" />
+            <rect x={5} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
+            <rect x={fieldWidth - 45} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
+          </>
+        ) : (
+          <>
+            <line x1={5} y1={midY} x2={fieldWidth - 5} y2={midY} stroke="#c7e2c7" strokeDasharray="4 4" />
+            <rect x={penaltyX} y={5} width={120} height={40} fill="none" stroke="#c7e2c7" />
+            <rect x={penaltyX} y={fieldHeight - 45} width={120} height={40} fill="none" stroke="#c7e2c7" />
+          </>
+        )}
         {displayItems.map((item) => {
           if (item.type === 'arrow') {
             return (
@@ -199,24 +234,35 @@ export default function DiagramPlayer({ data }: Props) {
         <div style={{ ...progressFillStyle, width: `${Math.round(progressRatio * 100)}%` }} />
       </div>
       <div style={playerBarStyle}>
-        <button type="button" onClick={restart} disabled={activeIndex === 0 && !isPlaying} style={playerButtonStyle} aria-label="Début" title="Début">
-          <SkipBackIcon size={28} />
-        </button>
-        <button type="button" onClick={goToPrevious} disabled={activeIndex === 0} style={playerButtonStyle} aria-label="Précédent" title="Précédent">
-          <StepBackIcon size={28} />
-        </button>
+        <div style={playerControlsStyle}>
+          <button type="button" onClick={restart} disabled={activeIndex === 0 && !isPlaying} style={playerButtonStyle} aria-label="Début" title="Début">
+            <SkipBackIcon size={28} />
+          </button>
+          <button type="button" onClick={goToPrevious} disabled={activeIndex === 0} style={playerButtonStyle} aria-label="Précédent" title="Précédent">
+            <StepBackIcon size={28} />
+          </button>
+          <button
+            type="button"
+            onClick={togglePlayback}
+            disabled={frames.length <= 1}
+            style={playerButtonStyle}
+            aria-label={isPlaying ? 'Pause' : 'Lecture'}
+            title={isPlaying ? 'Pause' : 'Lecture'}
+          >
+            {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
+          </button>
+          <button type="button" onClick={goToNext} disabled={activeIndex >= frames.length - 1} style={playerButtonStyle} aria-label="Suivant" title="Suivant">
+            <StepForwardIcon size={28} />
+          </button>
+        </div>
         <button
           type="button"
-          onClick={togglePlayback}
-          disabled={frames.length <= 1}
+          onClick={toggleOrientation}
           style={playerButtonStyle}
-          aria-label={isPlaying ? 'Pause' : 'Lecture'}
-          title={isPlaying ? 'Pause' : 'Lecture'}
+          aria-label={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
+          title={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
         >
-          {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
-        </button>
-        <button type="button" onClick={goToNext} disabled={activeIndex >= frames.length - 1} style={playerButtonStyle} aria-label="Suivant" title="Suivant">
-          <StepForwardIcon size={28} />
+          <OrientationIcon size={24} />
         </button>
       </div>
     </div>
@@ -241,8 +287,15 @@ const playerButtonStyle: React.CSSProperties = {
 const playerBarStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+}
+
+const playerControlsStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
   gap: 10,
+  margin: '0 auto',
 }
 
 const progressTrackStyle: React.CSSProperties = {

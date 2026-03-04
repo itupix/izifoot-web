@@ -154,3 +154,14 @@ export function StepForwardIcon({ size, style }: IconProps) {
     </IconBase>
   )
 }
+
+export function OrientationIcon({ size, style }: IconProps) {
+  return (
+    <IconBase size={size} style={style}>
+      <path d="M7 4.5h10a2.5 2.5 0 0 1 2.5 2.5v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M17 19.5H7A2.5 2.5 0 0 1 4.5 17V7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M17 4.5v3.7h-3.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 19.5v-3.7h3.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </IconBase>
+  )
+}

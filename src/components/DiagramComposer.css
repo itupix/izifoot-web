@@ -82,8 +82,15 @@
   gap: 8px;
   flex-wrap: nowrap;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   width: 100%;
+}
+
+.frames-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 auto;
 }
 
 .ghost-btn {
@@ -111,6 +118,10 @@
 
 .control-btn.reset {
   margin-left: 8px;
+}
+
+.orientation-btn {
+  margin-left: auto;
 }
 
 .ghost-btn.active {

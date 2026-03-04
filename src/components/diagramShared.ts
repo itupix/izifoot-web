@@ -18,7 +18,10 @@ export interface DiagramFrame {
 export interface DiagramData {
   frames: DiagramFrame[]
   fps?: number
+  orientation?: DiagramOrientation
 }
+
+export type DiagramOrientation = 'landscape' | 'portrait'
 
 export const PLAYER_COLOR_OPTIONS: Array<{ value: PlayerColor; label: string; fill: string }> = [
   { value: 'blue', label: 'Bleu', fill: '#3b82f6' },
@@ -29,6 +32,9 @@ export const PLAYER_COLOR_OPTIONS: Array<{ value: PlayerColor; label: string; fi
 ]
 
 export const MAX_STEPS = 10
+export const LANDSCAPE_FIELD_SIZE = { width: 600, height: 380 }
+export const PORTRAIT_FIELD_SIZE = { width: 380, height: 600 }
+const FIELD_MARGIN = 5
 
 function uid() {
   return Math.random().toString(36).slice(2, 10)
@@ -98,7 +104,64 @@ function normalizeItems(items: unknown): Item[] {
 }
 
 export function createEmptyDiagramData(): DiagramData {
-  return { frames: ensureTenFrames([createFrame()]), fps: 2 }
+  return { frames: ensureTenFrames([createFrame()]), fps: 2, orientation: 'landscape' }
+}
+
+export function normalizeDiagramOrientation(input: unknown): DiagramOrientation {
+  return input === 'portrait' ? 'portrait' : 'landscape'
+}
+
+function mapPointBetweenOrientations(
+  point: { x: number; y: number },
+  from: DiagramOrientation,
+  to: DiagramOrientation,
+): { x: number; y: number } {
+  if (from === to) return point
+  const fromSize = from === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+  const toSize = to === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+  const fromInnerWidth = fromSize.width - FIELD_MARGIN * 2
+  const fromInnerHeight = fromSize.height - FIELD_MARGIN * 2
+  const toInnerWidth = toSize.width - FIELD_MARGIN * 2
+  const toInnerHeight = toSize.height - FIELD_MARGIN * 2
+
+  const nx = Math.min(1, Math.max(0, (point.x - FIELD_MARGIN) / fromInnerWidth))
+  const ny = Math.min(1, Math.max(0, (point.y - FIELD_MARGIN) / fromInnerHeight))
+  const rotated = from === 'landscape' && to === 'portrait'
+    ? { nx: ny, ny: 1 - nx }
+    : { nx: 1 - ny, ny: nx }
+
+  return {
+    x: FIELD_MARGIN + rotated.nx * toInnerWidth,
+    y: FIELD_MARGIN + rotated.ny * toInnerHeight,
+  }
+}
+
+function mapItemBetweenOrientations(item: Item, from: DiagramOrientation, to: DiagramOrientation): Item {
+  if (from === to) return item
+  if (item.type === 'arrow') {
+    return {
+      ...item,
+      from: mapPointBetweenOrientations(item.from, from, to),
+      to: mapPointBetweenOrientations(item.to, from, to),
+    }
+  }
+  return {
+    ...item,
+    ...mapPointBetweenOrientations({ x: item.x, y: item.y }, from, to),
+  } as Item
+}
+
+export function remapDiagramToOrientation(data: DiagramData, target: DiagramOrientation): DiagramData {
+  const from = normalizeDiagramOrientation(data.orientation)
+  if (from === target) return { ...data, orientation: target }
+  return {
+    ...data,
+    orientation: target,
+    frames: data.frames.map((frame) => ({
+      ...frame,
+      items: frame.items.map((item) => mapItemBetweenOrientations(item, from, target)),
+    })),
+  }
 }
 
 export function normalizeDiagramData(input: unknown): DiagramData {
@@ -108,6 +171,7 @@ export function normalizeDiagramData(input: unknown): DiagramData {
     const maybeItems = (obj as { items?: unknown }).items
     const maybeFrames = (obj as { frames?: unknown }).frames
     const fps = Number((obj as { fps?: unknown }).fps)
+    const orientation = normalizeDiagramOrientation((obj as { orientation?: unknown }).orientation)
 
     if (Array.isArray(maybeFrames) && maybeFrames.length > 0) {
       const frames = maybeFrames.map((frame, idx) => {
@@ -118,11 +182,11 @@ export function normalizeDiagramData(input: unknown): DiagramData {
           items: normalizeItems(raw.items),
         }
       })
-      return { frames: ensureTenFrames(frames), fps: Number.isFinite(fps) && fps > 0 ? fps : 2 }
+      return { frames: ensureTenFrames(frames), fps: Number.isFinite(fps) && fps > 0 ? fps : 2, orientation }
     }
 
     if (Array.isArray(maybeItems)) {
-      return { frames: ensureTenFrames([createFrame('Etape 1', normalizeItems(maybeItems))]), fps: 2 }
+      return { frames: ensureTenFrames([createFrame('Etape 1', normalizeItems(maybeItems))]), fps: 2, orientation }
     }
 
     return createEmptyDiagramData()
