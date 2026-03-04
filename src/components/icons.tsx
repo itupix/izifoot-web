@@ -165,3 +165,11 @@ export function OrientationIcon({ size, style }: IconProps) {
     </IconBase>
   )
 }
+
+export function FullscreenIcon({ size, style }: IconProps) {
+  return (
+    <IconBase size={size} style={style}>
+      <path d="M8 4.5H4.5V8M16 4.5h3.5V8M8 19.5H4.5V16M16 19.5h3.5V16" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+    </IconBase>
+  )
+}

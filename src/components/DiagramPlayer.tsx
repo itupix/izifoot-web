@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  getFieldSizeForQuarterTurns,
   getPlayerFill,
   interpolateItem,
-  LANDSCAPE_FIELD_SIZE,
   normalizeDiagramData,
-  normalizeDiagramOrientation,
-  PORTRAIT_FIELD_SIZE,
-  remapDiagramToOrientation,
-  type DiagramOrientation,
+  normalizeRotationQuarterTurns,
+  rotateDiagramToQuarterTurns,
 } from './diagramShared'
-import { OrientationIcon, PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
+import { FullscreenIcon, OrientationIcon, PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
 
 interface Props {
   data: unknown
@@ -17,21 +15,26 @@ interface Props {
 
 export default function DiagramPlayer({ data }: Props) {
   const normalized = useMemo(() => normalizeDiagramData(data), [data])
-  const [orientation, setOrientation] = useState<DiagramOrientation>(normalizeDiagramOrientation(normalized.orientation))
+  const [rotationQuarterTurns, setRotationQuarterTurns] = useState<number>(
+    normalizeRotationQuarterTurns(normalized.rotationQuarterTurns, normalized.orientation),
+  )
   const frames = useMemo(() => {
-    const oriented = remapDiagramToOrientation(normalized, orientation)
+    const oriented = rotateDiagramToQuarterTurns(normalized, rotationQuarterTurns)
     const compressed = oriented.frames.filter((frame, index, list) => {
       if (index === 0) return true
       return JSON.stringify(frame.items) !== JSON.stringify(list[index - 1].items)
     })
     return compressed.length > 0 ? compressed : oriented.frames.slice(0, 1)
-  }, [normalized, orientation])
+  }, [normalized, rotationQuarterTurns])
   const fps = Math.max(1, Math.min(8, Math.round(normalized.fps || 2)))
   const [activeIndex, setActiveIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [transitionFromIndex, setTransitionFromIndex] = useState<number | null>(null)
   const [transitionProgress, setTransitionProgress] = useState(0)
-  const fieldSize = orientation === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const fieldSize = getFieldSizeForQuarterTurns(rotationQuarterTurns)
+  const isPortrait = rotationQuarterTurns % 2 === 1
   const fieldWidth = fieldSize.width
   const fieldHeight = fieldSize.height
   const innerWidth = fieldWidth - 10
@@ -46,8 +49,8 @@ export default function DiagramPlayer({ data }: Props) {
     setIsPlaying(false)
     setTransitionFromIndex(null)
     setTransitionProgress(0)
-    setOrientation(normalizeDiagramOrientation(normalized.orientation))
-  }, [data, normalized.orientation])
+    setRotationQuarterTurns(normalizeRotationQuarterTurns(normalized.rotationQuarterTurns, normalized.orientation))
+  }, [data, normalized.orientation, normalized.rotationQuarterTurns])
 
   function goToPrevious() {
     if (activeIndex <= 0) return
@@ -109,8 +112,26 @@ export default function DiagramPlayer({ data }: Props) {
   }
 
   function toggleOrientation() {
-    setOrientation((current) => (current === 'landscape' ? 'portrait' : 'landscape'))
+    setRotationQuarterTurns((current) => (current + 1) % 4)
   }
+
+  async function toggleFullscreen() {
+    const stage = stageRef.current
+    if (!stage) return
+    if (document.fullscreenElement === stage) {
+      await document.exitFullscreen()
+      return
+    }
+    await stage.requestFullscreen()
+  }
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === stageRef.current)
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
 
   useEffect(() => {
     if (!isPlaying || frames.length <= 1) return
@@ -149,11 +170,20 @@ export default function DiagramPlayer({ data }: Props) {
 
   if (frames.length === 0) return null
 
+  const stageStyle: React.CSSProperties = {
+    display: 'grid',
+    gap: 12,
+    ...(isFullscreen ? { background: '#fff', padding: 12, minHeight: '100vh', boxSizing: 'border-box' } : {}),
+  }
+
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <svg viewBox={`0 0 ${fieldWidth} ${fieldHeight}`} style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 12, background: '#f8fff8' }}>
+    <div style={stageStyle} ref={stageRef}>
+      <svg
+        viewBox={`0 0 ${fieldWidth} ${fieldHeight}`}
+        style={{ width: '100%', minHeight: isFullscreen ? 'calc(100vh - 190px)' : 320, border: '1px solid #e5e7eb', borderRadius: 12, background: '#f8fff8' }}
+      >
         <rect x={5} y={5} width={innerWidth} height={innerHeight} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
-        {orientation === 'landscape' ? (
+        {!isPortrait ? (
           <>
             <line x1={midX} y1={5} x2={midX} y2={fieldHeight - 5} stroke="#c7e2c7" strokeDasharray="4 4" />
             <rect x={5} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
@@ -255,15 +285,26 @@ export default function DiagramPlayer({ data }: Props) {
             <StepForwardIcon size={28} />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={toggleOrientation}
-          style={playerButtonStyle}
-          aria-label={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
-          title={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
-        >
-          <OrientationIcon size={24} />
-        </button>
+        <div style={playerRightActionsStyle}>
+          <button
+            type="button"
+            onClick={toggleOrientation}
+            style={playerButtonStyle}
+            aria-label="Pivoter de 90° (horaire)"
+            title="Pivoter de 90° (horaire)"
+          >
+            <OrientationIcon size={24} />
+          </button>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            style={playerButtonStyle}
+            aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+            title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+          >
+            <FullscreenIcon size={24} />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -296,6 +337,13 @@ const playerControlsStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: 10,
   margin: '0 auto',
+}
+
+const playerRightActionsStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  marginLeft: 'auto',
 }
 
 const progressTrackStyle: React.CSSProperties = {

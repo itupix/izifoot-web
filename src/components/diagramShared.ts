@@ -19,6 +19,7 @@ export interface DiagramData {
   frames: DiagramFrame[]
   fps?: number
   orientation?: DiagramOrientation
+  rotationQuarterTurns?: number
 }
 
 export type DiagramOrientation = 'landscape' | 'portrait'
@@ -104,21 +105,32 @@ function normalizeItems(items: unknown): Item[] {
 }
 
 export function createEmptyDiagramData(): DiagramData {
-  return { frames: ensureTenFrames([createFrame()]), fps: 2, orientation: 'landscape' }
+  return { frames: ensureTenFrames([createFrame()]), fps: 2, orientation: 'landscape', rotationQuarterTurns: 0 }
 }
 
 export function normalizeDiagramOrientation(input: unknown): DiagramOrientation {
   return input === 'portrait' ? 'portrait' : 'landscape'
 }
 
-function mapPointBetweenOrientations(
-  point: { x: number; y: number },
-  from: DiagramOrientation,
-  to: DiagramOrientation,
-): { x: number; y: number } {
-  if (from === to) return point
-  const fromSize = from === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
-  const toSize = to === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+export function normalizeRotationQuarterTurns(input: unknown, fallbackOrientation?: unknown): number {
+  const turns = Number(input)
+  if (Number.isFinite(turns)) {
+    return ((Math.trunc(turns) % 4) + 4) % 4
+  }
+  return normalizeDiagramOrientation(fallbackOrientation) === 'portrait' ? 1 : 0
+}
+
+export function getOrientationFromQuarterTurns(turns: number): DiagramOrientation {
+  return normalizeRotationQuarterTurns(turns) % 2 === 1 ? 'portrait' : 'landscape'
+}
+
+export function getFieldSizeForQuarterTurns(turns: number): { width: number; height: number } {
+  return getOrientationFromQuarterTurns(turns) === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+}
+
+function mapPointClockwise(point: { x: number; y: number }, fromTurns: number): { x: number; y: number } {
+  const fromSize = getFieldSizeForQuarterTurns(fromTurns)
+  const toSize = getFieldSizeForQuarterTurns(fromTurns + 1)
   const fromInnerWidth = fromSize.width - FIELD_MARGIN * 2
   const fromInnerHeight = fromSize.height - FIELD_MARGIN * 2
   const toInnerWidth = toSize.width - FIELD_MARGIN * 2
@@ -126,42 +138,53 @@ function mapPointBetweenOrientations(
 
   const nx = Math.min(1, Math.max(0, (point.x - FIELD_MARGIN) / fromInnerWidth))
   const ny = Math.min(1, Math.max(0, (point.y - FIELD_MARGIN) / fromInnerHeight))
-  const rotated = from === 'landscape' && to === 'portrait'
-    ? { nx: ny, ny: 1 - nx }
-    : { nx: 1 - ny, ny: nx }
-
   return {
-    x: FIELD_MARGIN + rotated.nx * toInnerWidth,
-    y: FIELD_MARGIN + rotated.ny * toInnerHeight,
+    x: FIELD_MARGIN + ny * toInnerWidth,
+    y: FIELD_MARGIN + (1 - nx) * toInnerHeight,
   }
 }
 
-function mapItemBetweenOrientations(item: Item, from: DiagramOrientation, to: DiagramOrientation): Item {
-  if (from === to) return item
+function mapItemClockwise(item: Item, fromTurns: number): Item {
   if (item.type === 'arrow') {
     return {
       ...item,
-      from: mapPointBetweenOrientations(item.from, from, to),
-      to: mapPointBetweenOrientations(item.to, from, to),
+      from: mapPointClockwise(item.from, fromTurns),
+      to: mapPointClockwise(item.to, fromTurns),
     }
   }
   return {
     ...item,
-    ...mapPointBetweenOrientations({ x: item.x, y: item.y }, from, to),
+    ...mapPointClockwise({ x: item.x, y: item.y }, fromTurns),
   } as Item
 }
 
-export function remapDiagramToOrientation(data: DiagramData, target: DiagramOrientation): DiagramData {
-  const from = normalizeDiagramOrientation(data.orientation)
-  if (from === target) return { ...data, orientation: target }
+export function rotateDiagramClockwise(data: DiagramData): DiagramData {
+  const fromTurns = normalizeRotationQuarterTurns(data.rotationQuarterTurns, data.orientation)
+  const nextTurns = normalizeRotationQuarterTurns(fromTurns + 1)
   return {
     ...data,
-    orientation: target,
+    rotationQuarterTurns: nextTurns,
+    orientation: getOrientationFromQuarterTurns(nextTurns),
     frames: data.frames.map((frame) => ({
       ...frame,
-      items: frame.items.map((item) => mapItemBetweenOrientations(item, from, target)),
+      items: frame.items.map((item) => mapItemClockwise(item, fromTurns)),
     })),
   }
+}
+
+export function rotateDiagramToQuarterTurns(data: DiagramData, targetTurns: number): DiagramData {
+  const normalizedTarget = normalizeRotationQuarterTurns(targetTurns)
+  const currentTurns = normalizeRotationQuarterTurns(data.rotationQuarterTurns, data.orientation)
+  let next: DiagramData = {
+    ...data,
+    rotationQuarterTurns: currentTurns,
+    orientation: getOrientationFromQuarterTurns(currentTurns),
+  }
+  const steps = (normalizedTarget - currentTurns + 4) % 4
+  for (let i = 0; i < steps; i += 1) {
+    next = rotateDiagramClockwise(next)
+  }
+  return next
 }
 
 export function normalizeDiagramData(input: unknown): DiagramData {
@@ -171,7 +194,11 @@ export function normalizeDiagramData(input: unknown): DiagramData {
     const maybeItems = (obj as { items?: unknown }).items
     const maybeFrames = (obj as { frames?: unknown }).frames
     const fps = Number((obj as { fps?: unknown }).fps)
-    const orientation = normalizeDiagramOrientation((obj as { orientation?: unknown }).orientation)
+    const rotationQuarterTurns = normalizeRotationQuarterTurns(
+      (obj as { rotationQuarterTurns?: unknown }).rotationQuarterTurns,
+      (obj as { orientation?: unknown }).orientation,
+    )
+    const orientation = getOrientationFromQuarterTurns(rotationQuarterTurns)
 
     if (Array.isArray(maybeFrames) && maybeFrames.length > 0) {
       const frames = maybeFrames.map((frame, idx) => {
@@ -182,11 +209,21 @@ export function normalizeDiagramData(input: unknown): DiagramData {
           items: normalizeItems(raw.items),
         }
       })
-      return { frames: ensureTenFrames(frames), fps: Number.isFinite(fps) && fps > 0 ? fps : 2, orientation }
+      return {
+        frames: ensureTenFrames(frames),
+        fps: Number.isFinite(fps) && fps > 0 ? fps : 2,
+        orientation,
+        rotationQuarterTurns,
+      }
     }
 
     if (Array.isArray(maybeItems)) {
-      return { frames: ensureTenFrames([createFrame('Etape 1', normalizeItems(maybeItems))]), fps: 2, orientation }
+      return {
+        frames: ensureTenFrames([createFrame('Etape 1', normalizeItems(maybeItems))]),
+        fps: 2,
+        orientation,
+        rotationQuarterTurns,
+      }
     }
 
     return createEmptyDiagramData()

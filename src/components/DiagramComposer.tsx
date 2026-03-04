@@ -1,20 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './DiagramComposer.css'
-import { OrientationIcon, PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
+import { FullscreenIcon, OrientationIcon, PauseIcon, PlayIcon, SkipBackIcon, StepBackIcon, StepForwardIcon } from './icons'
 import {
   MAX_STEPS,
   createEmptyDiagramData,
-  LANDSCAPE_FIELD_SIZE,
-  PORTRAIT_FIELD_SIZE,
+  getFieldSizeForQuarterTurns,
   type Arrow,
   getPlayerFill,
   interpolateItem,
+  normalizeRotationQuarterTurns,
   type Item,
   type DiagramData,
-  normalizeDiagramOrientation,
   PLAYER_COLOR_OPTIONS,
   type PlayerColor,
-  remapDiagramToOrientation,
+  rotateDiagramClockwise,
 } from './diagramShared'
 
 export type Tool = 'select' | 'player' | 'cone' | 'cup' | 'ball' | 'post' | 'arrow'
@@ -53,13 +52,16 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
   const [transitionFromIndex, setTransitionFromIndex] = useState<number | null>(null)
   const [transitionProgress, setTransitionProgress] = useState(0)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null)
   const arrowRef = useRef<{ id: string } | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const frames = value.frames.length ? value.frames : createEmptyDiagramData().frames
   const fps = Math.max(1, Math.min(8, Math.round(value.fps || 2)))
-  const orientation = normalizeDiagramOrientation(value.orientation)
-  const fieldSize = orientation === 'portrait' ? PORTRAIT_FIELD_SIZE : LANDSCAPE_FIELD_SIZE
+  const rotationQuarterTurns = normalizeRotationQuarterTurns(value.rotationQuarterTurns, value.orientation)
+  const fieldSize = getFieldSizeForQuarterTurns(rotationQuarterTurns)
+  const isPortrait = rotationQuarterTurns % 2 === 1
   const fieldWidth = fieldSize.width
   const fieldHeight = fieldSize.height
   const innerWidth = fieldWidth - 10
@@ -208,9 +210,26 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
   }
 
   function toggleOrientation() {
-    const target = orientation === 'landscape' ? 'portrait' : 'landscape'
-    onChange(remapDiagramToOrientation({ ...value, frames }, target))
+    onChange(rotateDiagramClockwise({ ...value, frames }))
   }
+
+  async function toggleFullscreen() {
+    const stage = stageRef.current
+    if (!stage) return
+    if (document.fullscreenElement === stage) {
+      await document.exitFullscreen()
+      return
+    }
+    await stage.requestFullscreen()
+  }
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === stageRef.current)
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
 
   useEffect(() => {
     if (!isPlaying || frames.length <= 1) return
@@ -376,82 +395,95 @@ export default function DiagramComposer({ value, onChange, className, minHeight 
         </div>
       </div>
 
-      <div className="diagram-step-bar">
-        <div className="diagram-progress-track" aria-hidden="true">
-          <div className="diagram-progress-fill" style={{ width: `${Math.round(progressRatio * 100)}%` }} />
-        </div>
-        <div className="frames-actions">
-          <div className="frames-controls">
-            <button type="button" className="ghost-btn control-btn" onClick={goToPreviousStep} disabled={activeFrameIndex === 0} aria-label="Précédente" title="Précédente">
-              <StepBackIcon size={28} />
-            </button>
-            <button
-              type="button"
-              className={`ghost-btn control-btn play ${isPlaying ? 'active' : ''}`}
-              disabled={frames.length <= 1}
-              onClick={startPlayback}
-              aria-label={isPlaying ? 'Pause' : 'Lecture'}
-              title={isPlaying ? 'Pause' : 'Lecture'}
-            >
-              {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
-            </button>
-            <button type="button" className="ghost-btn control-btn" onClick={goToNextStep} disabled={activeFrameIndex >= frames.length - 1} aria-label="Suivante" title="Suivante">
-              <StepForwardIcon size={28} />
-            </button>
-            <button type="button" className="ghost-btn control-btn" onClick={() => goToStep(0)} disabled={activeFrameIndex === 0 && !isPlaying} aria-label="Début" title="Début">
-              <SkipBackIcon size={28} />
-            </button>
+      <div className={`diagram-stage ${isFullscreen ? 'fullscreen' : ''}`} ref={stageRef}>
+        <div className="diagram-step-bar">
+          <div className="diagram-progress-track" aria-hidden="true">
+            <div className="diagram-progress-fill" style={{ width: `${Math.round(progressRatio * 100)}%` }} />
           </div>
-          <button
-            type="button"
-            className="ghost-btn control-btn orientation-btn"
-            onClick={toggleOrientation}
-            aria-label={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
-            title={orientation === 'landscape' ? 'Passer en portrait' : 'Passer en paysage'}
-          >
-            <OrientationIcon size={24} />
-          </button>
+          <div className="frames-actions">
+            <div className="frames-controls">
+              <button type="button" className="ghost-btn control-btn" onClick={goToPreviousStep} disabled={activeFrameIndex === 0} aria-label="Précédente" title="Précédente">
+                <StepBackIcon size={28} />
+              </button>
+              <button
+                type="button"
+                className={`ghost-btn control-btn play ${isPlaying ? 'active' : ''}`}
+                disabled={frames.length <= 1}
+                onClick={startPlayback}
+                aria-label={isPlaying ? 'Pause' : 'Lecture'}
+                title={isPlaying ? 'Pause' : 'Lecture'}
+              >
+                {isPlaying ? <PauseIcon size={32} /> : <PlayIcon size={32} style={{ marginLeft: 3 }} />}
+              </button>
+              <button type="button" className="ghost-btn control-btn" onClick={goToNextStep} disabled={activeFrameIndex >= frames.length - 1} aria-label="Suivante" title="Suivante">
+                <StepForwardIcon size={28} />
+              </button>
+              <button type="button" className="ghost-btn control-btn" onClick={() => goToStep(0)} disabled={activeFrameIndex === 0 && !isPlaying} aria-label="Début" title="Début">
+                <SkipBackIcon size={28} />
+              </button>
+            </div>
+            <div className="frames-right-actions">
+              <button
+                type="button"
+                className="ghost-btn control-btn orientation-btn"
+                onClick={toggleOrientation}
+                aria-label="Pivoter de 90° (horaire)"
+                title="Pivoter de 90° (horaire)"
+              >
+                <OrientationIcon size={24} />
+              </button>
+              <button
+                type="button"
+                className="ghost-btn control-btn"
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+              >
+                <FullscreenIcon size={24} />
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${fieldWidth} ${fieldHeight}`}
-        className="diagram-canvas"
-        style={{ minHeight }}
-        onPointerDown={onCanvasDown}
-        onPointerMove={onCanvasMove}
-        onPointerUp={onCanvasUp}
-        onPointerCancel={onCanvasUp}
-      >
-        <rect x={5} y={5} width={innerWidth} height={innerHeight} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
-        {orientation === 'landscape' ? (
-          <>
-            <line x1={midX} y1={5} x2={midX} y2={fieldHeight - 5} stroke="#c7e2c7" strokeDasharray="4 4" />
-            <rect x={5} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
-            <rect x={fieldWidth - 45} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
-          </>
-        ) : (
-          <>
-            <line x1={5} y1={midY} x2={fieldWidth - 5} y2={midY} stroke="#c7e2c7" strokeDasharray="4 4" />
-            <rect x={penaltyX} y={5} width={120} height={40} fill="none" stroke="#c7e2c7" />
-            <rect x={penaltyX} y={fieldHeight - 45} width={120} height={40} fill="none" stroke="#c7e2c7" />
-          </>
-        )}
-        {displayItems.map((item) => renderItem(item, selectedId, startDrag, setSelectedId))}
-      </svg>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${fieldWidth} ${fieldHeight}`}
+          className="diagram-canvas"
+          style={{ minHeight: isFullscreen ? 'calc(100vh - 190px)' : minHeight }}
+          onPointerDown={onCanvasDown}
+          onPointerMove={onCanvasMove}
+          onPointerUp={onCanvasUp}
+          onPointerCancel={onCanvasUp}
+        >
+          <rect x={5} y={5} width={innerWidth} height={innerHeight} rx={8} ry={8} fill="white" stroke="#c7e2c7" />
+          {!isPortrait ? (
+            <>
+              <line x1={midX} y1={5} x2={midX} y2={fieldHeight - 5} stroke="#c7e2c7" strokeDasharray="4 4" />
+              <rect x={5} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
+              <rect x={fieldWidth - 45} y={penaltyY} width={40} height={120} fill="none" stroke="#c7e2c7" />
+            </>
+          ) : (
+            <>
+              <line x1={5} y1={midY} x2={fieldWidth - 5} y2={midY} stroke="#c7e2c7" strokeDasharray="4 4" />
+              <rect x={penaltyX} y={5} width={120} height={40} fill="none" stroke="#c7e2c7" />
+              <rect x={penaltyX} y={fieldHeight - 45} width={120} height={40} fill="none" stroke="#c7e2c7" />
+            </>
+          )}
+          {displayItems.map((item) => renderItem(item, selectedId, startDrag, setSelectedId))}
+        </svg>
 
-      <div className="step-buttons" aria-label="Sélection des étapes">
-        {Array.from({ length: MAX_STEPS }, (_, index) => (
-          <button
-            key={index}
-            type="button"
-            className={`step-button ${index === activeFrameIndex ? 'active' : ''}`}
-            onClick={() => goToStep(index)}
-          >
-            {index + 1}
-          </button>
-        ))}
+        <div className="step-buttons" aria-label="Sélection des étapes">
+          {Array.from({ length: MAX_STEPS }, (_, index) => (
+            <button
+              key={index}
+              type="button"
+              className={`step-button ${index === activeFrameIndex ? 'active' : ''}`}
+              onClick={() => goToStep(index)}
+            >
+              {index + 1}
+            </button>
+          ))}
+        </div>
       </div>
 
       {selected && !isPlaying && (

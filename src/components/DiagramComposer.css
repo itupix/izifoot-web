@@ -77,6 +77,17 @@
   gap: 10px;
 }
 
+.diagram-stage {
+  display: grid;
+  gap: 10px;
+}
+
+.diagram-stage:fullscreen {
+  background: #ffffff;
+  padding: 12px;
+  overflow: auto;
+}
+
 .frames-actions {
   display: flex;
   gap: 8px;
@@ -91,6 +102,13 @@
   gap: 8px;
   align-items: center;
   margin: 0 auto;
+}
+
+.frames-right-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
 }
 
 .ghost-btn {
@@ -121,7 +139,7 @@
 }
 
 .orientation-btn {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .ghost-btn.active {
