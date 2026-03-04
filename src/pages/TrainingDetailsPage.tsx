@@ -31,6 +31,26 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   return '/planning'
 }
 
+function sortTrainingDrills(items: TrainingDrill[]) {
+  return [...items].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+}
+
+function reindexTrainingDrills(items: TrainingDrill[]) {
+  return items.map((item, index) => ({ ...item, order: index }))
+}
+
+function moveTrainingDrills(items: TrainingDrill[], draggedId: string, targetId: string) {
+  const sourceIndex = items.findIndex((item) => item.id === draggedId)
+  const targetIndex = items.findIndex((item) => item.id === targetId)
+
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items
+
+  const next = [...items]
+  const [moved] = next.splice(sourceIndex, 1)
+  next.splice(targetIndex, 0, moved)
+  return next
+}
+
 export default function TrainingDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -45,6 +65,9 @@ export default function TrainingDetailsPage() {
   const [playersOpen, setPlayersOpen] = useState(false)
   const [manageDrillsOpen, setManageDrillsOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+  const [draggedDrillId, setDraggedDrillId] = useState<string | null>(null)
+  const [dragOverDrillId, setDragOverDrillId] = useState<string | null>(null)
+  const [savingDrillOrder, setSavingDrillOrder] = useState(false)
 
   const loadTraining = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -60,7 +83,7 @@ export default function TrainingDetailsPage() {
     setTraining(t)
     setPlayers(ps)
     setCatalog(dr.items)
-    setDrills(ds)
+    setDrills(sortTrainingDrills(ds))
     setAttendance(new Set(att.map((a) => a.playerId)))
   }, [id])
 
@@ -147,7 +170,7 @@ export default function TrainingDetailsPage() {
     if (!training || !drillId) return
     try {
       const row = await apiPost<TrainingDrill>(apiRoutes.trainings.drills(training.id), { drillId })
-      setDrills((prev) => [...prev, row])
+      setDrills((prev) => sortTrainingDrills([...prev, row]))
     } catch (err: unknown) {
       uiAlert(`Erreur ajout exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
@@ -161,6 +184,70 @@ export default function TrainingDetailsPage() {
     } catch (err: unknown) {
       uiAlert(`Erreur suppression exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
+  }
+
+  async function persistDrillOrder(previousDrills: TrainingDrill[], nextDrills: TrainingDrill[]) {
+    if (!training) return
+
+    const previousById = new Map(previousDrills.map((item) => [item.id, item]))
+    const changedRows = nextDrills.filter((item) => previousById.get(item.id)?.order !== item.order)
+
+    if (changedRows.length === 0) return
+
+    setSavingDrillOrder(true)
+    try {
+      await Promise.all(
+        changedRows.map((item) =>
+          apiPut<TrainingDrill>(apiRoutes.trainings.drillById(training.id, item.id), { order: item.order }),
+        ),
+      )
+    } catch (err: unknown) {
+      setDrills(previousDrills)
+      uiAlert(`Erreur réorganisation exercices: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setSavingDrillOrder(false)
+    }
+  }
+
+  function handleDrillDragStart(event: React.DragEvent<HTMLElement>, trainingDrillId: string) {
+    if (savingDrillOrder) {
+      event.preventDefault()
+      return
+    }
+
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', trainingDrillId)
+    setDraggedDrillId(trainingDrillId)
+    setDragOverDrillId(trainingDrillId)
+  }
+
+  function handleDrillDragEnd() {
+    setDraggedDrillId(null)
+    setDragOverDrillId(null)
+  }
+
+  function handleDrillDragOver(event: React.DragEvent<HTMLElement>, trainingDrillId: string) {
+    if (!draggedDrillId || draggedDrillId === trainingDrillId) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragOverDrillId !== trainingDrillId) setDragOverDrillId(trainingDrillId)
+  }
+
+  async function handleDrillDrop(trainingDrillId: string) {
+    if (!draggedDrillId || draggedDrillId === trainingDrillId || savingDrillOrder) {
+      setDraggedDrillId(null)
+      setDragOverDrillId(null)
+      return
+    }
+
+    const previousDrills = drills
+    const movedDrills = moveTrainingDrills(previousDrills, draggedDrillId, trainingDrillId)
+    const nextDrills = reindexTrainingDrills(movedDrills)
+
+    setDrills(nextDrills)
+    setDraggedDrillId(null)
+    setDragOverDrillId(null)
+    await persistDrillOrder(previousDrills, nextDrills)
   }
 
   function openDrill(drillId: string) {
@@ -279,17 +366,29 @@ export default function TrainingDetailsPage() {
               <div className="drill-cards-grid">
                 {drills.map((row) => {
                   const meta = row.meta || catalogById.get(row.drillId) || null
+                  const isDragTarget = dragOverDrillId === row.id && draggedDrillId !== row.id
                   return (
                     <article
                       key={row.id}
-                      className="drill-card"
+                      className={`drill-card ${isDragTarget ? 'is-drag-target' : ''}`}
+                      draggable={!savingDrillOrder}
                       onClick={() => openDrill(row.drillId)}
+                      onDragStart={(event) => handleDrillDragStart(event, row.id)}
+                      onDragEnd={handleDrillDragEnd}
+                      onDragOver={(event) => handleDrillDragOver(event, row.id)}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        void handleDrillDrop(row.id)
+                      }}
                     >
                       <div className="drill-card-head">
-                        <h4>{meta?.title || 'Exercice'}</h4>
+                        <div className="drill-card-title-wrap">
+                          <h4>{meta?.title || 'Exercice'}</h4>
+                        </div>
                         <RoundIconButton
                           ariaLabel="Supprimer l'exercice"
                           className="icon-danger-button card-delete-button"
+                          disabled={savingDrillOrder}
                           onClick={(e) => {
                             e.stopPropagation()
                             removeDrill(row.id)
@@ -298,7 +397,7 @@ export default function TrainingDetailsPage() {
                           <CloseIcon size={16} />
                         </RoundIconButton>
                       </div>
-                      <small>{meta?.category || '—'} · {row.duration ?? meta?.duration ?? '—'} min</small>
+                      {meta?.category && <small>{meta.category}</small>}
                     </article>
                   )
                 })}
@@ -307,6 +406,7 @@ export default function TrainingDetailsPage() {
                 )}
               </div>
             )}
+            {drills.length > 1 && !isCancelled && savingDrillOrder && <p className="muted-line">Enregistrement du nouvel ordre…</p>}
           </section>
         </div>
       )}

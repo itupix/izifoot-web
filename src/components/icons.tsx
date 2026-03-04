@@ -91,6 +91,19 @@ export function DotsHorizontalIcon({ size, style }: IconProps) {
   )
 }
 
+export function GripVerticalIcon({ size, style }: IconProps) {
+  return (
+    <IconBase size={size} style={style}>
+      <circle cx="9" cy="7" r="1.2" fill="currentColor" />
+      <circle cx="15" cy="7" r="1.2" fill="currentColor" />
+      <circle cx="9" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="15" cy="12" r="1.2" fill="currentColor" />
+      <circle cx="9" cy="17" r="1.2" fill="currentColor" />
+      <circle cx="15" cy="17" r="1.2" fill="currentColor" />
+    </IconBase>
+  )
+}
+
 export function CloseIcon({ size, style }: IconProps) {
   return (
     <IconBase size={size} style={style}>

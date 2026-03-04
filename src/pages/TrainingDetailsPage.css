@@ -210,8 +210,17 @@
   padding-right: 52px;
   display: grid;
   gap: 6px;
-  cursor: pointer;
+  cursor: grab;
   position: relative;
+}
+
+.drill-card.is-drag-target {
+  border-color: #0b65c2;
+  background: #f8fbff;
+}
+
+.drill-card:active {
+  cursor: grabbing;
 }
 
 .drill-card-head {
@@ -219,6 +228,17 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+}
+
+.drill-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.drill-card-title-wrap h4 {
+  min-width: 0;
 }
 
 .card-actions {
