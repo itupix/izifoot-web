@@ -1,13 +1,16 @@
 // src/auth.tsx
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api, type Me } from './api';
 import { AuthCtx } from './useAuth';
 
 
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  const isPublicPlateauRoute = location.pathname.startsWith('/plateau/public/');
 
   const refresh = async () => {
     try {
@@ -21,8 +24,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    if (isPublicPlateauRoute) {
+      setLoading(false);
+      return;
+    }
     refresh();
-  }, []);
+  }, [isPublicPlateauRoute]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);

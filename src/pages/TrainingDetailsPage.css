@@ -364,6 +364,58 @@
   color: #64748b;
 }
 
+.share-modal {
+  width: min(460px, calc(100vw - 24px));
+}
+
+.share-content {
+  display: grid;
+  gap: 10px;
+}
+
+.share-url-block {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.share-url-block input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  font: inherit;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.share-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.share-actions button,
+.share-actions a {
+  font: inherit;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.share-qr-wrap {
+  display: grid;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+}
+
 @media (min-width: 900px) {
   .topbar {
     grid-template-columns: 44px 1fr 44px;

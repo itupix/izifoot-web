@@ -54,6 +54,10 @@ export default function PlateauDetailsPage() {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false)
   const [isPlanningModalOpen, setIsPlanningModalOpen] = useState(false)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [sharedPublicUrl, setSharedPublicUrl] = useState('')
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [editingPlanning, setEditingPlanning] = useState<Planning | null>(null)
   const [selectedPlanningTeam, setSelectedPlanningTeam] = useState('')
@@ -125,6 +129,11 @@ export default function PlateauDetailsPage() {
       })
       .filter((slot) => slot.games.length > 0)
   }, [plateauPlanningData, selectedPlanningTeam])
+  const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
+  const publicPlateauQrUrl = useMemo(() => {
+    if (!publicPlateauUrl) return ''
+    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(publicPlateauUrl)}`
+  }, [publicPlateauUrl])
 
   async function togglePlateauPresence(playerId: string, present: boolean) {
     if (!id) return
@@ -210,6 +219,38 @@ export default function PlateauDetailsPage() {
   function closePlanningModal() {
     setIsPlanningModalOpen(false)
     setEditingPlanning(null)
+  }
+
+  async function openShareModal() {
+    if (!id) return
+    setShareCopied(false)
+    setShareLoading(true)
+    setIsShareModalOpen(true)
+    try {
+      const data = await apiPost<{ token: string; url?: string }>(apiRoutes.plateaus.share(id), {})
+      const fallbackUrl = `${window.location.origin}/plateau/public/${encodeURIComponent(data.token)}`
+      setSharedPublicUrl(data.url || fallbackUrl)
+    } catch (err: unknown) {
+      setSharedPublicUrl('')
+      uiAlert(`Erreur génération du lien public: ${toErrorMessage(err)}`)
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  function closeShareModal() {
+    setIsShareModalOpen(false)
+    setShareCopied(false)
+  }
+
+  async function copyShareLink() {
+    if (!publicPlateauUrl) return
+    try {
+      await navigator.clipboard.writeText(publicPlateauUrl)
+      setShareCopied(true)
+    } catch {
+      uiAlert("Impossible de copier automatiquement le lien.")
+    }
   }
 
   function upsertPlanning(savedPlanning: Planning) {
@@ -312,6 +353,15 @@ export default function PlateauDetailsPage() {
                 onClick={() => setActionsMenuOpen(false)}
               />
               <div className="floating-menu">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionsMenuOpen(false)
+                    void openShareModal()
+                  }}
+                >
+                  Partager le plateau
+                </button>
                 <button
                   type="button"
                   className="danger"
@@ -679,6 +729,48 @@ export default function PlateauDetailsPage() {
           onClose={closePlanningModal}
           onSaved={upsertPlanning}
         />
+      )}
+
+      {isShareModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeShareModal} />
+          <div className="drill-modal share-modal" role="dialog" aria-modal="true" aria-label="Partager le plateau">
+            <div className="drill-modal-head">
+              <h3>Partager le plateau</h3>
+              <button type="button" onClick={closeShareModal}>✕</button>
+            </div>
+            <div className="share-content">
+              <p className="muted-line">
+                Ce lien ouvre la version publique du plateau avec les blocs titre/date, informations et rotation.
+              </p>
+              <label className="share-url-block">
+                <span>Lien public</span>
+                <input type="text" readOnly value={shareLoading ? 'Génération du lien…' : publicPlateauUrl} />
+              </label>
+              <div className="share-actions">
+                <button type="button" onClick={() => void copyShareLink()} disabled={shareLoading || !publicPlateauUrl}>
+                  {shareCopied ? 'Lien copié' : 'Copier le lien'}
+                </button>
+                <a
+                  href={publicPlateauUrl || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => {
+                    if (!publicPlateauUrl) e.preventDefault()
+                  }}
+                  aria-disabled={!publicPlateauUrl}
+                >
+                  Ouvrir le lien
+                </a>
+              </div>
+              {publicPlateauQrUrl && (
+                <div className="share-qr-wrap">
+                  <img src={publicPlateauQrUrl} alt="QR code du lien public du plateau" width={220} height={220} />
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   )

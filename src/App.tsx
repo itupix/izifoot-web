@@ -8,6 +8,7 @@ import style from './App.module.css'
 import TrainingsPage from './pages/TrainingsPage';
 import TrainingDetailsPage from './pages/TrainingDetailsPage';
 import PlateauDetailsPage from './pages/PlateauDetailsPage';
+import PublicPlateauPage from './pages/PublicPlateauPage';
 import DrillsPage from './pages/Drills';
 import DrillDetailsPage from './pages/DrillDetailsPage';
 import PlayersPage from './pages/PlayersPage';
@@ -28,6 +29,8 @@ export default function App() {
   const { me, logout } = useAuth();
   const location = useLocation();
   const isHome = location.pathname === '/';
+  const isPublicPlateau = location.pathname.startsWith('/plateau/public/');
+  const showSidebarShell = !isHome && !isPublicPlateau;
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const headerHeight = 64;
@@ -67,67 +70,82 @@ export default function App() {
               zIndex: 50,
             }}
           >
-            <RoundIconButton ariaLabel="Ouvrir le menu" onClick={() => setMenuOpen(true)}>
-              <MenuIcon size={18} />
-            </RoundIconButton>
-            <Link
-              to="/planning"
-              className={style.logo}
-              style={{ textDecoration: 'none', fontWeight: 800, fontSize: 28, lineHeight: 1 }}
-            >
-              izifoot
-            </Link>
+            {showSidebarShell ? (
+              <RoundIconButton ariaLabel="Ouvrir le menu" onClick={() => setMenuOpen(true)}>
+                <MenuIcon size={18} />
+              </RoundIconButton>
+            ) : (
+              <div style={{ width: 34, height: 34 }} />
+            )}
+            {showSidebarShell ? (
+              <Link
+                to="/planning"
+                className={style.logo}
+                style={{ textDecoration: 'none', fontWeight: 800, fontSize: 28, lineHeight: 1 }}
+              >
+                izifoot
+              </Link>
+            ) : (
+              <span
+                className={style.logo}
+                style={{ textDecoration: 'none', fontWeight: 800, fontSize: 28, lineHeight: 1 }}
+              >
+                izifoot
+              </span>
+            )}
           </header>
-          {menuOpen && (
+          {showSidebarShell && menuOpen && (
             <div
               onClick={() => setMenuOpen(false)}
               style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 40 }}
             />
           )}
-          <aside
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              bottom: 0,
-              width: 280,
-              padding: 16,
-              background: '#fff',
-              borderRight: '1px solid #e2e8f0',
-              boxShadow: '0 12px 28px rgba(15, 23, 42, 0.12)',
-              transform: menuOpen ? 'translateX(0)' : 'translateX(-110%)',
-              transition: 'transform 200ms ease',
-              zIndex: 60,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 14,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <RoundIconButton ariaLabel="Fermer le menu" onClick={() => setMenuOpen(false)} style={{ color: '#334155' }}>
-                <CloseIcon size={16} />
-              </RoundIconButton>
-            </div>
-            <nav className={style.sidebarNav}>
-              {navItems.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMenuOpen(false)}
-                  className={`${style.sidebarLink} ${isActivePath(item.to) ? style.sidebarLinkActive : ''}`.trim()}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-            <div className={style.sidebarFooter}>
-              {me ? (
-                <button className={style.logoutButton} onClick={handleLogout}>
-                  Se déconnecter
-                </button>
-              ) : null}
-            </div>
-          </aside>
+          {showSidebarShell && (
+            <aside
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                bottom: 0,
+                width: 280,
+                padding: 16,
+                background: '#fff',
+                borderRight: '1px solid #e2e8f0',
+                boxShadow: '0 12px 28px rgba(15, 23, 42, 0.12)',
+                transform: menuOpen ? 'translateX(0)' : 'translateX(-110%)',
+                transition: 'transform 200ms ease',
+                zIndex: 60,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <RoundIconButton ariaLabel="Fermer le menu" onClick={() => setMenuOpen(false)} style={{ color: '#334155' }}>
+                  <CloseIcon size={16} />
+                </RoundIconButton>
+              </div>
+              <nav className={style.sidebarNav}>
+                {navItems.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMenuOpen(false)}
+                    className={`${style.sidebarLink} ${isActivePath(item.to) ? style.sidebarLinkActive : ''}`.trim()}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </nav>
+              <div className={style.sidebarFooter}>
+                {me ? (
+                  <button className={style.logoutButton} onClick={handleLogout}>
+                    Se déconnecter
+                  </button>
+                ) : null}
+              </div>
+            </aside>
+          )}
         </>
       )}
 
@@ -145,6 +163,7 @@ export default function App() {
             <Route path="/planning" element={<Protected><TrainingsPage /></Protected>} />
             <Route path="/training/:id" element={<Protected><TrainingDetailsPage /></Protected>} />
             <Route path="/plateau/:id" element={<Protected><PlateauDetailsPage /></Protected>} />
+            <Route path="/plateau/public/:token" element={<PublicPlateauPage />} />
             <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
             <Route path="/exercices/:id" element={<Protected><DrillDetailsPage /></Protected>} />
             <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />

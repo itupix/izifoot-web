@@ -27,7 +27,11 @@ export const apiRoutes = {
   plateaus: {
     list: '/plateaus',
     byId: (id: string) => `/plateaus/${enc(id)}`,
+    share: (id: string) => `/plateaus/${enc(id)}/share`,
     summary: (id: string) => `/plateaus/${enc(id)}/summary`,
+  },
+  public: {
+    plateauByToken: (token: string) => `/public/plateaus/${enc(token)}`,
   },
   drills: {
     list: '/drills',
