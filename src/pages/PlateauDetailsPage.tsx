@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type Planning } from '../api'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { canWrite } from '../authz'
 import AttendanceAccordion from '../components/AttendanceAccordion'
 import type { PlanningData } from '../components/PlanningEditor'
 import PlanningModal from '../components/PlanningModal'
@@ -10,6 +11,7 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { useAuth } from '../useAuth'
 import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
 import './TrainingDetailsPage.css'
@@ -42,6 +44,7 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
 }
 
 export default function PlateauDetailsPage() {
+  const { me } = useAuth()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -134,8 +137,10 @@ export default function PlateauDetailsPage() {
     if (!publicPlateauUrl) return ''
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(publicPlateauUrl)}`
   }, [publicPlateauUrl])
+  const writable = me ? canWrite(me.role) : false
 
   async function togglePlateauPresence(playerId: string, present: boolean) {
+    if (!writable) return
     if (!id) return
     try {
       await apiPost(apiRoutes.attendance.list, {
@@ -155,6 +160,7 @@ export default function PlateauDetailsPage() {
   }
 
   async function deleteMatch(matchId: string) {
+    if (!writable) return
     if (!uiConfirm('Supprimer définitivement ce match ?')) return
     try {
       await apiDelete(apiRoutes.matches.byId(matchId))
@@ -165,6 +171,7 @@ export default function PlateauDetailsPage() {
   }
 
   async function deletePlateau() {
+    if (!writable) return
     if (!id) return
     if (!uiConfirm('Supprimer définitivement ce plateau (et tous ses matchs) ?')) return
     try {
@@ -206,12 +213,14 @@ export default function PlateauDetailsPage() {
   }
 
   function openCreatePlanningModal() {
+    if (!writable) return
     if (plateauPlanning) return
     setEditingPlanning(null)
     setIsPlanningModalOpen(true)
   }
 
   function openEditPlanningModal(planning: Planning) {
+    if (!writable) return
     setEditingPlanning(planning)
     setIsPlanningModalOpen(true)
   }
@@ -222,6 +231,7 @@ export default function PlateauDetailsPage() {
   }
 
   async function openShareModal() {
+    if (!writable) return
     if (!id) return
     setShareCopied(false)
     setShareLoading(true)
@@ -259,6 +269,7 @@ export default function PlateauDetailsPage() {
   }
 
   async function deletePlanningItem(planningId: string) {
+    if (!writable) return
     if (!uiConfirm('Supprimer cette rotation ?')) return
     try {
       await api.deletePlanning(planningId)
@@ -270,6 +281,7 @@ export default function PlateauDetailsPage() {
   }
 
   function openEditMatchModal(match: MatchLite) {
+    if (!writable) return
     const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
     const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
     setEditingMatchId(match.id)
@@ -283,6 +295,7 @@ export default function PlateauDetailsPage() {
   }
 
   async function submitMatchForm(e: React.FormEvent) {
+    if (!writable) return
     e.preventDefault()
     if (!id) return
     if (!opponentName.trim()) {
@@ -337,42 +350,46 @@ export default function PlateauDetailsPage() {
           <p>{dateLabel}</p>
         </div>
         <div className="topbar-menu-wrap">
-          <RoundIconButton
-            ariaLabel="Ouvrir le menu d'actions"
-            className="menu-dots-button"
-            onClick={() => setActionsMenuOpen((prev) => !prev)}
-          >
-            <DotsHorizontalIcon size={18} />
-          </RoundIconButton>
-          {actionsMenuOpen && (
+          {writable && (
             <>
-              <button
-                type="button"
-                className="menu-backdrop"
-                aria-label="Fermer le menu"
-                onClick={() => setActionsMenuOpen(false)}
-              />
-              <div className="floating-menu">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionsMenuOpen(false)
-                    void openShareModal()
-                  }}
-                >
-                  Partager le plateau
-                </button>
-                <button
-                  type="button"
-                  className="danger"
-                  onClick={() => {
-                    setActionsMenuOpen(false)
-                    deletePlateau()
-                  }}
-                >
-                  Supprimer le plateau
-                </button>
-              </div>
+              <RoundIconButton
+                ariaLabel="Ouvrir le menu d'actions"
+                className="menu-dots-button"
+                onClick={() => setActionsMenuOpen((prev) => !prev)}
+              >
+                <DotsHorizontalIcon size={18} />
+              </RoundIconButton>
+              {actionsMenuOpen && (
+                <>
+                  <button
+                    type="button"
+                    className="menu-backdrop"
+                    aria-label="Fermer le menu"
+                    onClick={() => setActionsMenuOpen(false)}
+                  />
+                  <div className="floating-menu">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionsMenuOpen(false)
+                        void openShareModal()
+                      }}
+                    >
+                      Partager le plateau
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => {
+                        setActionsMenuOpen(false)
+                        deletePlateau()
+                      }}
+                    >
+                      Supprimer le plateau
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
@@ -383,6 +400,7 @@ export default function PlateauDetailsPage() {
 
       {plateau && (
         <>
+          {!writable && <p className="muted-line">Mode lecture seule: actions de modification désactivées.</p>}
           <div className="training-details-grid">
             <section className="details-card">
               <div className="card-head">
@@ -396,6 +414,8 @@ export default function PlateauDetailsPage() {
               isOpen={playersOpen}
               onToggle={() => setPlayersOpen((prev) => !prev)}
               toggleLabel={playersOpen ? 'Réduire la liste des joueurs' : 'Ouvrir la liste des joueurs'}
+              disabled={!writable}
+              disabledMessage={<p className="muted-line">Mode lecture seule: présences indisponibles.</p>}
             >
               <div className="attendance-list-simple">
                 {players.map((p) => {
@@ -406,6 +426,7 @@ export default function PlateauDetailsPage() {
                       <input
                         type="checkbox"
                         checked={present}
+                        disabled={!writable}
                         onChange={(e) => togglePlateauPresence(p.id, e.target.checked)}
                       />
                     </label>
@@ -425,7 +446,7 @@ export default function PlateauDetailsPage() {
                     type="button"
                     className="add-button"
                     onClick={openCreatePlanningModal}
-                    disabled={!plateau?.date}
+                    disabled={!plateau?.date || !writable}
                   >
                     Créer une rotation
                   </button>
@@ -445,6 +466,7 @@ export default function PlateauDetailsPage() {
                       <button
                         type="button"
                         onClick={() => openEditPlanningModal(plateauPlanning)}
+                        disabled={!writable}
                         style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
                       >
                         Modifier
@@ -452,6 +474,7 @@ export default function PlateauDetailsPage() {
                       <button
                         type="button"
                         onClick={() => void deletePlanningItem(plateauPlanning.id)}
+                        disabled={!writable}
                         style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
                       >
                         Supprimer
@@ -528,6 +551,7 @@ export default function PlateauDetailsPage() {
                   type="button"
                   className="add-button"
                   onClick={openCreateMatchModal}
+                  disabled={!writable}
                 >
                   Ajouter
                 </button>
@@ -584,6 +608,7 @@ export default function PlateauDetailsPage() {
                       <button
                         type="button"
                         onClick={() => openEditMatchModal(m)}
+                        disabled={!writable}
                         style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
                       >
                         Modifier
@@ -591,6 +616,7 @@ export default function PlateauDetailsPage() {
                       <button
                         type="button"
                         onClick={() => deleteMatch(m.id)}
+                        disabled={!writable}
                         style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
                       >
                         Supprimer
@@ -607,7 +633,7 @@ export default function PlateauDetailsPage() {
         </>
       )}
 
-      {isMatchModalOpen && (
+      {writable && isMatchModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeMatchModal} />
           <div className="drill-modal" role="dialog" aria-modal="true">
@@ -722,7 +748,7 @@ export default function PlateauDetailsPage() {
         </>
       )}
 
-      {isPlanningModalOpen && plateau?.date && (
+      {writable && isPlanningModalOpen && plateau?.date && (
         <PlanningModal
           dateISO={plateau.date}
           planning={editingPlanning}
@@ -731,7 +757,7 @@ export default function PlateauDetailsPage() {
         />
       )}
 
-      {isShareModalOpen && (
+      {writable && isShareModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeShareModal} />
           <div className="drill-modal share-modal" role="dialog" aria-modal="true" aria-label="Partager le plateau">

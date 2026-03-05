@@ -8,6 +8,7 @@ import slateImg from '../assets/slate.png';
 import ballImg from '../assets/ball.png';
 import { toErrorMessage } from '../errors';
 import CtaButton from '../components/CtaButton';
+import { getDefaultRouteByRole } from '../authz';
 
 export default function Home() {
   const { me, login, register } = useAuth();
@@ -165,7 +166,7 @@ export default function Home() {
           <h1 style={title}>izifoot</h1>
           <div style={ctaRow}>
             {me ? (
-              <CtaButton to="/planning">Ouvrir le planning</CtaButton>
+              <CtaButton to={getDefaultRouteByRole(me.role)}>Ouvrir l'espace</CtaButton>
             ) : null}
           </div>
           <div style={visualWrap}>

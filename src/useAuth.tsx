@@ -1,9 +1,16 @@
 import { createContext, useContext } from "react";
 import type { Me } from "./api";
+import type { AccountRole } from "./authz";
 
 type AuthState = {
   me: Me | null;
   loading: boolean;
+  role: AccountRole | null;
+  isDirection: boolean;
+  isCoach: boolean;
+  isPlayerOrParent: boolean;
+  canWrite: boolean;
+  canManageClub: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;

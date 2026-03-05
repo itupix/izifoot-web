@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { canWrite } from '../authz'
 import CtaButton from '../components/CtaButton'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SoccerBallIcon, TrophyIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { useAuth } from '../useAuth'
 import { uiAlert } from '../ui'
 import type { Plateau, Training } from '../types/api'
 import './TrainingsPage.css'
@@ -53,6 +55,7 @@ function formatDateTitle(d: Date) {
 }
 
 export default function TrainingsPage() {
+  const { me } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
@@ -66,6 +69,12 @@ export default function TrainingsPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
 
+  const writable = me ? canWrite(me.role) : false
+  const coachManagedTeams = useMemo(() => {
+    if (!me || me.role !== 'COACH') return null
+    return new Set(me.managedTeamIds)
+  }, [me])
+
   // Load trainings + plateaus
   const loadTrainings = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const [ts, pls] = await Promise.all([
@@ -73,10 +82,17 @@ export default function TrainingsPage() {
       apiGet<Plateau[]>(apiRoutes.plateaus.list),
     ])
     if (isCancelled()) return
-    ts.sort((a, b) => +new Date(b.date) - +new Date(a.date))
-    setTrainings(ts)
-    setPlateaus(pls)
-  }, [])
+    const filteredTrainings = coachManagedTeams
+      ? ts.filter((training) => !training.teamId || coachManagedTeams.has(training.teamId))
+      : ts
+    const filteredPlateaus = coachManagedTeams
+      ? pls.filter((plateau) => !plateau.teamId || coachManagedTeams.has(plateau.teamId))
+      : pls
+
+    filteredTrainings.sort((a, b) => +new Date(b.date) - +new Date(a.date))
+    setTrainings(filteredTrainings)
+    setPlateaus(filteredPlateaus)
+  }, [coachManagedTeams])
 
   const { loading, error } = useAsyncLoader(loadTrainings)
   // Derived data for selected day
@@ -222,6 +238,9 @@ export default function TrainingsPage() {
 
         <section className="trainings-block">
           <div className="trainings-block-title">Entraînements</div>
+          {!writable && (
+            <div className="trainings-empty">Mode lecture seule: création et modifications désactivées.</div>
+          )}
           {dayTrainings.length === 0 ? (
             <div className="trainings-empty">Aucun entraînement ce jour.</div>
           ) : (
@@ -243,11 +262,13 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          <div className="trainings-block-footer">
-            <CtaButton onClick={() => createTrainingForDay(selectedDate)}>
-              Ajouter un entraînement
-            </CtaButton>
-          </div>
+          {writable && (
+            <div className="trainings-block-footer">
+              <CtaButton onClick={() => createTrainingForDay(selectedDate)}>
+                Ajouter un entraînement
+              </CtaButton>
+            </div>
+          )}
         </section>
 
         <section className="trainings-block">
@@ -273,11 +294,13 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          <div className="trainings-block-footer">
-            <CtaButton onClick={openPlateauModal}>
-              Ajouter un plateau
-            </CtaButton>
-          </div>
+          {writable && (
+            <div className="trainings-block-footer">
+              <CtaButton onClick={openPlateauModal}>
+                Ajouter un plateau
+              </CtaButton>
+            </div>
+          )}
         </section>
       </div>
 
@@ -355,7 +378,7 @@ export default function TrainingsPage() {
         </div>
       )}
 
-      {isPlateauModalOpen && (
+      {writable && isPlateauModalOpen && (
         <div onClick={closePlateauModal} className="trainings-overlay">
           <div
             onClick={(e) => e.stopPropagation()}

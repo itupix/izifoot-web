@@ -1,54 +1,68 @@
 // src/App.tsx
-import React from 'react';
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import AccountPage from './pages/AccountPage';
-import Home from './pages/Home';
-import { useAuth } from './useAuth';
+import React from 'react'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import style from './App.module.css'
-import TrainingsPage from './pages/TrainingsPage';
-import TrainingDetailsPage from './pages/TrainingDetailsPage';
-import PlateauDetailsPage from './pages/PlateauDetailsPage';
-import PublicPlateauPage from './pages/PublicPlateauPage';
-import DrillsPage from './pages/Drills';
-import DrillDetailsPage from './pages/DrillDetailsPage';
-import PlayersPage from './pages/PlayersPage';
-import DiagramEditor from './pages/DiagramEditor';
-import StatsPage from './pages/Stats';
-import MatchDay from './pages/MatchDay';
-import { CloseIcon, MenuIcon } from './components/icons';
-import RoundIconButton from './components/RoundIconButton';
+import { getDefaultRouteByRole, type AccountRole } from './authz'
+import { CloseIcon, MenuIcon } from './components/icons'
+import RoundIconButton from './components/RoundIconButton'
+import { RequireAuth, RequireRole } from './components/RouteGuards'
+import { useAuth } from './useAuth'
+import AccountPage from './pages/AccountPage'
+import ClubManagementPage from './pages/ClubManagementPage'
+import DiagramEditor from './pages/DiagramEditor'
+import DrillDetailsPage from './pages/DrillDetailsPage'
+import DrillsPage from './pages/Drills'
+import Home from './pages/Home'
+import MatchDay from './pages/MatchDay'
+import PlateauDetailsPage from './pages/PlateauDetailsPage'
+import PlayersPage from './pages/PlayersPage'
+import PublicPlateauPage from './pages/PublicPlateauPage'
+import StatsPage from './pages/Stats'
+import TrainingDetailsPage from './pages/TrainingDetailsPage'
+import TrainingsPage from './pages/TrainingsPage'
 
-function Protected({ children }: { children: React.ReactNode }) {
-  const { me, loading } = useAuth();
-  if (loading) return <div style={{ padding: 16 }}>Chargement…</div>;
-  if (!me) return <Navigate to="/" replace />;
-  return <>{children}</>;
+type NavItem = {
+  to: string
+  label: string
+  roles: AccountRole[]
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { to: '/club', label: 'Club', roles: ['DIRECTION'] },
+  { to: '/planning', label: 'Planning', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'] },
+  { to: '/exercices', label: 'Exercices', roles: ['DIRECTION', 'COACH'] },
+  { to: '/effectif', label: 'Effectif', roles: ['DIRECTION', 'COACH'] },
+  { to: '/stats', label: 'Stats', roles: ['DIRECTION', 'COACH'] },
+]
+
+function RoleAwareFallback() {
+  const { me } = useAuth()
+  return <Navigate to={me ? getDefaultRouteByRole(me.role) : '/'} replace />
 }
 
 export default function App() {
-  const { me, logout } = useAuth();
-  const location = useLocation();
-  const isHome = location.pathname === '/';
-  const isPublicPlateau = location.pathname.startsWith('/plateau/public/');
-  const showSidebarShell = !isHome && !isPublicPlateau;
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const headerHeight = 64;
-  const pageWidth = 980;
+  const { me, logout } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
 
-  const isActivePath = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+  const isHome = location.pathname === '/'
+  const isPublicPlateau = location.pathname.startsWith('/plateau/public/')
+  const showSidebarShell = !isHome && !isPublicPlateau
+  const [menuOpen, setMenuOpen] = React.useState(false)
+  const headerHeight = 64
+  const pageWidth = 980
+
+  const isActivePath = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`)
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/');
-  };
+    await logout()
+    navigate('/')
+  }
 
-  const navItems = [
-    { to: '/planning', label: 'Planning' },
-    { to: '/exercices', label: 'Exercices' },
-    { to: '/effectif', label: 'Effectif' },
-    { to: '/stats', label: 'Stats' },
-  ];
+  const navItems = React.useMemo(() => {
+    if (!me) return [] as NavItem[]
+    return NAV_ITEMS.filter((item) => item.roles.includes(me.role))
+  }, [me])
 
   return (
     <>
@@ -79,7 +93,7 @@ export default function App() {
             )}
             {showSidebarShell ? (
               <Link
-                to="/planning"
+                to={me ? getDefaultRouteByRole(me.role) : '/planning'}
                 className={style.logo}
                 style={{ textDecoration: 'none', fontWeight: 800, fontSize: 28, lineHeight: 1 }}
               >
@@ -159,21 +173,104 @@ export default function App() {
         <div style={{ width: '100%', maxWidth: pageWidth }}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/account" element={<Protected><AccountPage /></Protected>} />
-            <Route path="/planning" element={<Protected><TrainingsPage /></Protected>} />
-            <Route path="/training/:id" element={<Protected><TrainingDetailsPage /></Protected>} />
-            <Route path="/plateau/:id" element={<Protected><PlateauDetailsPage /></Protected>} />
             <Route path="/plateau/public/:token" element={<PublicPlateauPage />} />
-            <Route path="/exercices" element={<Protected><DrillsPage /></Protected>} />
-            <Route path="/exercices/:id" element={<Protected><DrillDetailsPage /></Protected>} />
-            <Route path="/diagram-editor" element={<Protected><DiagramEditor /></Protected>} />
-            <Route path="/effectif" element={<Protected><PlayersPage /></Protected>} />
-            <Route path="/stats" element={<Protected><StatsPage /></Protected>} />
-            <Route path="/match-day/:id" element={<Protected><MatchDay /></Protected>} />
-            <Route path="*" element={<Navigate to={me ? "/planning" : "/"} replace />} />
+
+            <Route
+              path="/account"
+              element={
+                <RequireAuth>
+                  <AccountPage />
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/club"
+              element={
+                <RequireRole roles={['DIRECTION']}>
+                  <ClubManagementPage />
+                </RequireRole>
+              }
+            />
+
+            <Route
+              path="/planning"
+              element={
+                <RequireAuth>
+                  <TrainingsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/training/:id"
+              element={
+                <RequireAuth>
+                  <TrainingDetailsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/plateau/:id"
+              element={
+                <RequireAuth>
+                  <PlateauDetailsPage />
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/exercices"
+              element={
+                <RequireRole roles={['DIRECTION', 'COACH']}>
+                  <DrillsPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/exercices/:id"
+              element={
+                <RequireRole roles={['DIRECTION', 'COACH']}>
+                  <DrillDetailsPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/diagram-editor"
+              element={
+                <RequireRole roles={['DIRECTION', 'COACH']}>
+                  <DiagramEditor />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/effectif"
+              element={
+                <RequireRole roles={['DIRECTION', 'COACH']}>
+                  <PlayersPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/stats"
+              element={
+                <RequireRole roles={['DIRECTION', 'COACH']}>
+                  <StatsPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/match-day/:id"
+              element={
+                <RequireRole roles={['DIRECTION', 'COACH']}>
+                  <MatchDay />
+                </RequireRole>
+              }
+            />
+
+            <Route path="*" element={<RoleAwareFallback />} />
           </Routes>
         </div>
       </main>
     </>
-  );
+  )
 }

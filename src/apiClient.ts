@@ -1,4 +1,4 @@
-import { API_BASE } from './api'
+import { API_BASE, HttpError } from './api'
 
 function authHeaders(): Record<string, string> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
@@ -16,6 +16,24 @@ function buildUrl(path: string, cacheBust: boolean): string {
   return cacheBust ? withCacheBust(raw) : raw
 }
 
+async function parseError(res: Response): Promise<string> {
+  const contentType = res.headers.get('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    const json = await res.json().catch(() => null)
+    const msg = (json && typeof json === 'object' ? (json as { error?: unknown; message?: unknown }) : null)
+    if (typeof msg?.error === 'string' && msg.error.trim()) return msg.error
+    if (typeof msg?.message === 'string' && msg.message.trim()) return msg.message
+  }
+
+  const text = await res.text().catch(() => '')
+  if (text.trim()) return text
+
+  if (res.status === 403) return 'Accès non autorisé pour ce rôle'
+  if (res.status === 401) return 'Session expirée. Veuillez vous reconnecter.'
+  return `HTTP ${res.status}`
+}
+
 export function apiUrl(path: string): string {
   return buildUrl(path, false)
 }
@@ -31,7 +49,14 @@ async function requestJson<T>(
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(init.headers || {}) },
     ...init,
   })
-  if (!res.ok) throw new Error(await res.text())
+
+  if (!res.ok) {
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('izifoot:unauthorized'))
+    }
+    throw new HttpError(res.status, await parseError(res))
+  }
+
   return res.json()
 }
 

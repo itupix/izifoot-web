@@ -7,6 +7,15 @@ export const apiRoutes = {
     logout: '/auth/logout',
   },
   me: '/me',
+  clubs: {
+    me: '/clubs/me',
+  },
+  teams: {
+    list: '/teams',
+  },
+  accounts: {
+    list: '/accounts',
+  },
   plannings: {
     list: '/plannings',
     byId: (id: string) => `/plannings/${enc(id)}`,

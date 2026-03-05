@@ -11,12 +11,28 @@ export interface Training {
   id: string
   date: string
   status: string
+  teamId?: string | null
 }
 
 export interface Plateau {
   id: string
   date: string
   lieu: string
+  teamId?: string | null
+}
+
+export interface ClubMe {
+  id: string
+  name: string
+  createdAt?: string
+}
+
+export interface Team {
+  id: string
+  name: string
+  category?: string | null
+  clubId?: string | null
+  createdAt?: string
 }
 
 export interface AttendanceRow {

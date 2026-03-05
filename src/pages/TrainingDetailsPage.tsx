@@ -2,11 +2,13 @@ import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { canWrite } from '../authz'
 import AttendanceAccordion from '../components/AttendanceAccordion'
 import { ChevronLeftIcon, CloseIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { useAuth } from '../useAuth'
 import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, Drill, Player, Training, TrainingDrill } from '../types/api'
 import './TrainingDetailsPage.css'
@@ -52,6 +54,7 @@ function moveTrainingDrills(items: TrainingDrill[], draggedId: string, targetId:
 }
 
 export default function TrainingDetailsPage() {
+  const { me } = useAuth()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -121,8 +124,10 @@ export default function TrainingDetailsPage() {
     return list.sort((a, b) => Number(drillIdsInSession.has(a.id)) - Number(drillIdsInSession.has(b.id)))
   }, [catalog, query, drillIdsInSession])
   const isCancelled = training?.status === 'CANCELLED'
+  const writable = me ? canWrite(me.role) : false
 
   async function setTrainingStatus(cancelled: boolean) {
+    if (!writable) return
     if (!training) return
     try {
       const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
@@ -135,6 +140,7 @@ export default function TrainingDetailsPage() {
   }
 
   async function deleteTraining() {
+    if (!writable) return
     if (!training) return
     if (!uiConfirm('Supprimer définitivement cet entraînement ?')) return
     try {
@@ -146,6 +152,7 @@ export default function TrainingDetailsPage() {
   }
 
   async function togglePresence(playerId: string, present: boolean) {
+    if (!writable) return
     if (!training) return
     try {
       await apiPost(apiRoutes.attendance.list, {
@@ -167,6 +174,7 @@ export default function TrainingDetailsPage() {
   }
 
   async function addDrill(drillId: string) {
+    if (!writable) return
     if (!training || !drillId) return
     try {
       const row = await apiPost<TrainingDrill>(apiRoutes.trainings.drills(training.id), { drillId })
@@ -177,6 +185,7 @@ export default function TrainingDetailsPage() {
   }
 
   async function removeDrill(trainingDrillId: string) {
+    if (!writable) return
     if (!training) return
     try {
       await apiDelete(apiRoutes.trainings.drillById(training.id, trainingDrillId))
@@ -187,6 +196,7 @@ export default function TrainingDetailsPage() {
   }
 
   async function persistDrillOrder(previousDrills: TrainingDrill[], nextDrills: TrainingDrill[]) {
+    if (!writable) return
     if (!training) return
 
     const previousById = new Map(previousDrills.map((item) => [item.id, item]))
@@ -210,6 +220,10 @@ export default function TrainingDetailsPage() {
   }
 
   function handleDrillDragStart(event: React.DragEvent<HTMLElement>, trainingDrillId: string) {
+    if (!writable) {
+      event.preventDefault()
+      return
+    }
     if (savingDrillOrder) {
       event.preventDefault()
       return
@@ -234,6 +248,7 @@ export default function TrainingDetailsPage() {
   }
 
   async function handleDrillDrop(trainingDrillId: string) {
+    if (!writable) return
     if (!draggedDrillId || draggedDrillId === trainingDrillId || savingDrillOrder) {
       setDraggedDrillId(null)
       setDragOverDrillId(null)
@@ -271,44 +286,48 @@ export default function TrainingDetailsPage() {
           <p>{trainingDateLabel}</p>
         </div>
         <div className="topbar-menu-wrap">
-          <RoundIconButton
-            ariaLabel="Ouvrir le menu d'actions"
-            className="menu-dots-button"
-            onClick={() => setActionsMenuOpen((prev) => !prev)}
-          >
-            <DotsHorizontalIcon size={18} />
-          </RoundIconButton>
-          {actionsMenuOpen && (
+          {writable && (
             <>
-              <button
-                type="button"
-                className="menu-backdrop"
-                aria-label="Fermer le menu"
-                onClick={() => setActionsMenuOpen(false)}
-              />
-              <div className="floating-menu">
-                {training && (
+              <RoundIconButton
+                ariaLabel="Ouvrir le menu d'actions"
+                className="menu-dots-button"
+                onClick={() => setActionsMenuOpen((prev) => !prev)}
+              >
+                <DotsHorizontalIcon size={18} />
+              </RoundIconButton>
+              {actionsMenuOpen && (
+                <>
                   <button
                     type="button"
-                    onClick={() => {
-                      setActionsMenuOpen(false)
-                      setTrainingStatus(training.status !== 'CANCELLED')
-                    }}
-                  >
-                    {training.status === 'CANCELLED' ? 'Rétablir l’entrainement' : 'Annuler l’entrainement'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="danger"
-                  onClick={() => {
-                    setActionsMenuOpen(false)
-                    deleteTraining()
-                  }}
-                >
-                  Supprimer l’entrainement
-                </button>
-              </div>
+                    className="menu-backdrop"
+                    aria-label="Fermer le menu"
+                    onClick={() => setActionsMenuOpen(false)}
+                  />
+                  <div className="floating-menu">
+                    {training && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionsMenuOpen(false)
+                          setTrainingStatus(training.status !== 'CANCELLED')
+                        }}
+                      >
+                        {training.status === 'CANCELLED' ? 'Rétablir l’entrainement' : 'Annuler l’entrainement'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => {
+                        setActionsMenuOpen(false)
+                        deleteTraining()
+                      }}
+                    >
+                      Supprimer l’entrainement
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
@@ -324,8 +343,8 @@ export default function TrainingDetailsPage() {
             isOpen={playersOpen}
             onToggle={() => setPlayersOpen((prev) => !prev)}
             toggleLabel={playersOpen ? 'Réduire la liste des joueurs' : 'Ouvrir la liste des joueurs'}
-            disabled={isCancelled}
-            disabledMessage={<p className="muted-line">Séance annulée: présences indisponibles.</p>}
+            disabled={isCancelled || !writable}
+            disabledMessage={<p className="muted-line">{isCancelled ? 'Séance annulée: présences indisponibles.' : 'Mode lecture seule: présences indisponibles.'}</p>}
           >
             <div className="attendance-list-simple">
               {players.map((player) => {
@@ -336,6 +355,7 @@ export default function TrainingDetailsPage() {
                     <input
                       type="checkbox"
                       checked={present}
+                      disabled={!writable}
                       onChange={(e) => togglePresence(player.id, e.target.checked)}
                     />
                   </label>
@@ -348,7 +368,7 @@ export default function TrainingDetailsPage() {
             <div className="card-head">
               <h3>Exercices</h3>
               <div className="head-actions">
-                {!isCancelled && (
+                {!isCancelled && writable && (
                   <button
                     type="button"
                     className="add-button"
@@ -371,7 +391,7 @@ export default function TrainingDetailsPage() {
                     <article
                       key={row.id}
                       className={`drill-card ${isDragTarget ? 'is-drag-target' : ''}`}
-                      draggable={!savingDrillOrder}
+                      draggable={writable && !savingDrillOrder}
                       onClick={() => openDrill(row.drillId)}
                       onDragStart={(event) => handleDrillDragStart(event, row.id)}
                       onDragEnd={handleDrillDragEnd}
@@ -388,7 +408,7 @@ export default function TrainingDetailsPage() {
                         <RoundIconButton
                           ariaLabel="Supprimer l'exercice"
                           className="icon-danger-button card-delete-button"
-                          disabled={savingDrillOrder}
+                          disabled={savingDrillOrder || !writable}
                           onClick={(e) => {
                             e.stopPropagation()
                             removeDrill(row.id)
@@ -406,12 +426,13 @@ export default function TrainingDetailsPage() {
                 )}
               </div>
             )}
+            {!writable && <p className="muted-line">Mode lecture seule: édition des exercices désactivée.</p>}
             {drills.length > 1 && !isCancelled && savingDrillOrder && <p className="muted-line">Enregistrement du nouvel ordre…</p>}
           </section>
         </div>
       )}
 
-      {manageDrillsOpen && !isCancelled && (
+      {manageDrillsOpen && !isCancelled && writable && (
         <>
           <div className="modal-overlay" onClick={() => setManageDrillsOpen(false)} />
           <div className="drill-modal manage-modal" role="dialog" aria-modal="true">
