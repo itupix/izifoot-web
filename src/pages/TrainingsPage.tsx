@@ -57,7 +57,7 @@ function formatDateTitle(d: Date) {
 
 export default function TrainingsPage() {
   const { me } = useAuth()
-  const { selectedTeamId, requiresSelection } = useTeamScope()
+  const { selectedTeamId, requiresSelection, teamOptions } = useTeamScope()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
@@ -73,6 +73,7 @@ export default function TrainingsPage() {
 
   const writable = me ? canWrite(me.role) : false
   const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
+  const teamNameById = useMemo(() => new Map(teamOptions.map((team) => [team.id, team.name])), [teamOptions])
   const coachManagedTeams = useMemo(() => {
     if (!me || me.role !== 'COACH') return null
     return new Set(me.managedTeamIds)
@@ -273,7 +274,14 @@ export default function TrainingsPage() {
                 <span className="trainings-item-row">
                   <span className="trainings-item-left">
                     {t.status === 'CANCELLED' ? <span style={{ fontSize: 24 }}>❌</span> : <SoccerBallIcon size={24} />}
-                    Entraînement
+                    <span style={{ display: 'grid', gap: 2 }}>
+                      <span>Entraînement</span>
+                      {me?.role === 'DIRECTION' && (
+                        <small style={{ color: '#64748b' }}>
+                          Équipe: {t.teamId ? (teamNameById.get(t.teamId) || t.teamId) : 'Non renseignée'}
+                        </small>
+                      )}
+                    </span>
                   </span>
                   <span className="trainings-item-right">
                     <ChevronRightIcon size={24} />
@@ -305,7 +313,14 @@ export default function TrainingsPage() {
                 <span className="trainings-item-row">
                   <span className="trainings-item-left">
                     <TrophyIcon size={24} />
-                    Plateau — {p.lieu}
+                    <span style={{ display: 'grid', gap: 2 }}>
+                      <span>Plateau — {p.lieu}</span>
+                      {me?.role === 'DIRECTION' && (
+                        <small style={{ color: '#64748b' }}>
+                          Équipe: {p.teamId ? (teamNameById.get(p.teamId) || p.teamId) : 'Non renseignée'}
+                        </small>
+                      )}
+                    </span>
                   </span>
                   <span className="trainings-item-right">
                     <ChevronRightIcon size={24} />
