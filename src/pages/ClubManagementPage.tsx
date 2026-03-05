@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState, type CSSProperties } from 'react'
-import { apiGet, apiPost } from '../apiClient'
+import { useNavigate } from 'react-router-dom'
+import { apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { useAuth } from '../useAuth'
 import { uiAlert } from '../ui'
 import type { ClubMe, Team } from '../types/api'
 import type { AccountRole } from '../authz'
@@ -18,8 +20,12 @@ interface AccountPayload {
 const ACCOUNT_CREATION_ROLES: AccountRole[] = ['DIRECTION', 'COACH', 'PLAYER', 'PARENT']
 
 export default function ClubManagementPage() {
+  const { me } = useAuth()
+  const navigate = useNavigate()
   const [club, setClub] = useState<ClubMe | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
+  const [clubName, setClubName] = useState('')
+  const [renamingClub, setRenamingClub] = useState(false)
 
   const [teamName, setTeamName] = useState('')
   const [teamCategory, setTeamCategory] = useState('')
@@ -41,6 +47,7 @@ export default function ClubManagementPage() {
     if (isCancelled()) return
 
     setClub(clubData)
+    setClubName(clubData?.name ?? '')
     setTeams(Array.isArray(teamData) ? teamData : [])
   }, [])
 
@@ -100,6 +107,38 @@ export default function ClubManagementPage() {
     }
   }
 
+  async function renameClub(e: React.FormEvent) {
+    e.preventDefault()
+    const nextName = clubName.trim()
+    if (!nextName || !club) return
+
+    setRenamingClub(true)
+    try {
+      const updated = await apiPut<ClubMe>(apiRoutes.clubs.me, { name: nextName })
+      setClub(updated)
+      setClubName(updated.name ?? nextName)
+      uiAlert('Nom du club mis à jour.')
+    } catch (err: unknown) {
+      const status = err instanceof Error && 'status' in err ? (err as Error & { status?: number }).status : undefined
+
+      if (status === 401) {
+        navigate('/', { replace: true })
+        return
+      }
+      if (status === 403) {
+        uiAlert('Action réservée à la direction')
+        return
+      }
+      if (status === 400) {
+        uiAlert(toErrorMessage(err, 'Nom invalide'))
+        return
+      }
+      uiAlert(toErrorMessage(err, 'Erreur lors du renommage du club'))
+    } finally {
+      setRenamingClub(false)
+    }
+  }
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <h2 style={{ marginTop: 0 }}>Gestion du club</h2>
@@ -113,6 +152,27 @@ export default function ClubManagementPage() {
           <div style={{ display: 'grid', gap: 6 }}>
             <div><strong>Nom:</strong> {club.name || '—'}</div>
             <div><strong>ID:</strong> {club.id || '—'}</div>
+            {me?.role === 'DIRECTION' && (
+              <form onSubmit={renameClub} style={{ ...formStyle, marginTop: 8 }}>
+                <label style={{ fontSize: 12, color: '#6b7280' }}>Renommer le club</label>
+                <input
+                  value={clubName}
+                  onChange={(e) => setClubName(e.target.value)}
+                  placeholder="Nouveau nom du club"
+                  style={inputStyle}
+                  minLength={2}
+                  maxLength={120}
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={renamingClub || clubName.trim().length < 2 || clubName.trim().length > 120}
+                  style={buttonStyle}
+                >
+                  {renamingClub ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </form>
+            )}
           </div>
         ) : (
           <div style={{ color: '#6b7280' }}>Données club indisponibles pour le moment.</div>
