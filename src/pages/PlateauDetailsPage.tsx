@@ -12,6 +12,7 @@ import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
+import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
 import './TrainingDetailsPage.css'
@@ -45,6 +46,7 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
 
 export default function PlateauDetailsPage() {
   const { me } = useAuth()
+  const { selectedTeamId, requiresSelection } = useTeamScope()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -137,7 +139,7 @@ export default function PlateauDetailsPage() {
     if (!publicPlateauUrl) return ''
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(publicPlateauUrl)}`
   }, [publicPlateauUrl])
-  const writable = me ? canWrite(me.role) : false
+  const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
 
   async function togglePlateauPresence(playerId: string, present: boolean) {
     if (!writable) return

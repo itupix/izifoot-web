@@ -46,6 +46,28 @@
   gap: 10px;
 }
 
+.teamScopeBlock {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.teamScopeLabel {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.teamScopeSelect {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #1e293b;
+  font-size: 14px;
+}
+
 .sidebarPrimaryAction {
   display: block;
   padding: 13px 14px;

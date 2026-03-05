@@ -2,15 +2,20 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { canWrite } from '../authz'
 import DiagramComposer from '../components/DiagramComposer'
 import FloatingPlusButton from '../components/FloatingPlusButton'
 import SearchSelectBar from '../components/SearchSelectBar'
 import { createEmptyDiagramData, hasDiagramContent, type DiagramData } from '../components/diagramShared'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { useAuth } from '../useAuth'
+import { useTeamScope } from '../useTeamScope'
 import type { Drill, DrillsResponse } from '../types/api'
 
 export default function DrillsPage() {
+  const { me } = useAuth()
+  const { selectedTeamId, requiresSelection } = useTeamScope()
   const navigate = useNavigate()
   const [data, setData] = useState<DrillsResponse>({ items: [], categories: [], tags: [] })
   const [q, setQ] = useState('')
@@ -25,6 +30,9 @@ export default function DrillsPage() {
   const [creating, setCreating] = useState(false)
   const [createErr, setCreateErr] = useState<string | null>(null)
 
+  const writable = me ? canWrite(me.role) : false
+  const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
+
   const loadDrills = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
     if (!isCancelled()) setData(res)
@@ -33,7 +41,11 @@ export default function DrillsPage() {
   const { loading, error } = useAsyncLoader(loadDrills)
 
   const filtered = useMemo(() => {
-    let items = data.items
+    let items = requiresSelection && !selectedTeamId
+      ? []
+      : selectedTeamId
+        ? data.items.filter((drill) => !drill.teamId || drill.teamId === selectedTeamId)
+        : data.items
     if (q.trim()) {
       const needle = q.toLowerCase()
       items = items.filter(d =>
@@ -43,12 +55,13 @@ export default function DrillsPage() {
     }
     if (category) items = items.filter(d => d.category === category)
     return items
-  }, [data.items, q, category])
+  }, [data.items, q, category, requiresSelection, selectedTeamId])
 
   const categories = useMemo(() => data.categories, [data.categories])
 
   async function createDrill(e: React.FormEvent) {
     e.preventDefault()
+    if (!teamScopedWritable) return
     setCreateErr(null)
     if (!newTitle || !newCategory) {
       setCreateErr('Remplis tous les champs obligatoires.')
@@ -62,7 +75,8 @@ export default function DrillsPage() {
         duration: 1,
         players: 'Variable',
         description: newDescription.trim(),
-        tags: []
+        tags: [],
+        teamId: selectedTeamId || undefined,
       }
       const created = await apiPost<Drill>(apiRoutes.drills.list, payload)
       if (hasDiagramContent(newDiagramData)) {
@@ -89,6 +103,11 @@ export default function DrillsPage() {
   return (
     <div style={{ position: 'relative' }}>
       <h2 style={{ marginTop: 0, marginBottom: 12 }}>Exercices</h2>
+      {writable && requiresSelection && !selectedTeamId && (
+        <div style={{ color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', marginBottom: 12 }}>
+          Sélectionnez une équipe active pour modifier les exercices.
+        </div>
+      )}
       <div style={{ marginBottom: 14 }}>
         <SearchSelectBar
           query={q}
@@ -122,12 +141,14 @@ export default function DrillsPage() {
           </article>
         ))}
       </div>
-      <FloatingPlusButton ariaLabel="Nouvel exercice" zIndex={20} onClick={() => {
-        setCreateErr(null)
-        setNewDiagramData(createEmptyDiagramData())
-        setShowCreateModal(true)
-      }} />
-      {showCreateModal && (
+      {teamScopedWritable && (
+        <FloatingPlusButton ariaLabel="Nouvel exercice" zIndex={20} onClick={() => {
+          setCreateErr(null)
+          setNewDiagramData(createEmptyDiagramData())
+          setShowCreateModal(true)
+        }} />
+      )}
+      {teamScopedWritable && showCreateModal && (
         <div
           role="dialog"
           aria-modal="true"

@@ -7,6 +7,7 @@ import { CloseIcon, MenuIcon } from './components/icons'
 import RoundIconButton from './components/RoundIconButton'
 import { RequireAuth, RequireRole } from './components/RouteGuards'
 import { useAuth } from './useAuth'
+import { useTeamScope } from './useTeamScope'
 import AccountPage from './pages/AccountPage'
 import ClubManagementPage from './pages/ClubManagementPage'
 import DiagramEditor from './pages/DiagramEditor'
@@ -43,6 +44,7 @@ function RoleAwareFallback() {
 
 export default function App() {
   const { me, logout } = useAuth()
+  const { selectedTeamId, setSelectedTeamId, teamOptions, loading: teamLoading, canSelectTeam, requiresSelection } = useTeamScope()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -153,6 +155,23 @@ export default function App() {
                   </Link>
                 ))}
               </nav>
+              {canSelectTeam && (
+                <div className={style.teamScopeBlock}>
+                  <label htmlFor="team-scope-select" className={style.teamScopeLabel}>Équipe active</label>
+                  <select
+                    id="team-scope-select"
+                    className={style.teamScopeSelect}
+                    value={selectedTeamId || ''}
+                    onChange={(e) => setSelectedTeamId(e.target.value || null)}
+                    disabled={teamLoading}
+                  >
+                    <option value="">{requiresSelection ? 'Sélectionner une équipe' : 'Toutes les équipes'}</option>
+                    {teamOptions.map((team) => (
+                      <option key={team.id} value={team.id}>{team.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className={style.sidebarFooter}>
                 {me ? (
                   <button className={style.logoutButton} onClick={handleLogout}>

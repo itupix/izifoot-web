@@ -5,8 +5,11 @@ import FloatingPlusButton from '../components/FloatingPlusButton'
 import SearchSelectBar from '../components/SearchSelectBar'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { useAuth } from '../useAuth'
+import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
 import type { Player } from '../types/api'
 
@@ -14,6 +17,8 @@ const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
 
 // -------- UI --------
 export default function PlayersPage() {
+  const { me } = useAuth()
+  const { selectedTeamId, requiresSelection } = useTeamScope()
   const [players, setPlayers] = useState<Player[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -31,6 +36,9 @@ export default function PlayersPage() {
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
 
+  const writable = me ? canWrite(me.role) : false
+  const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
+
   const loadPlayers = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const list = await apiGet<Player[]>(apiRoutes.players.list)
     if (!isCancelled()) setPlayers(list)
@@ -39,17 +47,22 @@ export default function PlayersPage() {
   const { loading, error } = useAsyncLoader(loadPlayers)
 
   const filtered = useMemo(() => {
-    let items = players
+    let items = requiresSelection && !selectedTeamId
+      ? []
+      : selectedTeamId
+        ? players.filter((p) => !p.teamId || p.teamId === selectedTeamId)
+        : players
     if (q.trim()) {
       const n = q.toLowerCase()
       items = items.filter(p => p.name.toLowerCase().includes(n))
     }
     if (posFilter) items = items.filter(p => p.primary_position === posFilter || p.secondary_position === posFilter)
     return items
-  }, [players, q, posFilter])
+  }, [players, q, posFilter, requiresSelection, selectedTeamId])
 
   async function createPlayer(e: React.FormEvent) {
     e.preventDefault()
+    if (!teamScopedWritable) return
     try {
       const body: {
         name: string
@@ -57,10 +70,12 @@ export default function PlayersPage() {
         secondary_position?: string
         email?: string
         phone?: string
+        teamId?: string
       } = {
         name: name.trim(),
         primary_position: primary,
         secondary_position: secondary.trim() || undefined,
+        teamId: selectedTeamId || undefined,
       }
       if (email.trim()) body.email = email.trim()
       if (phone.trim()) body.phone = phone.trim()
@@ -77,6 +92,7 @@ export default function PlayersPage() {
   }
 
   async function updatePlayer(id: string, patch: Partial<Player>) {
+    if (!teamScopedWritable) return
     try {
       const p = await apiPut<Player>(apiRoutes.players.byId(id), patch)
       setPlayers(prev => prev.map(x => x.id === id ? p : x))
@@ -86,6 +102,7 @@ export default function PlayersPage() {
   }
 
   async function removePlayer(id: string) {
+    if (!teamScopedWritable) return
     if (!uiConfirm('Supprimer ce joueur ?')) return
     try {
       await apiDelete(apiRoutes.players.byId(id))
@@ -106,6 +123,11 @@ export default function PlayersPage() {
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <h2 style={{ marginTop: 0 }}>Effectif</h2>
+      {writable && requiresSelection && !selectedTeamId && (
+        <div style={{ color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
+          Sélectionnez une équipe active pour modifier les joueurs.
+        </div>
+      )}
 
       <SearchSelectBar
         query={q}
@@ -240,11 +262,12 @@ export default function PlayersPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
                 <button
                   onClick={() => setDetailEdit(!detailEdit)}
+                  disabled={!teamScopedWritable}
                   style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
                 >
                   {detailEdit ? 'Terminer' : 'Modifier'}
                 </button>
-                <button onClick={() => removePlayer(selectedPlayer.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>
+                <button disabled={!teamScopedWritable} onClick={() => removePlayer(selectedPlayer.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>
                   Supprimer
                 </button>
               </div>
@@ -318,7 +341,7 @@ export default function PlayersPage() {
         </>
       )}
 
-      <FloatingPlusButton ariaLabel="Ajouter un joueur" onClick={() => setModalOpen(true)} />
+      {teamScopedWritable && <FloatingPlusButton ariaLabel="Ajouter un joueur" onClick={() => setModalOpen(true)} />}
     </div>
   )
 }

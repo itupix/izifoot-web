@@ -7,8 +7,11 @@ import RoundIconButton from '../components/RoundIconButton'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/diagramShared'
+import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { useAuth } from '../useAuth'
+import { useTeamScope } from '../useTeamScope'
 import type { Drill } from '../types/api'
 import './DrillDetailsPage.css'
 
@@ -27,6 +30,8 @@ function normalizeDiagramList(input: unknown): Diagram[] {
 }
 
 export default function DrillDetailsPage() {
+  const { me } = useAuth()
+  const { selectedTeamId, requiresSelection } = useTeamScope()
   const params = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -44,6 +49,7 @@ export default function DrillDetailsPage() {
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
   const [diagramData, setDiagramData] = useState<DiagramData>(createEmptyDiagramData())
+  const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
 
   const loadDrill = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const [rows, diagramRows] = await Promise.all([
@@ -60,6 +66,7 @@ export default function DrillDetailsPage() {
   const { loading, error } = useAsyncLoader(loadDrill)
 
   function openEditModal() {
+    if (!writable) return
     if (!drill) return
     setActionsMenuOpen(false)
     setTitle(drill.title)
@@ -71,6 +78,7 @@ export default function DrillDetailsPage() {
   }
 
   async function saveEdit(e: React.FormEvent) {
+    if (!writable) return
     e.preventDefault()
     if (!drill) return
     setEditError(null)
@@ -112,6 +120,7 @@ export default function DrillDetailsPage() {
   }
 
   async function deleteDrill() {
+    if (!writable) return
     if (!drill || deleting) return
     setActionsMenuOpen(false)
     if (!window.confirm('Supprimer cet exercice ?')) return
@@ -147,33 +156,42 @@ export default function DrillDetailsPage() {
           <p>{drill.category}</p>
         </div>
         <div className="drill-menu-wrap">
-          <RoundIconButton
-            ariaLabel="Ouvrir le menu d'actions"
-            className="drill-menu-button"
-            onClick={() => setActionsMenuOpen((prev) => !prev)}
-          >
-            <DotsHorizontalIcon size={18} />
-          </RoundIconButton>
-          {actionsMenuOpen && (
+          {writable && (
             <>
-              <button
-                type="button"
-                className="drill-menu-backdrop"
-                aria-label="Fermer le menu"
-                onClick={() => setActionsMenuOpen(false)}
-              />
-              <div className="drill-floating-menu">
-                <button type="button" onClick={openEditModal}>Modifier l'exercice</button>
-                <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
-                  {deleting ? 'Suppression…' : "Supprimer l'exercice"}
-                </button>
-              </div>
+              <RoundIconButton
+                ariaLabel="Ouvrir le menu d'actions"
+                className="drill-menu-button"
+                onClick={() => setActionsMenuOpen((prev) => !prev)}
+              >
+                <DotsHorizontalIcon size={18} />
+              </RoundIconButton>
+              {actionsMenuOpen && (
+                <>
+                  <button
+                    type="button"
+                    className="drill-menu-backdrop"
+                    aria-label="Fermer le menu"
+                    onClick={() => setActionsMenuOpen(false)}
+                  />
+                  <div className="drill-floating-menu">
+                    <button type="button" onClick={openEditModal}>Modifier l'exercice</button>
+                    <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
+                      {deleting ? 'Suppression…' : "Supprimer l'exercice"}
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
       </header>
 
       <div className="drill-details-grid">
+        {!writable && (
+          <section className="drill-card">
+            <p className="drill-empty-text">Sélectionnez une équipe active pour modifier cet exercice.</p>
+          </section>
+        )}
         <section className="drill-card">
           <h3>Description</h3>
           {!!drill.description && <p className="drill-description-text">{drill.description}</p>}
@@ -197,7 +215,7 @@ export default function DrillDetailsPage() {
         {editError && !editing && <div style={{ color: 'crimson' }}>{editError}</div>}
       </div>
 
-      {editing && (
+      {writable && editing && (
         <div
           role="dialog"
           aria-modal="true"

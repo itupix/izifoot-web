@@ -5,6 +5,7 @@ export interface Player {
   secondary_position?: string | null
   email?: string | null
   phone?: string | null
+  teamId?: string | null
 }
 
 export interface Training {
@@ -72,6 +73,7 @@ export interface Drill {
   players: string
   description: string
   tags: string[]
+  teamId?: string | null
 }
 
 export interface DrillsResponse {

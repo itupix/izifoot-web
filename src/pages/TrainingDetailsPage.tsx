@@ -9,6 +9,7 @@ import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
+import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, Drill, Player, Training, TrainingDrill } from '../types/api'
 import './TrainingDetailsPage.css'
@@ -55,6 +56,7 @@ function moveTrainingDrills(items: TrainingDrill[], draggedId: string, targetId:
 
 export default function TrainingDetailsPage() {
   const { me } = useAuth()
+  const { selectedTeamId, requiresSelection } = useTeamScope()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -124,7 +126,7 @@ export default function TrainingDetailsPage() {
     return list.sort((a, b) => Number(drillIdsInSession.has(a.id)) - Number(drillIdsInSession.has(b.id)))
   }, [catalog, query, drillIdsInSession])
   const isCancelled = training?.status === 'CANCELLED'
-  const writable = me ? canWrite(me.role) : false
+  const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
 
   async function setTrainingStatus(cancelled: boolean) {
     if (!writable) return

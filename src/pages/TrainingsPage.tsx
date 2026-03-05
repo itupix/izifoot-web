@@ -9,6 +9,7 @@ import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
+import { useTeamScope } from '../useTeamScope'
 import { uiAlert } from '../ui'
 import type { Plateau, Training } from '../types/api'
 import './TrainingsPage.css'
@@ -56,6 +57,7 @@ function formatDateTitle(d: Date) {
 
 export default function TrainingsPage() {
   const { me } = useAuth()
+  const { selectedTeamId, requiresSelection } = useTeamScope()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
@@ -70,6 +72,7 @@ export default function TrainingsPage() {
   })
 
   const writable = me ? canWrite(me.role) : false
+  const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
   const coachManagedTeams = useMemo(() => {
     if (!me || me.role !== 'COACH') return null
     return new Set(me.managedTeamIds)
@@ -82,17 +85,28 @@ export default function TrainingsPage() {
       apiGet<Plateau[]>(apiRoutes.plateaus.list),
     ])
     if (isCancelled()) return
-    const filteredTrainings = coachManagedTeams
+    const filteredByCoachTrainings = coachManagedTeams
       ? ts.filter((training) => !training.teamId || coachManagedTeams.has(training.teamId))
       : ts
-    const filteredPlateaus = coachManagedTeams
+    const filteredByCoachPlateaus = coachManagedTeams
       ? pls.filter((plateau) => !plateau.teamId || coachManagedTeams.has(plateau.teamId))
       : pls
+
+    const filteredTrainings = requiresSelection && !selectedTeamId
+      ? []
+      : selectedTeamId
+        ? filteredByCoachTrainings.filter((training) => !training.teamId || training.teamId === selectedTeamId)
+        : filteredByCoachTrainings
+    const filteredPlateaus = requiresSelection && !selectedTeamId
+      ? []
+      : selectedTeamId
+        ? filteredByCoachPlateaus.filter((plateau) => !plateau.teamId || plateau.teamId === selectedTeamId)
+        : filteredByCoachPlateaus
 
     filteredTrainings.sort((a, b) => +new Date(b.date) - +new Date(a.date))
     setTrainings(filteredTrainings)
     setPlateaus(filteredPlateaus)
-  }, [coachManagedTeams])
+  }, [coachManagedTeams, requiresSelection, selectedTeamId])
 
   const { loading, error } = useAsyncLoader(loadTrainings)
   // Derived data for selected day
@@ -173,6 +187,7 @@ export default function TrainingsPage() {
   }
 
   async function createPlateauForDay(day: Date, lieu: string) {
+    if (!teamScopedWritable) return
     const normalizedLieu = lieu.trim()
     if (!normalizedLieu) return
     setIsCreatingPlateau(true)
@@ -180,6 +195,7 @@ export default function TrainingsPage() {
       const created = await apiPost<Plateau>(apiRoutes.plateaus.list, {
         date: day.toISOString(),
         lieu: normalizedLieu,
+        teamId: selectedTeamId || undefined,
       })
       setPlateaus(prev => [created, ...prev])
       setPlateauLocation('')
@@ -195,8 +211,9 @@ export default function TrainingsPage() {
   // Plateau match helpers: edit, save, delete
 
   async function createTrainingForDay(day: Date) {
+    if (!teamScopedWritable) return
     try {
-      const created = await apiPost<Training>(apiRoutes.trainings.list, { date: day.toISOString() })
+      const created = await apiPost<Training>(apiRoutes.trainings.list, { date: day.toISOString(), teamId: selectedTeamId || undefined })
       setTrainings(prev => [created, ...prev])
     } catch (err: unknown) {
       uiAlert(`Erreur création entraînement: ${toErrorMessage(err)}`)
@@ -238,8 +255,11 @@ export default function TrainingsPage() {
 
         <section className="trainings-block">
           <div className="trainings-block-title">Entraînements</div>
-          {!writable && (
+          {!teamScopedWritable && (
             <div className="trainings-empty">Mode lecture seule: création et modifications désactivées.</div>
+          )}
+          {writable && requiresSelection && !selectedTeamId && (
+            <div className="trainings-empty">Sélectionnez une équipe active pour modifier les données.</div>
           )}
           {dayTrainings.length === 0 ? (
             <div className="trainings-empty">Aucun entraînement ce jour.</div>
@@ -262,7 +282,7 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          {writable && (
+          {teamScopedWritable && (
             <div className="trainings-block-footer">
               <CtaButton onClick={() => createTrainingForDay(selectedDate)}>
                 Ajouter un entraînement
@@ -294,7 +314,7 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          {writable && (
+          {teamScopedWritable && (
             <div className="trainings-block-footer">
               <CtaButton onClick={openPlateauModal}>
                 Ajouter un plateau
@@ -378,7 +398,7 @@ export default function TrainingsPage() {
         </div>
       )}
 
-      {writable && isPlateauModalOpen && (
+      {teamScopedWritable && isPlateauModalOpen && (
         <div onClick={closePlateauModal} className="trainings-overlay">
           <div
             onClick={(e) => e.stopPropagation()}
