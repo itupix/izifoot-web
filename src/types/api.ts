@@ -35,6 +35,28 @@ export interface Team {
   createdAt?: string
 }
 
+export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED'
+
+export interface AccountInvitation {
+  id: string
+  email: string
+  role: 'DIRECTION' | 'COACH' | 'PLAYER' | 'PARENT'
+  status: InvitationStatus
+  inviteUrl?: string
+  sentAt?: string
+  createdAt?: string
+  expiresAt?: string
+  acceptedAt?: string | null
+}
+
+export interface InvitationDetails {
+  id: string
+  email: string
+  role: 'DIRECTION' | 'COACH' | 'PLAYER' | 'PARENT'
+  status: InvitationStatus
+  expiresAt?: string
+}
+
 export interface AttendanceRow {
   id?: string
   session_type: 'TRAINING' | 'PLATEAU'

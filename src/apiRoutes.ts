@@ -5,6 +5,8 @@ export const apiRoutes = {
     register: '/auth/register',
     login: '/auth/login',
     logout: '/auth/logout',
+    invitationByToken: (token: string) => `/auth/invitations/${enc(token)}`,
+    acceptInvitation: '/auth/invitations/accept',
   },
   me: '/me',
   clubs: {
@@ -15,6 +17,7 @@ export const apiRoutes = {
   },
   accounts: {
     list: '/accounts',
+    invitations: '/accounts/invitations',
   },
   plannings: {
     list: '/plannings',

@@ -20,6 +20,7 @@ import PublicPlateauPage from './pages/PublicPlateauPage'
 import StatsPage from './pages/Stats'
 import TrainingDetailsPage from './pages/TrainingDetailsPage'
 import TrainingsPage from './pages/TrainingsPage'
+import InviteAcceptPage from './pages/InviteAcceptPage'
 
 type NavItem = {
   to: string
@@ -47,7 +48,8 @@ export default function App() {
 
   const isHome = location.pathname === '/'
   const isPublicPlateau = location.pathname.startsWith('/plateau/public/')
-  const showSidebarShell = !isHome && !isPublicPlateau
+  const isInviteAccept = location.pathname.startsWith('/invite/accept')
+  const showSidebarShell = !isHome && !isPublicPlateau && !isInviteAccept
   const [menuOpen, setMenuOpen] = React.useState(false)
   const headerHeight = 64
   const pageWidth = 980
@@ -66,7 +68,7 @@ export default function App() {
 
   return (
     <>
-      {!isHome && (
+      {!isHome && !isInviteAccept && (
         <>
           <header
             style={{
@@ -165,7 +167,7 @@ export default function App() {
 
       <main
         style={
-          isHome
+          isHome || isInviteAccept
             ? { padding: 0, display: 'flex', justifyContent: 'center' }
             : { padding: 16, paddingTop: headerHeight + 16, display: 'flex', justifyContent: 'center' }
         }
@@ -174,6 +176,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/plateau/public/:token" element={<PublicPlateauPage />} />
+            <Route path="/invite/accept" element={<InviteAcceptPage />} />
 
             <Route
               path="/account"

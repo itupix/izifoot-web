@@ -2,28 +2,50 @@ import { useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { type AccountRole } from '../authz'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { uiAlert } from '../ui'
-import type { ClubMe, Team } from '../types/api'
-import type { AccountRole } from '../authz'
+import type { AccountInvitation, ClubMe, Team } from '../types/api'
 
-interface AccountPayload {
+interface InviteAccountPayload {
   email: string
-  password: string
   role: AccountRole
   teamId?: string
+  managedTeamIds?: string[]
   linkedPlayerUserId?: string
+  expiresInDays?: number
 }
 
 const ACCOUNT_CREATION_ROLES: AccountRole[] = ['DIRECTION', 'COACH', 'PLAYER', 'PARENT']
 
+function extractStatusCode(err: unknown): number | undefined {
+  if (err instanceof Error && 'status' in err && typeof (err as Error & { status?: unknown }).status === 'number') {
+    return (err as Error & { status: number }).status
+  }
+  return undefined
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleString('fr-FR')
+}
+
+function getSentAt(invitation: AccountInvitation): string | undefined {
+  return invitation.sentAt || invitation.createdAt
+}
+
 export default function ClubManagementPage() {
   const { me } = useAuth()
   const navigate = useNavigate()
+
   const [club, setClub] = useState<ClubMe | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
+  const [invitations, setInvitations] = useState<AccountInvitation[]>([])
+
   const [clubName, setClubName] = useState('')
   const [renamingClub, setRenamingClub] = useState(false)
 
@@ -32,16 +54,21 @@ export default function ClubManagementPage() {
   const [creatingTeam, setCreatingTeam] = useState(false)
 
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [role, setRole] = useState<AccountRole>('COACH')
   const [teamId, setTeamId] = useState('')
+  const [managedTeamIds, setManagedTeamIds] = useState<string[]>([])
   const [linkedPlayerUserId, setLinkedPlayerUserId] = useState('')
-  const [creatingAccount, setCreatingAccount] = useState(false)
+  const [expiresInDays, setExpiresInDays] = useState(7)
+  const [creatingInvitation, setCreatingInvitation] = useState(false)
+  const [lastInviteUrl, setLastInviteUrl] = useState('')
+
+  const isDirection = me?.role === 'DIRECTION'
 
   const loadClubData = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
-    const [clubData, teamData] = await Promise.all([
+    const [clubData, teamData, invitationData] = await Promise.all([
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
       apiGet<Team[]>(apiRoutes.teams.list).catch(() => []),
+      apiGet<AccountInvitation[]>(apiRoutes.accounts.invitations).catch(() => []),
     ])
 
     if (isCancelled()) return
@@ -49,6 +76,7 @@ export default function ClubManagementPage() {
     setClub(clubData)
     setClubName(clubData?.name ?? '')
     setTeams(Array.isArray(teamData) ? teamData : [])
+    setInvitations(Array.isArray(invitationData) ? invitationData : [])
   }, [])
 
   const { loading, error } = useAsyncLoader(loadClubData)
@@ -57,6 +85,48 @@ export default function ClubManagementPage() {
     () => [...teams].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr-FR')),
     [teams],
   )
+
+  const sortedInvitations = useMemo(
+    () => [...invitations].sort((a, b) => +new Date(getSentAt(b) || 0) - +new Date(getSentAt(a) || 0)),
+    [invitations],
+  )
+
+  function handleProtectedRouteErrors(err: unknown, forbiddenMessage = 'Action réservée à la direction'): boolean {
+    const status = extractStatusCode(err)
+    if (status === 401) {
+      navigate('/', { replace: true })
+      return true
+    }
+    if (status === 403) {
+      uiAlert(forbiddenMessage)
+      return true
+    }
+    return false
+  }
+
+  async function renameClub(e: React.FormEvent) {
+    e.preventDefault()
+    const nextName = clubName.trim()
+    if (!nextName || !club) return
+
+    setRenamingClub(true)
+    try {
+      const updated = await apiPut<ClubMe>(apiRoutes.clubs.me, { name: nextName })
+      setClub(updated)
+      setClubName(updated.name ?? nextName)
+      uiAlert('Nom du club mis à jour.')
+    } catch (err: unknown) {
+      if (handleProtectedRouteErrors(err)) return
+      const status = extractStatusCode(err)
+      if (status === 400) {
+        uiAlert(toErrorMessage(err, 'Nom invalide'))
+        return
+      }
+      uiAlert(toErrorMessage(err, 'Erreur lors du renommage du club'))
+    } finally {
+      setRenamingClub(false)
+    }
+  }
 
   async function createTeam(e: React.FormEvent) {
     e.preventDefault()
@@ -72,70 +142,63 @@ export default function ClubManagementPage() {
       setTeamName('')
       setTeamCategory('')
     } catch (err: unknown) {
+      if (handleProtectedRouteErrors(err)) return
       uiAlert(toErrorMessage(err, 'Erreur création équipe'))
     } finally {
       setCreatingTeam(false)
     }
   }
 
-  async function createAccount(e: React.FormEvent) {
+  async function createInvitation(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim() || !password.trim()) return
+    if (!email.trim()) return
 
-    const payload: AccountPayload = {
+    const payload: InviteAccountPayload = {
       email: email.trim(),
-      password,
       role,
+      expiresInDays,
     }
 
     if ((role === 'COACH' || role === 'PLAYER') && teamId) payload.teamId = teamId
+    if (role === 'COACH' && managedTeamIds.length > 0) payload.managedTeamIds = managedTeamIds
     if (role === 'PARENT' && linkedPlayerUserId.trim()) payload.linkedPlayerUserId = linkedPlayerUserId.trim()
 
-    setCreatingAccount(true)
+    setCreatingInvitation(true)
     try {
-      await apiPost(apiRoutes.accounts.list, payload)
+      const created = await apiPost<AccountInvitation>(apiRoutes.accounts.list, payload)
+      setInvitations((prev) => [created, ...prev])
+      setLastInviteUrl(created.inviteUrl || '')
       setEmail('')
-      setPassword('')
       setRole('COACH')
       setTeamId('')
+      setManagedTeamIds([])
       setLinkedPlayerUserId('')
-      uiAlert('Compte créé avec succès.')
+      setExpiresInDays(7)
+      uiAlert('Invitation envoyée')
     } catch (err: unknown) {
-      uiAlert(toErrorMessage(err, 'Erreur création compte'))
+      if (handleProtectedRouteErrors(err)) return
+      const status = extractStatusCode(err)
+      if (status === 400) {
+        uiAlert(toErrorMessage(err, 'Données invitation invalides'))
+        return
+      }
+      uiAlert(toErrorMessage(err, 'Erreur envoi invitation'))
     } finally {
-      setCreatingAccount(false)
+      setCreatingInvitation(false)
     }
   }
 
-  async function renameClub(e: React.FormEvent) {
-    e.preventDefault()
-    const nextName = clubName.trim()
-    if (!nextName || !club) return
+  function toggleManagedTeam(teamValue: string) {
+    setManagedTeamIds((prev) => (prev.includes(teamValue) ? prev.filter((id) => id !== teamValue) : [...prev, teamValue]))
+  }
 
-    setRenamingClub(true)
+  async function copyInviteUrl() {
+    if (!lastInviteUrl) return
     try {
-      const updated = await apiPut<ClubMe>(apiRoutes.clubs.me, { name: nextName })
-      setClub(updated)
-      setClubName(updated.name ?? nextName)
-      uiAlert('Nom du club mis à jour.')
-    } catch (err: unknown) {
-      const status = err instanceof Error && 'status' in err ? (err as Error & { status?: number }).status : undefined
-
-      if (status === 401) {
-        navigate('/', { replace: true })
-        return
-      }
-      if (status === 403) {
-        uiAlert('Action réservée à la direction')
-        return
-      }
-      if (status === 400) {
-        uiAlert(toErrorMessage(err, 'Nom invalide'))
-        return
-      }
-      uiAlert(toErrorMessage(err, 'Erreur lors du renommage du club'))
-    } finally {
-      setRenamingClub(false)
+      await navigator.clipboard.writeText(lastInviteUrl)
+      uiAlert('Lien d’invitation copié')
+    } catch {
+      uiAlert('Impossible de copier le lien')
     }
   }
 
@@ -152,7 +215,7 @@ export default function ClubManagementPage() {
           <div style={{ display: 'grid', gap: 6 }}>
             <div><strong>Nom:</strong> {club.name || '—'}</div>
             <div><strong>ID:</strong> {club.id || '—'}</div>
-            {me?.role === 'DIRECTION' && (
+            {isDirection && (
               <form onSubmit={renameClub} style={{ ...formStyle, marginTop: 8 }}>
                 <label style={{ fontSize: 12, color: '#6b7280' }}>Renommer le club</label>
                 <input
@@ -218,14 +281,24 @@ export default function ClubManagementPage() {
 
       <section style={cardStyle}>
         <h3 style={titleStyle}>Créer un compte</h3>
-        <form onSubmit={createAccount} style={formStyle}>
+        <form onSubmit={createInvitation} style={formStyle}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="Email *" required style={inputStyle} />
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Mot de passe *" required style={inputStyle} />
-          <select value={role} onChange={(e) => setRole(e.target.value as AccountRole)} style={inputStyle}>
+          <select
+            value={role}
+            onChange={(e) => {
+              const nextRole = e.target.value as AccountRole
+              setRole(nextRole)
+              if (nextRole !== 'COACH') setManagedTeamIds([])
+              if (nextRole !== 'PARENT') setLinkedPlayerUserId('')
+              if (nextRole !== 'PLAYER' && nextRole !== 'COACH') setTeamId('')
+            }}
+            style={inputStyle}
+          >
             {ACCOUNT_CREATION_ROLES.map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
           </select>
+
           {(role === 'COACH' || role === 'PLAYER') && (
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} style={inputStyle}>
               <option value="">Aucune équipe</option>
@@ -234,6 +307,27 @@ export default function ClubManagementPage() {
               ))}
             </select>
           )}
+
+          {role === 'COACH' && (
+            <div style={{ display: 'grid', gap: 6, border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <span style={{ fontSize: 12, color: '#6b7280' }}>Équipes gérées</span>
+              {sortedTeams.length === 0 ? (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>Aucune équipe disponible</span>
+              ) : (
+                sortedTeams.map((team) => (
+                  <label key={`managed-${team.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={managedTeamIds.includes(team.id)}
+                      onChange={() => toggleManagedTeam(team.id)}
+                    />
+                    <span>{team.name || team.id}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          )}
+
           {role === 'PARENT' && (
             <input
               value={linkedPlayerUserId}
@@ -242,12 +336,93 @@ export default function ClubManagementPage() {
               style={inputStyle}
             />
           )}
-          <button type="submit" disabled={creatingAccount} style={buttonStyle}>
-            {creatingAccount ? 'Création…' : 'Créer compte'}
+
+          <label style={{ display: 'grid', gap: 4 }}>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>Expiration invitation (jours)</span>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={expiresInDays}
+              onChange={(e) => setExpiresInDays(Math.max(1, Math.min(30, Number(e.target.value) || 7)))}
+              style={inputStyle}
+            />
+          </label>
+
+          <button type="submit" disabled={creatingInvitation} style={buttonStyle}>
+            {creatingInvitation ? 'Envoi…' : 'Envoyer invitation'}
           </button>
+
+          {lastInviteUrl && (
+            <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+              <label style={{ fontSize: 12, color: '#6b7280' }}>Lien d’invitation</label>
+              <input value={lastInviteUrl} readOnly style={inputStyle} />
+              <button type="button" onClick={copyInviteUrl} style={secondaryButtonStyle}>Copier le lien</button>
+            </div>
+          )}
         </form>
       </section>
+
+      <section style={cardStyle}>
+        <h3 style={titleStyle}>Invitations</h3>
+        {sortedInvitations.length === 0 ? (
+          <div style={{ color: '#6b7280' }}>Aucune invitation.</div>
+        ) : (
+          <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+              <thead style={{ background: '#f8fafc' }}>
+                <tr>
+                  <th style={thStyle}>Email</th>
+                  <th style={thStyle}>Rôle</th>
+                  <th style={thStyle}>Statut</th>
+                  <th style={thStyle}>Date d’envoi</th>
+                  <th style={thStyle}>Expiration</th>
+                  <th style={thStyle}>Accepté le</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedInvitations.map((invitation) => (
+                  <tr key={invitation.id}>
+                    <td style={tdStyle}>{invitation.email}</td>
+                    <td style={tdStyle}>{invitation.role}</td>
+                    <td style={tdStyle}><StatusBadge status={invitation.status} /></td>
+                    <td style={tdStyle}>{formatDate(getSentAt(invitation))}</td>
+                    <td style={tdStyle}>{formatDate(invitation.expiresAt)}</td>
+                    <td style={tdStyle}>{formatDate(invitation.acceptedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
+  )
+}
+
+function StatusBadge({ status }: { status: AccountInvitation['status'] }) {
+  const map: Record<AccountInvitation['status'], { background: string; color: string }> = {
+    PENDING: { background: '#dbeafe', color: '#1d4ed8' },
+    ACCEPTED: { background: '#dcfce7', color: '#166534' },
+    CANCELLED: { background: '#fee2e2', color: '#b91c1c' },
+    EXPIRED: { background: '#f1f5f9', color: '#334155' },
+  }
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+        background: map[status].background,
+        color: map[status].color,
+      }}
+    >
+      {status}
+    </span>
   )
 }
 
@@ -283,6 +458,15 @@ const buttonStyle: CSSProperties = {
   cursor: 'pointer',
 }
 
+const secondaryButtonStyle: CSSProperties = {
+  border: '1px solid #d1d5db',
+  background: '#fff',
+  color: '#1f2937',
+  borderRadius: 8,
+  padding: '8px 12px',
+  cursor: 'pointer',
+}
+
 const rowStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -291,4 +475,18 @@ const rowStyle: CSSProperties = {
   border: '1px solid #e5e7eb',
   borderRadius: 8,
   padding: '8px 10px',
+}
+
+const thStyle: CSSProperties = {
+  textAlign: 'left',
+  padding: '10px 8px',
+  borderBottom: '1px solid #e5e7eb',
+  fontSize: 12,
+  color: '#475569',
+}
+
+const tdStyle: CSSProperties = {
+  padding: '10px 8px',
+  borderBottom: '1px solid #f1f5f9',
+  fontSize: 14,
 }
