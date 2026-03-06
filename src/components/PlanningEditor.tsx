@@ -8,6 +8,7 @@ export type PlanningData = {
   pitches: number;
   matchMin: number;
   breakMin: number;
+  teams?: TeamEntry[];
   slots: { time: string; games: { pitch: number; A: string; B: string }[] }[];
 };
 
@@ -51,6 +52,22 @@ const dangerButtonStyle = {
   color: '#be123c',
   padding: '8px 12px',
   fontWeight: 700,
+}
+
+const stepperButtonStyle = {
+  border: '1px solid #cbd5e1',
+  borderRadius: 8,
+  width: 32,
+  height: 32,
+  background: '#fff',
+  color: '#0f172a',
+  fontWeight: 700,
+}
+
+function clamp(value: number, min: number, max?: number) {
+  if (!Number.isFinite(value)) return min
+  if (max == null) return Math.max(min, value)
+  return Math.min(max, Math.max(min, value))
 }
 
 /** ==== Fonctions utilitaires (inchangées ou quasi) ==== */
@@ -299,7 +316,19 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   }, [value])
 
   const [teamHistory, setTeamHistory] = useLocalStorageState('u9plateau.teamHistory', teamsFromValue)
-  const [teamEntries, setTeamEntries] = useState<TeamEntry[]>(() => buildTeamEntries(teamsFromValue))
+  const [teamEntries, setTeamEntries] = useState<TeamEntry[]>(() => {
+    const savedTeams = Array.isArray((value as PlanningData | null)?.teams)
+      ? ((value as PlanningData).teams ?? []).filter((entry) => normalizeName(entry.label))
+      : []
+    if (savedTeams.length === 0) return buildTeamEntries(teamsFromValue)
+    const merged = [...savedTeams]
+    for (const label of teamsFromValue) {
+      if (!merged.some((entry) => entry.label === label)) {
+        merged.push({ label, color: TEAM_COLORS[merged.length % TEAM_COLORS.length] })
+      }
+    }
+    return merged
+  })
   const [newTeamLabel, setNewTeamLabel] = useState('')
   const [teamsOpen, setTeamsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -312,7 +341,7 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   const [regenKey, setRegenKey] = useLocalStorageState('u9plateau.regenSeed', 1)
   const [matchesPerTeam, setMatchesPerTeam] = useLocalStorageState('u9plateau.matchesPerTeam', 3)
   const [restEveryX, setRestEveryX] = useLocalStorageState('u9plateau.restEveryX', 1)
-  const [allowRematches, setAllowRematches] = useLocalStorageState('u9plateau.allowRematches', false)
+  const [allowRematches, setAllowRematches] = useState(false)
 
   // 2) Génération
   const parsedStart = useMemo(() => parseHHMM(startHHMM) || { hh: 10, mm: 0 }, [startHHMM])
@@ -344,13 +373,14 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
     const exportObj: PlanningData = {
       start: fmtTime(parsedStart!),
       pitches, matchMin, breakMin,
+      teams: teamEntries,
       slots: agenda.map((slot) => ({
         time: fmtTime(addMinutes(parsedStart!, slot.timeIndex * slotMinutes)),
         games: slot.games.map((g) => ({ pitch: g.pitch, A: g.match.a.label, B: g.match.b.label })),
       })),
     }
     onChange?.(exportObj)
-  }, [agenda, parsedStart, pitches, matchMin, breakMin, slotMinutes, onChange])
+  }, [agenda, parsedStart, pitches, matchMin, breakMin, slotMinutes, teamEntries, onChange])
 
   useEffect(() => {
     setOpenSlots([])
@@ -504,55 +534,70 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
             toggleLabel={settingsOpen ? 'Réduire les réglages de la rotation' : 'Ouvrir les réglages de la rotation'}
           >
             <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <label>Terrains
-                  <input type="number" min={1} value={pitches}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value || '1', 10)
-                      if (Number.isNaN(v)) setPitches(1)
-                      else setPitches(v)
-                    }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  Terrains
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" onClick={() => setPitches((prev) => clamp(prev - 1, 1))} style={stepperButtonStyle} aria-label="Diminuer le nombre de terrains">−</button>
+                    <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{pitches}</output>
+                    <button type="button" onClick={() => setPitches((prev) => clamp(prev + 1, 1))} style={stepperButtonStyle} aria-label="Augmenter le nombre de terrains">+</button>
+                  </div>
                 </label>
-                <label>Début (HH:MM)
-                  <input value={startHHMM} onChange={(e) => setStartHHMM(e.target.value)} placeholder="10:00" />
-                </label>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <label>Durée d'un match (min)
-                  <input type="number" min={1} value={matchMin}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value || '10', 10)
-                      if (Number.isNaN(v)) setMatchMin(10)
-                      else setMatchMin(v)
-                    }} />
-                </label>
-                <label>Pause entre matchs (min)
-                  <input type="number" min={0} value={breakMin}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value || '0', 10)
-                      if (Number.isNaN(v)) setBreakMin(0)
-                      else setBreakMin(v)
-                    }} />
+                <label style={{ display: 'grid', gap: 6 }}>
+                  Début
+                  <input type="time" value={fmtTime(parsedStart)} onChange={(e) => setStartHHMM(e.target.value)} />
                 </label>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <label>Nombre de matchs par équipe
-                  <input type="number" min={1} max={Math.max(1, teams.length - 1)} value={matchesPerTeam}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value || '1', 10)
-                      if (Number.isNaN(v)) setMatchesPerTeam(1)
-                      else setMatchesPerTeam(v)
-                    }} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  Durée d'un match (min)
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" onClick={() => setMatchMin((prev) => clamp(prev - 1, 1))} style={stepperButtonStyle} aria-label="Diminuer la durée d'un match">−</button>
+                    <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{matchMin}</output>
+                    <button type="button" onClick={() => setMatchMin((prev) => clamp(prev + 1, 1))} style={stepperButtonStyle} aria-label="Augmenter la durée d'un match">+</button>
+                  </div>
                 </label>
-                <label>Repos obligatoire (X consécutifs max)
-                  <input type="number" min={1} value={restEveryX}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value || '1', 10)
-                      if (Number.isNaN(v)) setRestEveryX(1)
-                      else setRestEveryX(v)
-                    }} />
+                <label style={{ display: 'grid', gap: 6 }}>
+                  Pause entre matchs (min)
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" onClick={() => setBreakMin((prev) => clamp(prev - 1, 0))} style={stepperButtonStyle} aria-label="Diminuer la pause entre matchs">−</button>
+                    <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{breakMin}</output>
+                    <button type="button" onClick={() => setBreakMin((prev) => clamp(prev + 1, 0))} style={stepperButtonStyle} aria-label="Augmenter la pause entre matchs">+</button>
+                  </div>
+                </label>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  Nombre de matchs par équipe
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setMatchesPerTeam((prev) => clamp(prev - 1, 1, Math.max(1, teams.length - 1)))}
+                      style={stepperButtonStyle}
+                      aria-label="Diminuer le nombre de matchs par équipe"
+                    >
+                      −
+                    </button>
+                    <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{matchesPerTeam}</output>
+                    <button
+                      type="button"
+                      onClick={() => setMatchesPerTeam((prev) => clamp(prev + 1, 1, Math.max(1, teams.length - 1)))}
+                      style={stepperButtonStyle}
+                      aria-label="Augmenter le nombre de matchs par équipe"
+                    >
+                      +
+                    </button>
+                  </div>
+                </label>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  Repos obligatoire (X consécutifs max)
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev - 1, 1))} style={stepperButtonStyle} aria-label="Diminuer le repos obligatoire">−</button>
+                    <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{restEveryX}</output>
+                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev + 1, 1))} style={stepperButtonStyle} aria-label="Augmenter le repos obligatoire">+</button>
+                  </div>
                 </label>
               </div>
 

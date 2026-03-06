@@ -349,6 +349,10 @@
   overflow: auto;
 }
 
+.planning-modal-actions {
+  flex-wrap: wrap;
+}
+
 .modal-meta-grid {
   display: grid;
   gap: 10px;
@@ -432,5 +436,19 @@
 
   .modal-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .planning-modal {
+    width: calc(100vw - 16px);
+    top: 2vh;
+    max-height: 96vh;
+    padding: 12px;
+  }
+
+  .planning-modal-actions {
+    display: grid !important;
+    grid-template-columns: 1fr;
   }
 }

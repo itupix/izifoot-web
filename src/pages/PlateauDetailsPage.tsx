@@ -17,6 +17,13 @@ import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
 import './TrainingDetailsPage.css'
 
+const TEAM_COLORS = [
+  '#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed',
+  '#0891b2', '#dc2626', '#4f46e5', '#65a30d', '#c2410c',
+  '#9333ea', '#0f766e', '#be123c', '#1d4ed8', '#15803d',
+  '#b45309', '#6d28d9', '#0e7490', '#b91c1c', '#4338ca',
+]
+
 function getFirstName(fullName: string) {
   return fullName.trim().split(/\s+/)[0] || fullName
 }
@@ -66,6 +73,7 @@ export default function PlateauDetailsPage() {
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [editingPlanning, setEditingPlanning] = useState<Planning | null>(null)
   const [selectedPlanningTeam, setSelectedPlanningTeam] = useState('')
+  const [rotationMenuOpen, setRotationMenuOpen] = useState(false)
 
   const [homeScore, setHomeScore] = useState<number>(0)
   const [awayScore, setAwayScore] = useState<number>(0)
@@ -123,6 +131,17 @@ export default function PlateauDetailsPage() {
     }
     return Array.from(labels).sort((a, b) => a.localeCompare(b))
   }, [plateauPlanningData])
+  const plateauPlanningTeamColorMap = useMemo(() => {
+    const map = new Map<string, string>()
+    const savedEntries = Array.isArray(plateauPlanningData?.teams) ? plateauPlanningData?.teams : []
+    for (const entry of savedEntries ?? []) {
+      if (entry?.label && entry?.color) map.set(entry.label, entry.color)
+    }
+    for (const [index, label] of plateauPlanningTeams.entries()) {
+      if (!map.has(label)) map.set(label, TEAM_COLORS[index % TEAM_COLORS.length])
+    }
+    return map
+  }, [plateauPlanningData, plateauPlanningTeams])
   const visiblePlanningSlots = useMemo(() => {
     if (!plateauPlanningData?.slots?.length) return []
     return plateauPlanningData.slots
@@ -217,12 +236,14 @@ export default function PlateauDetailsPage() {
   function openCreatePlanningModal() {
     if (!writable) return
     if (plateauPlanning) return
+    setRotationMenuOpen(false)
     setEditingPlanning(null)
     setIsPlanningModalOpen(true)
   }
 
   function openEditPlanningModal(planning: Planning) {
     if (!writable) return
+    setRotationMenuOpen(false)
     setEditingPlanning(planning)
     setIsPlanningModalOpen(true)
   }
@@ -273,6 +294,7 @@ export default function PlateauDetailsPage() {
   async function deletePlanningItem(planningId: string) {
     if (!writable) return
     if (!uiConfirm('Supprimer cette rotation ?')) return
+    setRotationMenuOpen(false)
     try {
       await api.deletePlanning(planningId)
       setPlateauPlannings([])
@@ -442,7 +464,6 @@ export default function PlateauDetailsPage() {
             <div className="card-head">
               <h3>Rotation</h3>
               <div className="head-actions">
-                <span>{plateauPlanning ? '1' : '0'}</span>
                 {!plateauPlanning && (
                   <button
                     type="button"
@@ -452,6 +473,35 @@ export default function PlateauDetailsPage() {
                   >
                     Créer une rotation
                   </button>
+                )}
+                {plateauPlanning && writable && (
+                  <div className="topbar-menu-wrap">
+                    <RoundIconButton
+                      ariaLabel="Ouvrir le menu de la rotation"
+                      className="menu-dots-button"
+                      onClick={() => setRotationMenuOpen((prev) => !prev)}
+                    >
+                      <DotsHorizontalIcon size={18} />
+                    </RoundIconButton>
+                    {rotationMenuOpen && (
+                      <>
+                        <button
+                          type="button"
+                          className="menu-backdrop"
+                          aria-label="Fermer le menu"
+                          onClick={() => setRotationMenuOpen(false)}
+                        />
+                        <div className="floating-menu">
+                          <button type="button" onClick={() => openEditPlanningModal(plateauPlanning)}>
+                            Modifier la rotation
+                          </button>
+                          <button type="button" className="danger" onClick={() => void deletePlanningItem(plateauPlanning.id)}>
+                            Supprimer la rotation
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -463,24 +513,6 @@ export default function PlateauDetailsPage() {
                       <div style={{ fontSize: 12, color: '#6b7280' }}>
                         Mise à jour le {new Date(plateauPlanning.updatedAt).toLocaleString()}
                       </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => openEditPlanningModal(plateauPlanning)}
-                        disabled={!writable}
-                        style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void deletePlanningItem(plateauPlanning.id)}
-                        disabled={!writable}
-                        style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
-                      >
-                        Supprimer
-                      </button>
                     </div>
                   </div>
                   {plateauPlanningTeams.length > 0 && (
@@ -526,8 +558,18 @@ export default function PlateauDetailsPage() {
                               }}
                             >
                               <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Terrain {game.pitch}</div>
-                              <div style={{ fontWeight: 600 }}>{game.A}</div>
-                              <div style={{ fontWeight: 600 }}>{game.B}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                                  <circle cx="6" cy="6" r="6" fill={plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0]} />
+                                </svg>
+                                {game.A}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                                  <circle cx="6" cy="6" r="6" fill={plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1]} />
+                                </svg>
+                                {game.B}
+                              </div>
                             </div>
                           ))}
                         </div>

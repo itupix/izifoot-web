@@ -102,7 +102,7 @@ export default function PlanningModal({
           title="Préparer la rotation"
         />
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div className="planning-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button
             type="button"
             onClick={handleClose}

@@ -17,13 +17,26 @@ type RotationSlot = {
   games: RotationGame[]
 }
 
+type RotationTeam = {
+  label: string
+  color: string
+}
+
 type PublicPlateauResponse = {
   plateau: Plateau
   rotation: {
     updatedAt: string
+    teams?: RotationTeam[]
     slots: RotationSlot[]
   } | null
 }
+
+const TEAM_COLORS = [
+  '#e11d48', '#2563eb', '#16a34a', '#d97706', '#7c3aed',
+  '#0891b2', '#dc2626', '#4f46e5', '#65a30d', '#c2410c',
+  '#9333ea', '#0f766e', '#be123c', '#1d4ed8', '#15803d',
+  '#b45309', '#6d28d9', '#0e7490', '#b91c1c', '#4338ca',
+]
 
 export default function PublicPlateauPage() {
   const { token } = useParams<{ token: string }>()
@@ -74,6 +87,17 @@ export default function PublicPlateauPage() {
       })
       .filter((slot) => slot.games.length > 0)
   }, [rotation, selectedTeam])
+  const teamColorMap = useMemo(() => {
+    const map = new Map<string, string>()
+    const saved = Array.isArray(rotation?.teams) ? rotation.teams : []
+    for (const team of saved) {
+      if (team?.label && team?.color) map.set(team.label, team.color)
+    }
+    for (const [index, label] of teamLabels.entries()) {
+      if (!map.has(label)) map.set(label, TEAM_COLORS[index % TEAM_COLORS.length])
+    }
+    return map
+  }, [rotation, teamLabels])
 
   return (
     <div className="training-details-page">
@@ -153,8 +177,18 @@ export default function PublicPlateauPage() {
                               }}
                             >
                               <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Terrain {game.pitch}</div>
-                              <div style={{ fontWeight: 600 }}>{game.A}</div>
-                              <div style={{ fontWeight: 600 }}>{game.B}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                                  <circle cx="6" cy="6" r="6" fill={teamColorMap.get(game.A) ?? TEAM_COLORS[0]} />
+                                </svg>
+                                {game.A}
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                                  <circle cx="6" cy="6" r="6" fill={teamColorMap.get(game.B) ?? TEAM_COLORS[1]} />
+                                </svg>
+                                {game.B}
+                              </div>
                             </div>
                           ))}
                         </div>
