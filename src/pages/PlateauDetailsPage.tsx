@@ -396,14 +396,18 @@ export default function PlateauDetailsPage() {
 
   return (
     <div className="training-details-page">
-      <header className="topbar">
-        <RoundIconButton ariaLabel="Revenir au planning" className="back-round-button" onClick={() => navigate(backToPlanningUrl)}>
+      <header className="details-page-head">
+        <button type="button" className="back-link-button" onClick={() => navigate(backToPlanningUrl)}>
           <ChevronLeftIcon size={18} />
-        </RoundIconButton>
-        <div className="topbar-title">
-          <h2>Plateau</h2>
-          <p>{dateLabel}</p>
+          <span>Retour au planning</span>
+        </button>
+        <div className="details-page-title-wrap">
+          <h1 className="details-page-title">Plateau</h1>
+          <p className="details-page-subtitle">{dateLabel}</p>
         </div>
+      </header>
+
+      <div className="details-actions-bar">
         <div className="topbar-menu-wrap">
           {writable && (
             <>
@@ -448,7 +452,7 @@ export default function PlateauDetailsPage() {
             </>
           )}
         </div>
-      </header>
+      </div>
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}

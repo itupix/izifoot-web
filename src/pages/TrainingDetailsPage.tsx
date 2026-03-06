@@ -276,17 +276,21 @@ export default function TrainingDetailsPage() {
 
   return (
     <div className="training-details-page">
-      <header className="topbar">
-        <RoundIconButton ariaLabel="Revenir au planning" className="back-round-button" onClick={() => navigate(backToPlanningUrl)}>
+      <header className="details-page-head">
+        <button type="button" className="back-link-button" onClick={() => navigate(backToPlanningUrl)}>
           <ChevronLeftIcon size={18} />
-        </RoundIconButton>
-        <div className="topbar-title">
-          <h2>
+          <span>Retour au planning</span>
+        </button>
+        <div className="details-page-title-wrap">
+          <h1 className="details-page-title">
             Entrainement
             {isCancelled && <span className="cancelled-tag">Annulé</span>}
-          </h2>
-          <p>{trainingDateLabel}</p>
+          </h1>
+          <p className="details-page-subtitle">{trainingDateLabel}</p>
         </div>
+      </header>
+
+      <div className="details-actions-bar">
         <div className="topbar-menu-wrap">
           {writable && (
             <>
@@ -333,7 +337,7 @@ export default function TrainingDetailsPage() {
             </>
           )}
         </div>
-      </header>
+      </div>
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}
