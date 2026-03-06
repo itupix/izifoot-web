@@ -8,6 +8,11 @@ export type PlanningData = {
   pitches: number;
   matchMin: number;
   breakMin: number;
+  forbidIntraClub?: boolean;
+  matchesPerTeam?: number;
+  restEveryX?: number;
+  allowRematches?: boolean;
+  regenSeed?: number;
   teams?: TeamEntry[];
   slots: { time: string; games: { pitch: number; A: string; B: string }[] }[];
 };
@@ -337,11 +342,25 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   const [matchMin, setMatchMin] = useLocalStorageState('u9plateau.matchMin', initial.matchMin)
   const [breakMin, setBreakMin] = useLocalStorageState('u9plateau.breakMin', initial.breakMin)
   const [startHHMM, setStartHHMM] = useLocalStorageState('u9plateau.startHHMM', initial.start)
-  const [forbidIntraClub, setForbidIntraClub] = useLocalStorageState('u9plateau.forbidIntraClub', true)
-  const [regenKey, setRegenKey] = useLocalStorageState('u9plateau.regenSeed', 1)
-  const [matchesPerTeam, setMatchesPerTeam] = useLocalStorageState('u9plateau.matchesPerTeam', 3)
-  const [restEveryX, setRestEveryX] = useLocalStorageState('u9plateau.restEveryX', 1)
-  const [allowRematches, setAllowRematches] = useState(false)
+  const [forbidIntraClub, setForbidIntraClub] = useLocalStorageState(
+    'u9plateau.forbidIntraClub',
+    typeof value?.forbidIntraClub === 'boolean' ? value.forbidIntraClub : true
+  )
+  const [regenKey, setRegenKey] = useLocalStorageState(
+    'u9plateau.regenSeed',
+    typeof value?.regenSeed === 'number' ? value.regenSeed : 1
+  )
+  const [matchesPerTeam, setMatchesPerTeam] = useLocalStorageState(
+    'u9plateau.matchesPerTeam',
+    typeof value?.matchesPerTeam === 'number' ? value.matchesPerTeam : 3
+  )
+  const [restEveryX, setRestEveryX] = useLocalStorageState(
+    'u9plateau.restEveryX',
+    typeof value?.restEveryX === 'number' ? value.restEveryX : 1
+  )
+  const [allowRematches, setAllowRematches] = useState(
+    typeof value?.allowRematches === 'boolean' ? value.allowRematches : false
+  )
 
   // 2) Génération
   const parsedStart = useMemo(() => parseHHMM(startHHMM) || { hh: 10, mm: 0 }, [startHHMM])
@@ -373,6 +392,11 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
     const exportObj: PlanningData = {
       start: fmtTime(parsedStart!),
       pitches, matchMin, breakMin,
+      forbidIntraClub,
+      matchesPerTeam,
+      restEveryX,
+      allowRematches,
+      regenSeed: regenKey,
       teams: teamEntries,
       slots: agenda.map((slot) => ({
         time: fmtTime(addMinutes(parsedStart!, slot.timeIndex * slotMinutes)),
@@ -380,7 +404,21 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
       })),
     }
     onChange?.(exportObj)
-  }, [agenda, parsedStart, pitches, matchMin, breakMin, slotMinutes, teamEntries, onChange])
+  }, [
+    agenda,
+    parsedStart,
+    pitches,
+    matchMin,
+    breakMin,
+    slotMinutes,
+    forbidIntraClub,
+    matchesPerTeam,
+    restEveryX,
+    allowRematches,
+    regenKey,
+    teamEntries,
+    onChange,
+  ])
 
   useEffect(() => {
     setOpenSlots([])
