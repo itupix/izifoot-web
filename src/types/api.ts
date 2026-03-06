@@ -19,6 +19,9 @@ export interface Plateau {
   id: string
   date: string
   lieu: string
+  address?: string | null
+  startTime?: string | null
+  meetingTime?: string | null
   teamId?: string | null
 }
 

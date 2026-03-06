@@ -78,6 +78,11 @@ export default function PlateauDetailsPage() {
   const [selectedPlanningTeam, setSelectedPlanningTeam] = useState('')
   const [rotationMenuOpen, setRotationMenuOpen] = useState(false)
   const [infoTab, setInfoTab] = useState<'LIEU' | 'HORAIRES'>('LIEU')
+  const [infoModal, setInfoModal] = useState<null | 'ADDRESS' | 'START' | 'MEETING'>(null)
+  const [addressDraft, setAddressDraft] = useState('')
+  const [startTimeDraft, setStartTimeDraft] = useState('')
+  const [meetingTimeDraft, setMeetingTimeDraft] = useState('')
+  const [savingInfo, setSavingInfo] = useState(false)
 
   const [homeScore, setHomeScore] = useState<number>(0)
   const [awayScore, setAwayScore] = useState<number>(0)
@@ -158,6 +163,7 @@ export default function PlateauDetailsPage() {
       .filter((slot) => slot.games.length > 0)
   }, [plateauPlanningData, selectedPlanningTeam])
   const plateauStartTimeLabel = useMemo(() => {
+    if (plateau?.startTime) return plateau.startTime
     if (plateauPlanningData?.start) return plateauPlanningData.start
     if (!plateau?.date) return 'À définir'
     const date = new Date(plateau.date)
@@ -166,8 +172,10 @@ export default function PlateauDetailsPage() {
     const mm = String(date.getMinutes()).padStart(2, '0')
     if (hh === '00' && mm === '00') return 'À définir'
     return `${hh}:${mm}`
-  }, [plateau?.date, plateauPlanningData?.start])
+  }, [plateau?.date, plateau?.startTime, plateauPlanningData?.start])
+  const plateauAddressLabel = useMemo(() => plateau?.address?.trim() || plateau?.lieu || 'À définir', [plateau?.address, plateau?.lieu])
   const rendezVousTimeLabel = useMemo(() => {
+    if (plateau?.meetingTime) return plateau.meetingTime
     const fromPlanning = plateauPlanningData?.start ?? null
     const fromPlateauDate = plateau?.date ? (() => {
       const d = new Date(plateau.date)
@@ -186,7 +194,7 @@ export default function PlateauDetailsPage() {
     const hh = String(Math.floor(total / 60)).padStart(2, '0')
     const mm = String(total % 60).padStart(2, '0')
     return `${hh}:${mm}`
-  }, [plateau?.date, plateauPlanningData?.start])
+  }, [plateau?.date, plateau?.meetingTime, plateauPlanningData?.start])
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
 
@@ -291,6 +299,40 @@ export default function PlateauDetailsPage() {
   function openCreateMatchModal() {
     resetMatchForm()
     setIsMatchModalOpen(true)
+  }
+
+  function openAddressModal() {
+    setAddressDraft(plateauAddressLabel === 'À définir' ? '' : plateauAddressLabel)
+    setInfoModal('ADDRESS')
+  }
+
+  function openStartTimeModal() {
+    setStartTimeDraft(plateau?.startTime || '')
+    setInfoModal('START')
+  }
+
+  function openMeetingTimeModal() {
+    setMeetingTimeDraft(plateau?.meetingTime || '')
+    setInfoModal('MEETING')
+  }
+
+  function closeInfoModal() {
+    if (savingInfo) return
+    setInfoModal(null)
+  }
+
+  async function updatePlateauInfo(patch: { address?: string | null; startTime?: string | null; meetingTime?: string | null }) {
+    if (!id || !plateau || !writable) return
+    setSavingInfo(true)
+    try {
+      const updated = await apiPut<Plateau>(apiRoutes.plateaus.byId(id), patch)
+      setPlateau(updated)
+      setInfoModal(null)
+    } catch (err: unknown) {
+      uiAlert(`Erreur mise à jour des informations: ${toErrorMessage(err)}`)
+    } finally {
+      setSavingInfo(false)
+    }
   }
 
   function openCreatePlanningModal() {
@@ -517,24 +559,45 @@ export default function PlateauDetailsPage() {
                   <div className="map-preview-wrap">
                     <iframe
                       title="Aperçu carte du lieu"
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent(plateau.lieu)}&z=14&output=embed`}
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(plateauAddressLabel)}&z=14&output=embed`}
                       loading="lazy"
                       referrerPolicy="no-referrer-when-downgrade"
                     />
                   </div>
                   <div className="info-address">
-                    <p className="info-label">Adresse</p>
-                    <p className="info-value">{plateau.lieu}</p>
+                    <div className="info-row-head">
+                      <p className="info-label">Adresse</p>
+                      {writable && (
+                        <button type="button" className="info-edit-button" onClick={openAddressModal}>
+                          Modifier
+                        </button>
+                      )}
+                    </div>
+                    <p className="info-value">{plateauAddressLabel}</p>
                   </div>
                 </div>
               ) : (
                 <div className="info-hours-grid">
                   <div className="info-hour-card">
-                    <p className="info-label">Début du plateau</p>
+                    <div className="info-row-head">
+                      <p className="info-label">Début du plateau</p>
+                      {writable && (
+                        <button type="button" className="info-edit-button" onClick={openStartTimeModal}>
+                          Modifier
+                        </button>
+                      )}
+                    </div>
                     <p className="info-value">{plateauStartTimeLabel}</p>
                   </div>
                   <div className="info-hour-card">
-                    <p className="info-label">Rendez-vous sur le lieu</p>
+                    <div className="info-row-head">
+                      <p className="info-label">Rendez-vous sur le lieu</p>
+                      {writable && (
+                        <button type="button" className="info-edit-button" onClick={openMeetingTimeModal}>
+                          Modifier
+                        </button>
+                      )}
+                    </div>
                     <p className="info-value">{rendezVousTimeLabel}</p>
                   </div>
                 </div>
@@ -896,6 +959,73 @@ export default function PlateauDetailsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </>
+      )}
+
+      {writable && infoModal && (
+        <>
+          <div className="modal-overlay" onClick={closeInfoModal} />
+          <div className="drill-modal" role="dialog" aria-modal="true">
+            <div className="drill-modal-head">
+              <h3>
+                {infoModal === 'ADDRESS'
+                  ? "Modifier l'adresse"
+                  : infoModal === 'START'
+                    ? "Modifier l'horaire de début"
+                    : "Modifier l'horaire de rendez-vous"}
+              </h3>
+              <button type="button" onClick={closeInfoModal} disabled={savingInfo}>✕</button>
+            </div>
+            {infoModal === 'ADDRESS' ? (
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span className="info-label">Adresse</span>
+                <input
+                  value={addressDraft}
+                  onChange={(e) => setAddressDraft(e.target.value)}
+                  placeholder="Adresse du lieu"
+                  disabled={savingInfo}
+                />
+              </label>
+            ) : (
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span className="info-label">{infoModal === 'START' ? 'Début du plateau' : 'Rendez-vous sur le lieu'}</span>
+                <input
+                  type="time"
+                  value={infoModal === 'START' ? startTimeDraft : meetingTimeDraft}
+                  onChange={(e) => (infoModal === 'START' ? setStartTimeDraft(e.target.value) : setMeetingTimeDraft(e.target.value))}
+                  disabled={savingInfo}
+                />
+              </label>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                onClick={closeInfoModal}
+                disabled={savingInfo}
+                style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', padding: '8px 12px' }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={savingInfo}
+                style={{ border: '1px solid #1d4ed8', borderRadius: 8, background: '#2563eb', color: '#fff', padding: '8px 12px' }}
+                onClick={() => {
+                  if (infoModal === 'ADDRESS') {
+                    void updatePlateauInfo({ address: addressDraft.trim() || null })
+                    return
+                  }
+                  if (infoModal === 'START') {
+                    void updatePlateauInfo({ startTime: startTimeDraft || null })
+                    return
+                  }
+                  void updatePlateauInfo({ meetingTime: meetingTimeDraft || null })
+                }}
+              >
+                {savingInfo ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
           </div>
         </>
       )}

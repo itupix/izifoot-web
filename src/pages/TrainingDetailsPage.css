@@ -454,6 +454,28 @@
   padding: 12px;
 }
 
+.info-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.info-edit-button {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.info-edit-button:hover {
+  color: #1d4ed8;
+}
+
 .info-hours-grid {
   display: grid;
   gap: 10px;
