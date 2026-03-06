@@ -201,33 +201,39 @@ export default function StatsPage() {
   }, [attendance, players])
 
   return (
-    <div>
-      <h2 style={{ marginTop: 0 }}>Statistiques</h2>
+    <div className="page-shell">
+      <header className="page-head">
+        <div className="page-title-row">
+          <h2 className="page-title">Statistiques</h2>
+          <p className="panel-note">{ordered.length} match(s) analysé(s)</p>
+        </div>
+        <p className="page-subtitle">Vue synthétique des résultats, classements et évolutions.</p>
+      </header>
 
       {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
-      {error && <div style={{ color: 'crimson' }}>{error}</div>}
+      {error && <div className="inline-alert error">{error}</div>}
 
       {/* KPI: Buts marqués / encaissés */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, margin: '12px 0' }}>
+      <section className="page-metrics" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
         <KpiCard label="Buts marqués" value={totalFor} />
         <KpiCard label="Buts encaissés" value={totalAgainst} />
       </section>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, margin: '12px 0' }}>
-        <KpiCard label="Victoires" value={wins} tone="#16a34a" />
+      <section className="page-metrics">
+        <KpiCard label="Victoires" value={wins} tone="#1d4ed8" />
         <KpiCard label="Nuls" value={draws} tone="#6b7280" />
-        <KpiCard label="Défaites" value={losses} tone="#ef4444" />
+        <KpiCard label="Défaites" value={losses} tone="#334155" />
       </section>
 
       {/* Classements (onglets) */}
-      <div style={{ display: 'inline-flex', gap: 8, margin: '8px 0' }}>
+      <div style={{ display: 'inline-flex', gap: 8, margin: '4px 0 0', flexWrap: 'wrap' }}>
         <button onClick={() => setRankTab('buteurs')} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 10px', background: rankTab === 'buteurs' ? '#e0f2fe' : '#fff' }}>Buteurs</button>
         <button onClick={() => setRankTab('entrainements')} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 10px', background: rankTab === 'entrainements' ? '#e0f2fe' : '#fff' }}>Présences (Entraînements)</button>
         <button onClick={() => setRankTab('plateaux')} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 10px', background: rankTab === 'plateaux' ? '#e0f2fe' : '#fff' }}>Présences (Plateaux)</button>
       </div>
 
       {rankTab === 'buteurs' && (
-        <section style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff', marginBottom: 16 }}>
+        <section className="panel" style={{ marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <h3 style={{ margin: 0 }}>Classement des buteurs</h3>
             <span style={{ fontSize: 12, color: '#6b7280' }}>Notre équipe (buts côté Home)</span>
@@ -258,7 +264,7 @@ export default function StatsPage() {
       )}
 
       {rankTab === 'entrainements' && (
-        <section style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff', marginBottom: 16 }}>
+        <section className="panel" style={{ marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <h3 style={{ margin: 0 }}>Présences aux entraînements</h3>
             <span style={{ fontSize: 12, color: '#6b7280' }}>Nombre de séances</span>
@@ -289,7 +295,7 @@ export default function StatsPage() {
       )}
 
       {rankTab === 'plateaux' && (
-        <section style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff', marginBottom: 16 }}>
+        <section className="panel" style={{ marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <h3 style={{ margin: 0 }}>Présences aux plateaux</h3>
             <span style={{ fontSize: 12, color: '#6b7280' }}>Nombre de plateaux</span>
@@ -319,12 +325,12 @@ export default function StatsPage() {
         </section>
       )}
 
-      <div style={{ display: 'inline-flex', gap: 8, margin: '8px 0' }}>
+      <div style={{ display: 'inline-flex', gap: 8, margin: '4px 0 0', flexWrap: 'wrap' }}>
         <button onClick={() => setViewMode('match')} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 10px', background: viewMode === 'match' ? '#e0f2fe' : '#fff' }}>Par match</button>
         <button onClick={() => setViewMode('plateau')} style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 10px', background: viewMode === 'plateau' ? '#e0f2fe' : '#fff' }}>Par plateau</button>
       </div>
 
-      <section style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+      <section style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
         <Chart
           title={`Évolution du nombre moyen de buts marqués (${viewMode === 'match' ? 'par match' : 'par plateau'} – actuel: ${prettyAvg(lastAvgFor)})`}
           series={avgForSeries}
@@ -342,7 +348,7 @@ export default function StatsPage() {
 
 function KpiCard({ label, value, tone }: { label: string; value: number | string; tone?: string }) {
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff' }}>
+    <div className="metric-card">
       <div style={{ fontSize: 12, color: '#6b7280' }}>{label}</div>
       <div style={{ fontSize: 28, fontWeight: 700, color: tone || '#111827' }}>{value}</div>
     </div>
@@ -363,7 +369,7 @@ function Chart({ title, series, bands }: { title: string; series: SeriesPoint[];
   const sx = (x: number) => pad + ((x - minX) / spanX) * (w - 2 * pad)
 
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff' }}>
+    <div className="panel" style={{ padding: 12 }}>
       <div style={{ marginBottom: 8, fontWeight: 600 }}>{title}</div>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ display: 'block' }}>
         {/* axes */}

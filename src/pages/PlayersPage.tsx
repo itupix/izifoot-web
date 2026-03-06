@@ -121,31 +121,41 @@ export default function PlayersPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <h2 style={{ marginTop: 0 }}>Effectif</h2>
+    <div className="page-shell">
+      <header className="page-head">
+        <div className="page-title-row">
+          <h2 className="page-title">Effectif</h2>
+          <p className="panel-note">{filtered.length} joueur(s)</p>
+        </div>
+        <p className="page-subtitle">Recherche, consultation et édition rapide des fiches joueurs.</p>
+      </header>
       {writable && requiresSelection && !selectedTeamId && (
-        <div style={{ color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
+        <div className="inline-alert">
           Sélectionnez une équipe active pour modifier les joueurs.
         </div>
       )}
 
-      <SearchSelectBar
-        query={q}
-        onQueryChange={setQ}
-        queryPlaceholder="Recherche par nom"
-        selectValue={posFilter}
-        onSelectChange={setPosFilter}
-        selectPlaceholder="Tous les postes"
-        options={POSITIONS.map(p => ({ value: p, label: p }))}
-      />
+      <section className="panel">
+        <SearchSelectBar
+          query={q}
+          onQueryChange={setQ}
+          queryPlaceholder="Recherche par nom"
+          selectValue={posFilter}
+          onSelectChange={setPosFilter}
+          selectPlaceholder="Tous les postes"
+          options={POSITIONS.map(p => ({ value: p, label: p }))}
+        />
+      </section>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ color: '#6b7280', fontSize: 14 }}>{filtered.length} joueur(s)</div>
+      <section className="panel">
+      <div className="panel-head" style={{ marginBottom: 8 }}>
+        <h3 className="panel-title">Liste des joueurs</h3>
+        <p className="panel-note">{filtered.length} affiché(s)</p>
         {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
-        {error && <div style={{ color: 'crimson' }}>{error}</div>}
+        {error && <div className="inline-alert error">{error}</div>}
       </div>
 
-      <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}>
+      <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead style={{ background: '#f9fafb' }}>
             <tr>
@@ -168,6 +178,7 @@ export default function PlayersPage() {
           </tbody>
         </table>
       </div>
+      </section>
 
       {detailOpen && selectedPlayer && (
         <>
@@ -260,7 +271,7 @@ export default function PlayersPage() {
                 <div>{selectedPlayer.phone || '—'}</div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                <button
+              <button
                   onClick={() => setDetailEdit(!detailEdit)}
                   disabled={!teamScopedWritable}
                   style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}

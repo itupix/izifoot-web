@@ -110,8 +110,9 @@ export default function InviteAcceptPage() {
 
   return (
     <div style={wrapperStyle}>
-      <div style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>Finaliser mon compte</h2>
+      <div className="panel" style={cardStyle}>
+        <h2 style={{ marginTop: 0, marginBottom: 4 }}>Finaliser mon compte</h2>
+        <p className="page-subtitle" style={{ marginBottom: 12 }}>Validation de l’invitation et création du mot de passe.</p>
 
         {state === 'loading' && <p>Vérification de l’invitation…</p>}
 
@@ -182,9 +183,6 @@ const wrapperStyle: CSSProperties = {
 const cardStyle: CSSProperties = {
   width: '100%',
   maxWidth: 420,
-  border: '1px solid #e5e7eb',
-  borderRadius: 12,
-  background: '#fff',
   padding: 16,
 }
 
@@ -206,8 +204,8 @@ const metaStyle: CSSProperties = {
 }
 
 const buttonStyle: CSSProperties = {
-  border: '1px solid #16a34a',
-  background: '#16a34a',
+  border: '1px solid #1d4ed8',
+  background: '#2563eb',
   color: '#fff',
   borderRadius: 8,
   padding: '10px 12px',

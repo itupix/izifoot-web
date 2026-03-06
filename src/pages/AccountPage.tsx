@@ -5,22 +5,22 @@ export default function AccountPage() {
   const { me } = useAuth();
   if (!me) return null;
   return (
-    <div>
-      <h2>Mon compte</h2>
-      <p><strong>Email :</strong> {me.email}</p>
-      <p><strong>Rôle :</strong> {me.role}</p>
-      <p><strong>Club :</strong> {me.clubId || '—'}</p>
-      <p><strong>Équipe :</strong> {me.teamId || '—'}</p>
-      {me.managedTeamIds.length > 0 && (
-        <p><strong>Équipes gérées :</strong> {me.managedTeamIds.join(', ')}</p>
-      )}
-      {me.linkedPlayerUserId && (
-        <p><strong>Joueur lié :</strong> {me.linkedPlayerUserId}</p>
-      )}
-      <p><strong>Statut :</strong> {me.isPremium ? 'Premium' : 'Gratuit'}</p>
-      {typeof me.planningCount === 'number' && (
-        <p><strong>Plannings existants :</strong> {me.planningCount}</p>
-      )}
+    <div className="page-shell">
+      <header className="page-head">
+        <h2 className="page-title">Mon compte</h2>
+        <p className="page-subtitle">Informations de connexion et rattachements.</p>
+      </header>
+
+      <section className="panel" style={{ display: 'grid', gap: 10 }}>
+        <div><strong>Email:</strong> {me.email}</div>
+        <div><strong>Rôle:</strong> {me.role}</div>
+        <div><strong>Club:</strong> {me.clubId || '—'}</div>
+        <div><strong>Équipe:</strong> {me.teamId || '—'}</div>
+        {me.managedTeamIds.length > 0 && <div><strong>Équipes gérées:</strong> {me.managedTeamIds.join(', ')}</div>}
+        {me.linkedPlayerUserId && <div><strong>Joueur lié:</strong> {me.linkedPlayerUserId}</div>}
+        <div><strong>Statut:</strong> {me.isPremium ? 'Premium' : 'Gratuit'}</div>
+        {typeof me.planningCount === 'number' && <div><strong>Plannings existants:</strong> {me.planningCount}</div>}
+      </section>
     </div>
   );
 }

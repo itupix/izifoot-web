@@ -101,14 +101,20 @@ export default function DrillsPage() {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
-      <h2 style={{ marginTop: 0, marginBottom: 12 }}>Exercices</h2>
+    <div className="page-shell" style={{ position: 'relative' }}>
+      <header className="page-head">
+        <div className="page-title-row">
+          <h2 className="page-title">Exercices</h2>
+          <p className="panel-note">{filtered.length} résultat(s)</p>
+        </div>
+        <p className="page-subtitle">Bibliothèque d’exercices, filtrage rapide et création guidée.</p>
+      </header>
       {writable && requiresSelection && !selectedTeamId && (
-        <div style={{ color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', marginBottom: 12 }}>
+        <div className="inline-alert">
           Sélectionnez une équipe active pour modifier les exercices.
         </div>
       )}
-      <div style={{ marginBottom: 14 }}>
+      <section className="panel" style={{ marginBottom: 0 }}>
         <SearchSelectBar
           query={q}
           onQueryChange={setQ}
@@ -118,18 +124,20 @@ export default function DrillsPage() {
           selectPlaceholder="Toutes les catégories"
           options={categories.map(c => ({ value: c, label: c }))}
         />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ color: '#6b7280', fontSize: 14 }}>{filtered.length} exercice(s)</div>
+      </section>
+      <section className="panel" style={{ display: 'grid', gap: 12 }}>
+        <div className="panel-head" style={{ marginBottom: 0 }}>
+          <h3 className="panel-title">Liste</h3>
+          <p className="panel-note">{filtered.length} exercice(s)</p>
+        </div>
         {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
-        {error && <div style={{ color: 'crimson' }}>{error}</div>}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+        {error && <div className="inline-alert error">{error}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
         {filtered.map(d => (
           <article
             key={d.id}
             onClick={() => navigate(`/exercices/${d.id}`)}
-            style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, background: '#fff', cursor: 'pointer' }}
+            style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, background: '#fff', cursor: 'pointer', boxShadow: '0 4px 12px rgba(15,23,42,0.05)' }}
           >
             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{d.category}</div>
             <header>
@@ -140,7 +148,9 @@ export default function DrillsPage() {
             </p>
           </article>
         ))}
-      </div>
+        {filtered.length === 0 && <div className="panel-note">Aucun exercice trouvé avec ces filtres.</div>}
+        </div>
+      </section>
       {teamScopedWritable && (
         <FloatingPlusButton ariaLabel="Nouvel exercice" zIndex={20} onClick={() => {
           setCreateErr(null)
@@ -224,7 +234,7 @@ export default function DrillsPage() {
                 <button
                   type="submit"
                   disabled={creating}
-                  style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #16a34a', background: '#16a34a', color: '#fff', cursor: 'pointer' }}
+                  style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #1d4ed8', background: '#2563eb', color: '#fff', cursor: 'pointer' }}
                 >
                   {creating ? 'Création…' : 'Ajouter'}
                 </button>

@@ -58,15 +58,21 @@ export default function DiagramEditor() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <section style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, background: '#fff' }}>
-        <h2 style={{ marginTop: 0, marginBottom: 10 }}>Éditeur de diagramme</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={save} disabled={loading || saving} style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}>
+    <div className="page-shell">
+      <header className="page-head">
+        <div className="page-title-row">
+          <h2 className="page-title">Éditeur de diagramme</h2>
+          <button onClick={save} disabled={loading || saving} className="btn btn-primary">
             {diagramId ? 'Mettre à jour' : 'Sauvegarder'}
           </button>
         </div>
-        {error && <div style={{ color: 'crimson', marginTop: 8 }}>{error}</div>}
+        <p className="page-subtitle">Construisez les séquences puis enregistrez-les sur l’exercice ou la séance.</p>
+        {error && <div className="inline-alert error" style={{ marginTop: 4 }}>{error}</div>}
+      </header>
+      <section className="panel">
+        <div style={{ display: 'flex', gap: 8 }}>
+          <span className="panel-note">{diagramId ? 'Mode édition' : 'Nouveau diagramme'}</span>
+        </div>
       </section>
       <DiagramComposer value={data} onChange={setData} minHeight={360} />
     </div>

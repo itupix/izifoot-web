@@ -203,14 +203,19 @@ export default function ClubManagementPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <h2 style={{ marginTop: 0 }}>Gestion du club</h2>
+    <div className="page-shell">
+      <header className="page-head">
+        <h2 className="page-title">Gestion du club</h2>
+        <p className="page-subtitle">Structure du club, équipes, comptes et invitations.</p>
+      </header>
 
       {loading && <div>Chargement…</div>}
-      {error && <div style={{ color: 'crimson' }}>{error}</div>}
+      {error && <div className="inline-alert error">{error}</div>}
 
-      <section style={cardStyle}>
-        <h3 style={titleStyle}>Club</h3>
+      <section className="panel" style={cardStyle}>
+        <div className="panel-head">
+          <h3 className="panel-title">Club</h3>
+        </div>
         {club ? (
           <div style={{ display: 'grid', gap: 6 }}>
             <div><strong>Nom:</strong> {club.name || '—'}</div>
@@ -242,8 +247,11 @@ export default function ClubManagementPage() {
         )}
       </section>
 
-      <section style={cardStyle}>
-        <h3 style={titleStyle}>Équipes</h3>
+      <section className="panel" style={cardStyle}>
+        <div className="panel-head">
+          <h3 className="panel-title">Équipes</h3>
+          <p className="panel-note">{sortedTeams.length} équipe(s)</p>
+        </div>
         <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
           {sortedTeams.length === 0 ? (
             <div style={{ color: '#6b7280' }}>Aucune équipe.</div>
@@ -279,8 +287,11 @@ export default function ClubManagementPage() {
         </form>
       </section>
 
-      <section style={cardStyle}>
-        <h3 style={titleStyle}>Créer un compte</h3>
+      <section className="panel" style={cardStyle}>
+        <div className="panel-head">
+          <h3 className="panel-title">Créer un compte</h3>
+          <p className="panel-note">Invitation par email avec rôle et périmètre.</p>
+        </div>
         <form onSubmit={createInvitation} style={formStyle}>
           <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="Email *" required style={inputStyle} />
           <select
@@ -363,8 +374,11 @@ export default function ClubManagementPage() {
         </form>
       </section>
 
-      <section style={cardStyle}>
-        <h3 style={titleStyle}>Invitations</h3>
+      <section className="panel" style={cardStyle}>
+        <div className="panel-head">
+          <h3 className="panel-title">Invitations</h3>
+          <p className="panel-note">{sortedInvitations.length} invitation(s)</p>
+        </div>
         {sortedInvitations.length === 0 ? (
           <div style={{ color: '#6b7280' }}>Aucune invitation.</div>
         ) : (
@@ -427,14 +441,7 @@ function StatusBadge({ status }: { status: AccountInvitation['status'] }) {
 }
 
 const cardStyle: CSSProperties = {
-  border: '1px solid #e5e7eb',
-  borderRadius: 10,
-  background: '#fff',
   padding: 14,
-}
-
-const titleStyle: CSSProperties = {
-  margin: '0 0 12px',
 }
 
 const formStyle: CSSProperties = {
@@ -450,8 +457,8 @@ const inputStyle: CSSProperties = {
 }
 
 const buttonStyle: CSSProperties = {
-  border: '1px solid #16a34a',
-  background: '#16a34a',
+  border: '1px solid #1d4ed8',
+  background: '#2563eb',
   color: '#fff',
   borderRadius: 8,
   padding: '8px 12px',

@@ -182,15 +182,16 @@ export default function MatchDay() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
+    <div className="page-shell" style={{ padding: 8, maxWidth: 1000, margin: '0 auto' }}>
       {rsvpStatus && (
-        <div style={{ background: '#ecfdf5', border: '1px solid #10b981', color: '#065f46', padding: '8px 12px', borderRadius: 8, marginBottom: 16 }}>
+        <div className="inline-alert" style={{ marginBottom: 0 }}>
           {rsvpStatus === 'present' ? 'Présence confirmée ✅' : 'Absence enregistrée ✅'}
         </div>
       )}
-      <header style={{ marginBottom: 24 }}>
+      <header className="page-head">
         <div style={{ fontSize: 12, opacity: 0.7 }}><Link to="/">← Retour</Link></div>
-        <h1 style={{ margin: '8px 0' }}>Plateau</h1>
+        <h1 style={{ margin: '8px 0 0' }} className="page-title">Plateau</h1>
+        <p className="page-subtitle">Convocations, RSVP et résultats des matchs du plateau.</p>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div><strong>Date:</strong> {dateLabel}</div>
           <div><strong>Lieu:</strong> {plateau.lieu}</div>
@@ -198,15 +199,18 @@ export default function MatchDay() {
         </div>
       </header>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2>Joueurs convoqués</h2>
+      <section className="panel">
+        <div className="panel-head">
+          <h2 className="panel-title">Joueurs convoqués</h2>
+          <p className="panel-note">{convocations.length} joueur(s)</p>
+        </div>
         {(convocations.length > 0) && (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0 12px' }}>
             <span style={{ fontSize: 14, opacity: 0.8 }}>{selectedIds.length} sélectionné(s)</span>
             <button
               onClick={convokeSelectedByEmail}
               disabled={!selectedIds.length}
-              style={{ border: '1px solid #10b981', color: '#10b981', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+              style={{ border: '1px solid #1d4ed8', color: '#1d4ed8', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
             >
               Convoquer (email)
             </button>
@@ -258,7 +262,7 @@ export default function MatchDay() {
                             const s = c.status ?? (c.present ? 'present' : 'non_convoque')
                             if (s === 'non_convoque') {
                               return (
-                                <button onClick={() => genLinksFor(c.player.id, true)} style={{ border: '1px solid #10b981', color: '#10b981', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>
+                                <button onClick={() => genLinksFor(c.player.id, true)} style={{ border: '1px solid #1d4ed8', color: '#1d4ed8', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>
                                   Convoquer
                                 </button>
                               )
@@ -302,7 +306,7 @@ export default function MatchDay() {
                           <div>
                             <button
                               onClick={() => genLinksFor(c.player.id, false)}
-                              style={{ border: '1px solid #10b981', color: '#10b981', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
+                              style={{ border: '1px solid #1d4ed8', color: '#1d4ed8', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
                             >Générer (sans email)</button>
                           </div>
                         </div>
@@ -315,8 +319,11 @@ export default function MatchDay() {
         )}
       </section>
 
-      <section>
-        <h2>Résultats des matches</h2>
+      <section className="panel">
+        <div className="panel-head">
+          <h2 className="panel-title">Résultats des matchs</h2>
+          <p className="panel-note">{matches.length} match(s)</p>
+        </div>
         {matches.length === 0 ? <p>Aucun match enregistré pour ce plateau.</p> : (
           <div style={{ display: 'grid', gap: 16 }}>
             {matches.map((m) => {
