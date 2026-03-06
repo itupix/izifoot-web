@@ -247,6 +247,56 @@
   display: grid;
 }
 
+.players-presence-card {
+  cursor: pointer;
+}
+
+.players-presence-card:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.players-avatar-stack {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.player-avatar-chip {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  margin-left: -10px;
+}
+
+.player-avatar-chip:first-child {
+  margin-left: 0;
+}
+
+.player-avatar-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.player-avatar-chip span {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .drill-search-box {
   display: grid;
   gap: 8px;
