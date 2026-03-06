@@ -77,6 +77,7 @@ export default function PlateauDetailsPage() {
   const [editingPlanning, setEditingPlanning] = useState<Planning | null>(null)
   const [selectedPlanningTeam, setSelectedPlanningTeam] = useState('')
   const [rotationMenuOpen, setRotationMenuOpen] = useState(false)
+  const [infoTab, setInfoTab] = useState<'LIEU' | 'HORAIRES'>('LIEU')
 
   const [homeScore, setHomeScore] = useState<number>(0)
   const [awayScore, setAwayScore] = useState<number>(0)
@@ -156,6 +157,36 @@ export default function PlateauDetailsPage() {
       })
       .filter((slot) => slot.games.length > 0)
   }, [plateauPlanningData, selectedPlanningTeam])
+  const plateauStartTimeLabel = useMemo(() => {
+    if (plateauPlanningData?.start) return plateauPlanningData.start
+    if (!plateau?.date) return 'À définir'
+    const date = new Date(plateau.date)
+    if (Number.isNaN(date.getTime())) return 'À définir'
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    if (hh === '00' && mm === '00') return 'À définir'
+    return `${hh}:${mm}`
+  }, [plateau?.date, plateauPlanningData?.start])
+  const rendezVousTimeLabel = useMemo(() => {
+    const fromPlanning = plateauPlanningData?.start ?? null
+    const fromPlateauDate = plateau?.date ? (() => {
+      const d = new Date(plateau.date)
+      if (Number.isNaN(d.getTime())) return null
+      const hh = String(d.getHours()).padStart(2, '0')
+      const mm = String(d.getMinutes()).padStart(2, '0')
+      return hh === '00' && mm === '00' ? null : `${hh}:${mm}`
+    })() : null
+    const source = fromPlanning || fromPlateauDate
+    if (!source) return 'À définir'
+    const match = source.match(/^(\d{2}):(\d{2})$/)
+    if (!match) return 'À définir'
+    const hour = Number(match[1])
+    const minute = Number(match[2])
+    const total = Math.max(0, hour * 60 + minute - 30)
+    const hh = String(Math.floor(total / 60)).padStart(2, '0')
+    const mm = String(total % 60).padStart(2, '0')
+    return `${hh}:${mm}`
+  }, [plateau?.date, plateauPlanningData?.start])
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
 
@@ -461,10 +492,53 @@ export default function PlateauDetailsPage() {
           {!writable && <p className="muted-line">Mode lecture seule: actions de modification désactivées.</p>}
           <div className="training-details-grid">
             <section className="details-card">
-              <div className="card-head">
-                <h3>Informations</h3>
+              <div className="info-tabs" role="tablist" aria-label="Informations du plateau">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={infoTab === 'LIEU'}
+                  className={`info-tab ${infoTab === 'LIEU' ? 'is-active' : ''}`}
+                  onClick={() => setInfoTab('LIEU')}
+                >
+                  Lieu
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={infoTab === 'HORAIRES'}
+                  className={`info-tab ${infoTab === 'HORAIRES' ? 'is-active' : ''}`}
+                  onClick={() => setInfoTab('HORAIRES')}
+                >
+                  Horaires
+                </button>
               </div>
-              <div style={{ color: '#374151' }}>Lieu : <strong>{plateau.lieu}</strong></div>
+              {infoTab === 'LIEU' ? (
+                <div className="info-pane-grid">
+                  <div className="map-preview-wrap">
+                    <iframe
+                      title="Aperçu carte du lieu"
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(plateau.lieu)}&z=14&output=embed`}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  </div>
+                  <div className="info-address">
+                    <p className="info-label">Adresse</p>
+                    <p className="info-value">{plateau.lieu}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="info-hours-grid">
+                  <div className="info-hour-card">
+                    <p className="info-label">Début du plateau</p>
+                    <p className="info-value">{plateauStartTimeLabel}</p>
+                  </div>
+                  <div className="info-hour-card">
+                    <p className="info-label">Rendez-vous sur le lieu</p>
+                    <p className="info-value">{rendezVousTimeLabel}</p>
+                  </div>
+                </div>
+              )}
             </section>
 
             <AttendanceAccordion
