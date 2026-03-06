@@ -401,58 +401,57 @@ export default function PlateauDetailsPage() {
           <ChevronLeftIcon size={18} />
           <span>Retour au planning</span>
         </button>
-        <div className="details-page-title-wrap">
-          <h1 className="details-page-title">Plateau</h1>
-          <p className="details-page-subtitle">{dateLabel}</p>
+        <div className="details-page-mainrow">
+          <div className="details-page-title-wrap">
+            <h1 className="details-page-title">Plateau</h1>
+            <p className="details-page-subtitle">{dateLabel}</p>
+          </div>
+          <div className="topbar-menu-wrap">
+            {writable && (
+              <>
+                <RoundIconButton
+                  ariaLabel="Ouvrir le menu d'actions"
+                  className="menu-dots-button"
+                  onClick={() => setActionsMenuOpen((prev) => !prev)}
+                >
+                  <DotsHorizontalIcon size={18} />
+                </RoundIconButton>
+                {actionsMenuOpen && (
+                  <>
+                    <button
+                      type="button"
+                      className="menu-backdrop"
+                      aria-label="Fermer le menu"
+                      onClick={() => setActionsMenuOpen(false)}
+                    />
+                    <div className="floating-menu">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionsMenuOpen(false)
+                          void openShareModal()
+                        }}
+                      >
+                        Partager le plateau
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => {
+                          setActionsMenuOpen(false)
+                          deletePlateau()
+                        }}
+                      >
+                        Supprimer le plateau
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </header>
-
-      <div className="details-actions-bar">
-        <div className="topbar-menu-wrap">
-          {writable && (
-            <>
-              <RoundIconButton
-                ariaLabel="Ouvrir le menu d'actions"
-                className="menu-dots-button"
-                onClick={() => setActionsMenuOpen((prev) => !prev)}
-              >
-                <DotsHorizontalIcon size={18} />
-              </RoundIconButton>
-              {actionsMenuOpen && (
-                <>
-                  <button
-                    type="button"
-                    className="menu-backdrop"
-                    aria-label="Fermer le menu"
-                    onClick={() => setActionsMenuOpen(false)}
-                  />
-                  <div className="floating-menu">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActionsMenuOpen(false)
-                        void openShareModal()
-                      }}
-                    >
-                      Partager le plateau
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => {
-                        setActionsMenuOpen(false)
-                        deletePlateau()
-                      }}
-                    >
-                      Supprimer le plateau
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}

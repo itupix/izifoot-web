@@ -281,63 +281,62 @@ export default function TrainingDetailsPage() {
           <ChevronLeftIcon size={18} />
           <span>Retour au planning</span>
         </button>
-        <div className="details-page-title-wrap">
-          <h1 className="details-page-title">
-            Entrainement
-            {isCancelled && <span className="cancelled-tag">Annulé</span>}
-          </h1>
-          <p className="details-page-subtitle">{trainingDateLabel}</p>
-        </div>
-      </header>
-
-      <div className="details-actions-bar">
-        <div className="topbar-menu-wrap">
-          {writable && (
-            <>
-              <RoundIconButton
-                ariaLabel="Ouvrir le menu d'actions"
-                className="menu-dots-button"
-                onClick={() => setActionsMenuOpen((prev) => !prev)}
-              >
-                <DotsHorizontalIcon size={18} />
-              </RoundIconButton>
-              {actionsMenuOpen && (
-                <>
-                  <button
-                    type="button"
-                    className="menu-backdrop"
-                    aria-label="Fermer le menu"
-                    onClick={() => setActionsMenuOpen(false)}
-                  />
-                  <div className="floating-menu">
-                    {training && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionsMenuOpen(false)
-                          setTrainingStatus(training.status !== 'CANCELLED')
-                        }}
-                      >
-                        {training.status === 'CANCELLED' ? 'Rétablir l’entrainement' : 'Annuler l’entrainement'}
-                      </button>
-                    )}
+        <div className="details-page-mainrow">
+          <div className="details-page-title-wrap">
+            <h1 className="details-page-title">
+              Entrainement
+              {isCancelled && <span className="cancelled-tag">Annulé</span>}
+            </h1>
+            <p className="details-page-subtitle">{trainingDateLabel}</p>
+          </div>
+          <div className="topbar-menu-wrap">
+            {writable && (
+              <>
+                <RoundIconButton
+                  ariaLabel="Ouvrir le menu d'actions"
+                  className="menu-dots-button"
+                  onClick={() => setActionsMenuOpen((prev) => !prev)}
+                >
+                  <DotsHorizontalIcon size={18} />
+                </RoundIconButton>
+                {actionsMenuOpen && (
+                  <>
                     <button
                       type="button"
-                      className="danger"
-                      onClick={() => {
-                        setActionsMenuOpen(false)
-                        deleteTraining()
-                      }}
-                    >
-                      Supprimer l’entrainement
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+                      className="menu-backdrop"
+                      aria-label="Fermer le menu"
+                      onClick={() => setActionsMenuOpen(false)}
+                    />
+                    <div className="floating-menu">
+                      {training && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionsMenuOpen(false)
+                            setTrainingStatus(training.status !== 'CANCELLED')
+                          }}
+                        >
+                          {training.status === 'CANCELLED' ? 'Rétablir l’entrainement' : 'Annuler l’entrainement'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => {
+                          setActionsMenuOpen(false)
+                          deleteTraining()
+                        }}
+                      >
+                        Supprimer l’entrainement
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </header>
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}
