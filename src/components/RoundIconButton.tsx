@@ -25,7 +25,7 @@ export default function RoundIconButton({
       {...buttonProps}
       style={{
         appearance: 'none',
-        border: 'none',
+        border: '1px solid #dbe5f1',
         background: '#fff',
         width: size,
         height: size,
@@ -37,6 +37,7 @@ export default function RoundIconButton({
         padding: 0,
         cursor: disabled ? 'default' : 'pointer',
         flexShrink: 0,
+        boxShadow: '0 4px 10px rgba(15, 23, 42, 0.06)',
         ...style,
       }}
     >

@@ -18,7 +18,7 @@ export default function Home() {
     minHeight: '100dvh',
     display: 'grid',
     gridTemplateRows: '1fr auto',
-    background: 'linear-gradient(180deg, #f7fbf9 0%, #f5f7ff 60%, #ffffff 100%)',
+    background: 'linear-gradient(180deg, #f8fbff 0%, #f5f8ff 60%, #ffffff 100%)',
   };
 
   const hero: React.CSSProperties = {
@@ -89,8 +89,8 @@ export default function Home() {
     borderRadius: 999,
     display: 'grid',
     placeItems: 'center',
-    border: `1px solid ${ok ? '#16a34a' : '#e2e8f0'}`,
-    color: ok ? '#16a34a' : 'transparent',
+    border: `1px solid ${ok ? '#2563eb' : '#e2e8f0'}`,
+    color: ok ? '#2563eb' : 'transparent',
     fontSize: 12,
     fontWeight: 700,
   });
@@ -208,7 +208,7 @@ export default function Home() {
                               ? '#fbbf24'
                               : passwordScore(password) === 3
                                 ? '#60a5fa'
-                                : '#34d399',
+                                : '#2563eb',
                         transition: 'width 200ms ease',
                       }}
                       title="Sécurité max: longueur ≥ 10 et caractère spécial."

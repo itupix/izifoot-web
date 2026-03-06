@@ -1,175 +1,93 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
+  GripVertical,
+  Maximize,
+  Menu,
+  MoreHorizontal,
+  Pause,
+  Play,
+  RotateCw,
+  SkipBack,
+  StepBack,
+  StepForward,
+  Trophy,
+  X,
+} from 'lucide-react'
 
 type IconProps = {
   size?: number
   style?: CSSProperties
 }
 
-function IconBase({
-  size = 24,
-  style,
-  children,
-}: IconProps & { children: ReactNode }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      style={{ display: 'block', ...style }}
-    >
-      {children}
-    </svg>
-  )
+function renderIcon(Icon: LucideIcon, { size = 24, style }: IconProps) {
+  return <Icon size={size} style={style} strokeWidth={2} aria-hidden="true" />
 }
 
-export function ChevronLeftIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M14.5 5.5L8 12l6.5 6.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    </IconBase>
-  )
+export function ChevronLeftIcon(props: IconProps) {
+  return renderIcon(ChevronLeft, props)
 }
 
-export function ChevronRightIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M9.5 5.5L16 12l-6.5 6.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    </IconBase>
-  )
+export function ChevronRightIcon(props: IconProps) {
+  return renderIcon(ChevronRight, props)
 }
 
-export function CalendarIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <rect x="3.5" y="5.5" width="17" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M3.5 9.5h17" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M8 3.5v4M16 3.5v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="8.5" cy="13" r="1.2" fill="currentColor" />
-      <circle cx="12" cy="13" r="1.2" fill="currentColor" />
-      <circle cx="15.5" cy="13" r="1.2" fill="currentColor" />
-    </IconBase>
-  )
+export function CalendarIcon(props: IconProps) {
+  return renderIcon(Calendar, props)
 }
 
-export function SoccerBallIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
-      <polygon points="12,8.5 9.6,10.2 10.5,13 13.5,13 14.4,10.2" fill="currentColor" />
-      <path d="M12 3.5v3M5.6 6.2l2.3 2M18.4 6.2l-2.3 2M4 12h3M20 12h-3M5.6 17.8l2.3-2M18.4 17.8l-2.3-2M12 20.5v-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </IconBase>
-  )
+export function SoccerBallIcon(props: IconProps) {
+  return renderIcon(CircleDot, props)
 }
 
-export function TrophyIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M8 4.5h8v3.8a4 4 0 0 1-4 4 4 4 0 0 1-4-4V4.5Z" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M9.2 12.2V15h5.6v-2.8M10 18.5h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M8 6H6.5A2.5 2.5 0 0 0 9 8.5M16 6h1.5A2.5 2.5 0 0 1 15 8.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </IconBase>
-  )
+export function TrophyIcon(props: IconProps) {
+  return renderIcon(Trophy, props)
 }
 
-export function MenuIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </IconBase>
-  )
+export function MenuIcon(props: IconProps) {
+  return renderIcon(Menu, props)
 }
 
-export function DotsHorizontalIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <circle cx="6" cy="12" r="1.8" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-      <circle cx="18" cy="12" r="1.8" fill="currentColor" />
-    </IconBase>
-  )
+export function DotsHorizontalIcon(props: IconProps) {
+  return renderIcon(MoreHorizontal, props)
 }
 
-export function GripVerticalIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <circle cx="9" cy="7" r="1.2" fill="currentColor" />
-      <circle cx="15" cy="7" r="1.2" fill="currentColor" />
-      <circle cx="9" cy="12" r="1.2" fill="currentColor" />
-      <circle cx="15" cy="12" r="1.2" fill="currentColor" />
-      <circle cx="9" cy="17" r="1.2" fill="currentColor" />
-      <circle cx="15" cy="17" r="1.2" fill="currentColor" />
-    </IconBase>
-  )
+export function GripVerticalIcon(props: IconProps) {
+  return renderIcon(GripVertical, props)
 }
 
-export function CloseIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </IconBase>
-  )
+export function CloseIcon(props: IconProps) {
+  return renderIcon(X, props)
 }
 
-export function SkipBackIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M8 6.5v11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M16 7.5 10 12l6 4.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-    </IconBase>
-  )
+export function SkipBackIcon(props: IconProps) {
+  return renderIcon(SkipBack, props)
 }
 
-export function StepBackIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M8 6.5v11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M16.5 7.5 10.5 12l6 4.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-    </IconBase>
-  )
+export function StepBackIcon(props: IconProps) {
+  return renderIcon(StepBack, props)
 }
 
-export function PlayIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M9 7.5v9l7-4.5-7-4.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" fill="none" />
-    </IconBase>
-  )
+export function PlayIcon(props: IconProps) {
+  return renderIcon(Play, props)
 }
 
-export function PauseIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M9 7.5v9M15 7.5v9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-    </IconBase>
-  )
+export function PauseIcon(props: IconProps) {
+  return renderIcon(Pause, props)
 }
 
-export function StepForwardIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M16 6.5v11" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M8.5 7.5 14.5 12l-6 4.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-    </IconBase>
-  )
+export function StepForwardIcon(props: IconProps) {
+  return renderIcon(StepForward, props)
 }
 
-export function OrientationIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M7 4.5h10a2.5 2.5 0 0 1 2.5 2.5v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M17 19.5H7A2.5 2.5 0 0 1 4.5 17V7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M17 4.5v3.7h-3.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M7 19.5v-3.7h3.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </IconBase>
-  )
+export function OrientationIcon(props: IconProps) {
+  return renderIcon(RotateCw, props)
 }
 
-export function FullscreenIcon({ size, style }: IconProps) {
-  return (
-    <IconBase size={size} style={style}>
-      <path d="M8 4.5H4.5V8M16 4.5h3.5V8M8 19.5H4.5V16M16 19.5h3.5V16" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-    </IconBase>
-  )
+export function FullscreenIcon(props: IconProps) {
+  return renderIcon(Maximize, props)
 }

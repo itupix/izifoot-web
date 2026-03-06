@@ -14,8 +14,9 @@
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 8px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .drill-topbar-title h2 {
@@ -57,7 +58,7 @@
   border: 1px solid #dbe5f1;
   border-radius: 10px;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
   padding: 6px;
   display: grid;
   gap: 2px;
@@ -88,11 +89,12 @@
 
 .drill-card {
   border: 1px solid #dbe5f1;
-  border-radius: 14px;
+  border-radius: 10px;
   background: #fff;
   padding: 14px;
   display: grid;
   gap: 12px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .drill-card h3 {

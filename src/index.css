@@ -13,6 +13,7 @@ body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color: #0f172a;
+  background: #f8fafc;
 }
 
 a {
@@ -21,16 +22,16 @@ a {
 }
 
 :root {
-  --bg: radial-gradient(1200px 600px at 80% -10%, rgba(56, 130, 246, 0.08), transparent 60%),
-    radial-gradient(900px 500px at -10% -10%, rgba(16, 185, 129, 0.08), transparent 60%),
-    linear-gradient(180deg, #f8fafc 0%, #ffffff 80%);
+  --bg: linear-gradient(180deg, #f8fbff 0%, #ffffff 75%);
   --border: #e2e8f0;
   --muted: #64748b;
   --muted-2: #475569;
-  --card-bg: rgba(255, 255, 255, 0.85);
+  --card-bg: #ffffff;
   --brand-1: #2563eb;
   --brand-1b: #1d4ed8;
-  --brand-2: #10b981;
+  --brand-2: #60a5fa;
+  --radius-lg: 10px;
+  --shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 #root {
@@ -41,10 +42,7 @@ a {
 main {
   flex-grow: 1;
   padding: 1rem;
-  background: radial-gradient(1200px 600px at 80% -10%, rgba(56, 130, 246, 0.15), transparent 60%),
-    radial-gradient(900px 500px at -10% -10%, rgba(16, 185, 129, 0.15), transparent 60%),
-    linear-gradient(rgb(248, 250, 252) 0%, rgb(255, 255, 255) 80%);
-
+  background: var(--bg);
 }
 
 /* Home layout */
@@ -138,16 +136,16 @@ h6 {
 /* Cards */
 .card {
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   background: var(--card-bg);
-  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-soft);
 }
 
 /* Buttons */
 .btn {
   appearance: none;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 10px 14px;
   font-weight: 700;
   border: 1px solid var(--border);
@@ -162,10 +160,10 @@ h6 {
 }
 
 .btn-primary {
-  border: none;
+  border: 1px solid #1d4ed8;
   color: white;
   background: linear-gradient(180deg, var(--brand-1), var(--brand-1b));
-  box-shadow: 0 10px 20px rgba(29, 78, 216, 0.15), 0 2px 6px rgba(29, 78, 216, 0.2);
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.18);
 }
 
 .btn-secondary {
@@ -190,7 +188,7 @@ textarea,
 select {
   font: inherit;
   padding: 8px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: white;
 }
@@ -219,9 +217,10 @@ textarea {
 
 .table .row-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   padding: 8px;
   background: white;
+  box-shadow: var(--shadow-soft);
 }
 
 /* Grids */
@@ -249,4 +248,18 @@ textarea {
 .page-bg {
   background: var(--bg);
   min-height: calc(100dvh - 56px);
+}
+
+.topbar,
+.drill-topbar,
+.details-card,
+.drill-card,
+.trainings-block,
+.trainings-calendar-modal,
+.trainings-plateau-modal,
+.drill-modal,
+.floating-menu,
+.drill-floating-menu {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
 }

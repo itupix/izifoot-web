@@ -14,8 +14,9 @@
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 8px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .topbar-title h2 {
@@ -64,7 +65,7 @@
   border: 1px solid #dbe5f1;
   border-radius: 10px;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
   padding: 6px;
   display: grid;
   gap: 2px;
@@ -107,11 +108,12 @@
 
 .details-card {
   border: 1px solid #dbe5f1;
-  border-radius: 14px;
+  border-radius: 10px;
   background: #fff;
   padding: 12px;
   display: grid;
   gap: 10px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .details-card.is-disabled {
@@ -212,11 +214,12 @@
   gap: 6px;
   cursor: grab;
   position: relative;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
 }
 
 .drill-card.is-drag-target {
-  border-color: #0b65c2;
-  background: #f8fbff;
+  border-color: #2563eb;
+  background: #eff6ff;
 }
 
 .drill-card:active {
@@ -310,10 +313,11 @@
   width: min(560px, calc(100vw - 24px));
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 14px;
   display: grid;
   gap: 10px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
 }
 
 .drill-modal-head {

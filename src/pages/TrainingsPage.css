@@ -45,9 +45,9 @@
   display: grid;
   gap: 12px;
   border: 1px solid #dbe5f1;
-  border-radius: 16px;
+  border-radius: 10px;
   padding: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: #ffffff;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
@@ -96,14 +96,14 @@
 }
 
 .trainings-block-footer {
-  background: #f4f8fb;
+  background: #f8fafc;
   border-top: 1px solid #dbe5f1;
   margin: 0 -14px -14px;
   padding: 10px 14px;
   display: flex;
   justify-content: flex-end;
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 16px;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
 }
 
 .trainings-aside-error {
@@ -124,8 +124,8 @@
   width: min(560px, 100%);
   background: #fff;
   border: 1px solid #d1d5db;
-  border-radius: 16px;
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
   padding: 16px;
   display: grid;
   gap: 14px;
@@ -135,8 +135,8 @@
   width: min(520px, 100%);
   background: #fff;
   border: 1px solid #d1d5db;
-  border-radius: 16px;
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
   padding: 16px;
   display: grid;
   gap: 14px;
@@ -208,7 +208,7 @@
 
 .trainings-location-chip--active {
   border-color: #2563eb;
-  background: #dbeafe;
+  background: #eff6ff;
   color: #1d4ed8;
 }
 
@@ -234,8 +234,8 @@
 }
 
 .trainings-primary-btn {
-  border: 1px solid #0f172a;
-  background: #0f172a;
+  border: 1px solid #1d4ed8;
+  background: #2563eb;
   color: #fff;
 }
 
@@ -285,8 +285,9 @@
 }
 
 .trainings-day-btn--selected {
-  background: #0f172a;
+  background: #2563eb;
   color: #fff;
+  border-color: #1d4ed8;
 }
 
 .trainings-day-btn--default {
@@ -304,14 +305,14 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #ef4444;
+  background: #2563eb;
 }
 
 .trainings-dot-plateau {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #3b82f6;
+  background: #93c5fd;
 }
 
 .trainings-legend {

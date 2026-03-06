@@ -1,6 +1,6 @@
 .logo {
   color: transparent;
-  background: linear-gradient(90deg, rgb(14, 165, 233), rgb(34, 197, 94)) text;
+  background: linear-gradient(90deg, #2563eb, #1d4ed8) text;
 }
 
 .sidebarNav {
@@ -9,9 +9,11 @@
 }
 
 .sidebarLink {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: #fff;
   color: #1e293b;
@@ -34,10 +36,10 @@
 }
 
 .sidebarLinkActive {
-  border-color: transparent;
-  background: linear-gradient(180deg, var(--brand-1), var(--brand-1b));
-  color: #ffffff;
-  box-shadow: 0 8px 16px rgba(29, 78, 216, 0.18);
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.14);
 }
 
 .sidebarFooter {

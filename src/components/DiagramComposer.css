@@ -30,6 +30,7 @@
   min-height: 42px;
   font-size: 14px;
   white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
 }
 
 .icon-btn {
@@ -121,7 +122,7 @@
 
 .ghost-btn {
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #fff;
   color: #334155;
   padding: 8px 10px;
@@ -162,8 +163,8 @@
 .diagram-canvas {
   width: 100%;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #f8fff8;
+  border-radius: 10px;
+  background: #f8fbff;
   touch-action: none;
 }
 
@@ -178,7 +179,7 @@
 .diagram-progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
   transition: width 140ms linear;
 }
 

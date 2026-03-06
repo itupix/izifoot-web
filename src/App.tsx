@@ -1,5 +1,7 @@
 // src/App.tsx
 import React from 'react'
+import type { LucideIcon } from 'lucide-react'
+import { BarChart3, Building2, CalendarRange, Dumbbell, Users } from 'lucide-react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import style from './App.module.css'
 import { getDefaultRouteByRole, type AccountRole } from './authz'
@@ -27,14 +29,15 @@ type NavItem = {
   to: string
   label: string
   roles: AccountRole[]
+  icon: LucideIcon
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/club', label: 'Club', roles: ['DIRECTION'] },
-  { to: '/planning', label: 'Planning', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'] },
-  { to: '/exercices', label: 'Exercices', roles: ['DIRECTION', 'COACH'] },
-  { to: '/effectif', label: 'Effectif', roles: ['DIRECTION', 'COACH'] },
-  { to: '/stats', label: 'Stats', roles: ['DIRECTION', 'COACH'] },
+  { to: '/club', label: 'Club', roles: ['DIRECTION'], icon: Building2 },
+  { to: '/planning', label: 'Planning', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: CalendarRange },
+  { to: '/exercices', label: 'Exercices', roles: ['DIRECTION', 'COACH'], icon: Dumbbell },
+  { to: '/effectif', label: 'Effectif', roles: ['DIRECTION', 'COACH'], icon: Users },
+  { to: '/stats', label: 'Stats', roles: ['DIRECTION', 'COACH'], icon: BarChart3 },
 ]
 
 function RoleAwareFallback() {
@@ -151,6 +154,7 @@ export default function App() {
                     onClick={() => setMenuOpen(false)}
                     className={`${style.sidebarLink} ${isActivePath(item.to) ? style.sidebarLinkActive : ''}`.trim()}
                   >
+                    <item.icon size={16} />
                     {item.label}
                   </Link>
                 ))}

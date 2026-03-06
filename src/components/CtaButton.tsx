@@ -13,12 +13,12 @@ type CtaButtonProps = {
 
 const baseStyle: CSSProperties = {
   appearance: 'none',
-  border: 'none',
+  border: '1px solid #1d4ed8',
   textDecoration: 'none',
   padding: '13px 18px',
-  borderRadius: 999,
-  background: '#2dd4bf',
-  color: '#042f2e',
+  borderRadius: 10,
+  background: 'linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%)',
+  color: '#ffffff',
   fontWeight: 800,
   fontSize: 16,
   lineHeight: 1.2,
@@ -27,6 +27,7 @@ const baseStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   cursor: 'pointer',
+  boxShadow: '0 8px 18px rgba(29, 78, 216, 0.16)',
 }
 
 export default function CtaButton({
