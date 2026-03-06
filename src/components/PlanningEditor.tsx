@@ -282,16 +282,6 @@ function packSchedule(matches: Match[], pitches: number, restEveryX: number) {
   return agenda
 }
 
-/** ==== Hook de persistance locale (facultatif) ==== */
-function useLocalStorageState<T>(key: string, initialValue: T) {
-  const [state, setState] = useState<T>(() => {
-    try { const raw = localStorage.getItem(key); if (raw != null) return JSON.parse(raw) as T } catch { /* ignore */ }
-    return initialValue
-  })
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)) } catch { /* ignore */ } }, [key, state])
-  return [state, setState] as const
-}
-
 function mergeUniqueLabels(...lists: string[][]) {
   const seen = new Set<string>()
   const merged: string[] = []
@@ -320,7 +310,7 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
     return Array.from(set)
   }, [value])
 
-  const [teamHistory, setTeamHistory] = useLocalStorageState('u9plateau.teamHistory', teamsFromValue)
+  const [teamHistory, setTeamHistory] = useState<string[]>(teamsFromValue)
   const [teamEntries, setTeamEntries] = useState<TeamEntry[]>(() => {
     const savedTeams = Array.isArray((value as PlanningData | null)?.teams)
       ? ((value as PlanningData).teams ?? []).filter((entry) => normalizeName(entry.label))
@@ -338,29 +328,49 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   const [teamsOpen, setTeamsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [openSlots, setOpenSlots] = useState<number[]>([])
-  const [pitches, setPitches] = useLocalStorageState('u9plateau.pitches', initial.pitches)
-  const [matchMin, setMatchMin] = useLocalStorageState('u9plateau.matchMin', initial.matchMin)
-  const [breakMin, setBreakMin] = useLocalStorageState('u9plateau.breakMin', initial.breakMin)
-  const [startHHMM, setStartHHMM] = useLocalStorageState('u9plateau.startHHMM', initial.start)
-  const [forbidIntraClub, setForbidIntraClub] = useLocalStorageState(
-    'u9plateau.forbidIntraClub',
+  const [pitches, setPitches] = useState(initial.pitches)
+  const [matchMin, setMatchMin] = useState(initial.matchMin)
+  const [breakMin, setBreakMin] = useState(initial.breakMin)
+  const [startHHMM, setStartHHMM] = useState(initial.start)
+  const [forbidIntraClub, setForbidIntraClub] = useState(
     typeof value?.forbidIntraClub === 'boolean' ? value.forbidIntraClub : true
   )
-  const [regenKey, setRegenKey] = useLocalStorageState(
-    'u9plateau.regenSeed',
+  const [regenKey, setRegenKey] = useState(
     typeof value?.regenSeed === 'number' ? value.regenSeed : 1
   )
-  const [matchesPerTeam, setMatchesPerTeam] = useLocalStorageState(
-    'u9plateau.matchesPerTeam',
+  const [matchesPerTeam, setMatchesPerTeam] = useState(
     typeof value?.matchesPerTeam === 'number' ? value.matchesPerTeam : 3
   )
-  const [restEveryX, setRestEveryX] = useLocalStorageState(
-    'u9plateau.restEveryX',
+  const [restEveryX, setRestEveryX] = useState(
     typeof value?.restEveryX === 'number' ? value.restEveryX : 1
   )
   const [allowRematches, setAllowRematches] = useState(
     typeof value?.allowRematches === 'boolean' ? value.allowRematches : false
   )
+
+  useEffect(() => {
+    if (!value) return
+    setPitches(typeof value.pitches === 'number' ? clamp(value.pitches, 1) : 3)
+    setMatchMin(typeof value.matchMin === 'number' ? clamp(value.matchMin, 1) : 10)
+    setBreakMin(typeof value.breakMin === 'number' ? clamp(value.breakMin, 0) : 2)
+    setStartHHMM(value.start || '10:00')
+    setForbidIntraClub(typeof value.forbidIntraClub === 'boolean' ? value.forbidIntraClub : true)
+    setMatchesPerTeam(typeof value.matchesPerTeam === 'number' ? clamp(value.matchesPerTeam, 1) : 3)
+    setRestEveryX(typeof value.restEveryX === 'number' ? clamp(value.restEveryX, 1) : 1)
+    setAllowRematches(typeof value.allowRematches === 'boolean' ? value.allowRematches : false)
+    setRegenKey(typeof value.regenSeed === 'number' ? value.regenSeed : 1)
+  }, [
+    value,
+    setPitches,
+    setMatchMin,
+    setBreakMin,
+    setStartHHMM,
+    setForbidIntraClub,
+    setMatchesPerTeam,
+    setRestEveryX,
+    setAllowRematches,
+    setRegenKey,
+  ])
 
   // 2) Génération
   const parsedStart = useMemo(() => parseHHMM(startHHMM) || { hh: 10, mm: 0 }, [startHHMM])
