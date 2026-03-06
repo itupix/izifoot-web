@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import QRCode from 'qrcode'
 import { apiGet } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
@@ -43,6 +44,10 @@ export default function PublicPlateauPage() {
   const [plateau, setPlateau] = useState<Plateau | null>(null)
   const [rotation, setRotation] = useState<PublicPlateauResponse['rotation']>(null)
   const [selectedTeam, setSelectedTeam] = useState('')
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+  const [shareQrDataUrl, setShareQrDataUrl] = useState('')
+  const [shareQrLoading, setShareQrLoading] = useState(false)
 
   const loadPublicPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!token) return
@@ -98,6 +103,58 @@ export default function PublicPlateauPage() {
     }
     return map
   }, [rotation, teamLabels])
+  const publicPlateauUrl = useMemo(() => {
+    if (!token) return ''
+    if (typeof window === 'undefined') return ''
+    return `${window.location.origin}/plateau/public/${encodeURIComponent(token)}`
+  }, [token])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isShareModalOpen || !publicPlateauUrl) {
+      setShareQrDataUrl('')
+      setShareQrLoading(false)
+      return
+    }
+    setShareQrLoading(true)
+    void QRCode.toDataURL(publicPlateauUrl, {
+      width: 240,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+      .then((dataUrl: string) => {
+        if (cancelled) return
+        setShareQrDataUrl(dataUrl)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setShareQrDataUrl('')
+      })
+      .finally(() => {
+        if (cancelled) return
+        setShareQrLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isShareModalOpen, publicPlateauUrl])
+
+  function closeShareModal() {
+    setIsShareModalOpen(false)
+    setShareCopied(false)
+    setShareQrDataUrl('')
+    setShareQrLoading(false)
+  }
+
+  async function copyShareLink() {
+    if (!publicPlateauUrl) return
+    try {
+      await navigator.clipboard.writeText(publicPlateauUrl)
+      setShareCopied(true)
+    } catch {
+      setShareCopied(false)
+    }
+  }
 
   return (
     <div className="training-details-page">
@@ -125,7 +182,9 @@ export default function PublicPlateauPage() {
             <div className="card-head">
               <h3>Rotation</h3>
               <div className="head-actions">
-                <span>{rotation ? '1' : '0'}</span>
+                <button type="button" className="add-button" onClick={() => setIsShareModalOpen(true)}>
+                  Partager le plateau
+                </button>
               </div>
             </div>
             <div style={{ display: 'grid', gap: 10 }}>
@@ -204,6 +263,49 @@ export default function PublicPlateauPage() {
               )}
             </div>
           </section>
+        </>
+      )}
+
+      {isShareModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeShareModal} />
+          <div className="drill-modal share-modal" role="dialog" aria-modal="true" aria-label="Partager le plateau">
+            <div className="drill-modal-head">
+              <h3>Partager le plateau</h3>
+              <button type="button" onClick={closeShareModal}>✕</button>
+            </div>
+            <div className="share-content">
+              <p className="muted-line">
+                Ce lien ouvre la version publique du plateau avec les blocs titre/date, informations et rotation.
+              </p>
+              <label className="share-url-block">
+                <span>Lien public</span>
+                <input type="text" readOnly value={publicPlateauUrl} />
+              </label>
+              <div className="share-actions">
+                <button type="button" onClick={() => void copyShareLink()} disabled={!publicPlateauUrl}>
+                  {shareCopied ? 'Lien copié' : 'Copier le lien'}
+                </button>
+                <a
+                  href={publicPlateauUrl || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => {
+                    if (!publicPlateauUrl) e.preventDefault()
+                  }}
+                  aria-disabled={!publicPlateauUrl}
+                >
+                  Ouvrir le lien
+                </a>
+              </div>
+              {shareQrLoading && <p className="muted-line">Génération du QR code…</p>}
+              {shareQrDataUrl && (
+                <div className="share-qr-wrap">
+                  <img src={shareQrDataUrl} alt="QR code du lien public du plateau" width={220} height={220} />
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>

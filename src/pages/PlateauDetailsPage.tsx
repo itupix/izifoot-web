@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import QRCode from 'qrcode'
 import { api, type Planning } from '../api'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -70,6 +71,8 @@ export default function PlateauDetailsPage() {
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [sharedPublicUrl, setSharedPublicUrl] = useState('')
+  const [shareQrDataUrl, setShareQrDataUrl] = useState('')
+  const [shareQrLoading, setShareQrLoading] = useState(false)
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [editingPlanning, setEditingPlanning] = useState<Planning | null>(null)
   const [selectedPlanningTeam, setSelectedPlanningTeam] = useState('')
@@ -154,11 +157,37 @@ export default function PlateauDetailsPage() {
       .filter((slot) => slot.games.length > 0)
   }, [plateauPlanningData, selectedPlanningTeam])
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
-  const publicPlateauQrUrl = useMemo(() => {
-    if (!publicPlateauUrl) return ''
-    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(publicPlateauUrl)}`
-  }, [publicPlateauUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isShareModalOpen || !publicPlateauUrl) {
+      setShareQrDataUrl('')
+      setShareQrLoading(false)
+      return
+    }
+    setShareQrLoading(true)
+    void QRCode.toDataURL(publicPlateauUrl, {
+      width: 240,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+    })
+      .then((dataUrl: string) => {
+        if (cancelled) return
+        setShareQrDataUrl(dataUrl)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setShareQrDataUrl('')
+      })
+      .finally(() => {
+        if (cancelled) return
+        setShareQrLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isShareModalOpen, publicPlateauUrl])
 
   async function togglePlateauPresence(playerId: string, present: boolean) {
     if (!writable) return
@@ -274,6 +303,8 @@ export default function PlateauDetailsPage() {
   function closeShareModal() {
     setIsShareModalOpen(false)
     setShareCopied(false)
+    setShareQrDataUrl('')
+    setShareQrLoading(false)
   }
 
   async function copyShareLink() {
@@ -833,9 +864,10 @@ export default function PlateauDetailsPage() {
                   Ouvrir le lien
                 </a>
               </div>
-              {publicPlateauQrUrl && (
+              {shareQrLoading && <p className="muted-line">Génération du QR code…</p>}
+              {shareQrDataUrl && (
                 <div className="share-qr-wrap">
-                  <img src={publicPlateauQrUrl} alt="QR code du lien public du plateau" width={220} height={220} />
+                  <img src={shareQrDataUrl} alt="QR code du lien public du plateau" width={220} height={220} />
                 </div>
               )}
             </div>
