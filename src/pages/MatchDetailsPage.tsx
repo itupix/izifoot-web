@@ -1,15 +1,32 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { apiGet, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
+import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import type { ClubMe, MatchLite, MatchTeamLite, Player } from '../types/api'
 import { uiAlert } from '../ui'
 import './MatchDetailsPage.css'
+import './TrainingDetailsPage.css'
 
 type MatchDetailsData = MatchLite & {
   playersById?: Record<string, Player>
+}
+
+function getInitials(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase()
+}
+
+function colorFromName(name: string) {
+  const palette = ['#1d4ed8', '#0f766e', '#b45309', '#7c3aed', '#0e7490', '#b91c1c']
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return palette[hash % palette.length]
 }
 
 function getTeam(match: MatchLite, side: 'home' | 'away'): MatchTeamLite | undefined {
@@ -59,15 +76,12 @@ export default function MatchDetailsPage() {
   const [match, setMatch] = useState<MatchDetailsData | null>(null)
   const [clubName, setClubName] = useState<string>('Club')
   const [players, setPlayers] = useState<Player[]>([])
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<MatchDraft | null>(null)
   const [selectedHomePlayer, setSelectedHomePlayer] = useState('')
-  const [selectedAwayPlayer, setSelectedAwayPlayer] = useState('')
   const [selectedHomeRole, setSelectedHomeRole] = useState<'starter' | 'sub'>('starter')
-  const [selectedAwayRole, setSelectedAwayRole] = useState<'starter' | 'sub'>('starter')
   const [selectedHomeScorer, setSelectedHomeScorer] = useState('')
-  const [selectedAwayScorer, setSelectedAwayScorer] = useState('')
 
   const loadMatch = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -119,56 +133,48 @@ export default function MatchDetailsPage() {
       .map((s) => playerNameById.get(s.playerId) || s.playerId),
     [viewDraft.scorers, playerNameById]
   )
-  const heroAwayScorers = useMemo(
-    () => viewDraft.scorers
-      .filter((s) => s.side === 'away')
-      .map((s) => playerNameById.get(s.playerId) || s.playerId),
-    [viewDraft.scorers, playerNameById]
-  )
+  const playerById = useMemo(() => new Map(players.map((p) => [p.id, p] as const)), [players])
 
-  function toggleEditing(next: boolean) {
-    setIsEditing(next)
-    if (next && match) {
-      setDraft(buildDraft(match))
-      setSelectedHomePlayer('')
-      setSelectedAwayPlayer('')
-      setSelectedHomeScorer('')
-      setSelectedAwayScorer('')
-    }
+  function openEditModal() {
+    if (match) setDraft(buildDraft(match))
+    setSelectedHomePlayer('')
+    setSelectedHomeScorer('')
+    setIsEditModalOpen(true)
   }
 
-  function addPlayerToCompo(side: 'home' | 'away', role: 'starter' | 'sub', playerId: string) {
+  function closeEditModal() {
+    if (saving) return
+    setIsEditModalOpen(false)
+  }
+
+  function addPlayerToCompo(role: 'starter' | 'sub', playerId: string) {
     if (!playerId) return
     setDraft((prev) => {
       if (!prev) return prev
-      const block = side === 'home' ? prev.home : prev.away
+      const block = prev.home
       const all = new Set([...block.starters, ...block.subs])
       if (all.has(playerId)) return prev
       const updatedSide: SideDraft = role === 'starter'
         ? { starters: [...block.starters, playerId], subs: block.subs }
         : { starters: block.starters, subs: [...block.subs, playerId] }
-      return side === 'home'
-        ? { ...prev, home: updatedSide }
-        : { ...prev, away: updatedSide }
+      return { ...prev, home: updatedSide }
     })
   }
 
-  function removePlayerFromCompo(side: 'home' | 'away', role: 'starter' | 'sub', index: number) {
+  function removePlayerFromCompo(role: 'starter' | 'sub', index: number) {
     setDraft((prev) => {
       if (!prev) return prev
-      const block = side === 'home' ? prev.home : prev.away
+      const block = prev.home
       const updatedSide: SideDraft = role === 'starter'
         ? { starters: block.starters.filter((_, i) => i !== index), subs: block.subs }
         : { starters: block.starters, subs: block.subs.filter((_, i) => i !== index) }
-      return side === 'home'
-        ? { ...prev, home: updatedSide }
-        : { ...prev, away: updatedSide }
+      return { ...prev, home: updatedSide }
     })
   }
 
-  function addScorer(side: 'home' | 'away', playerId: string) {
+  function addScorer(playerId: string) {
     if (!playerId) return
-    setDraft((prev) => (prev ? { ...prev, scorers: [...prev.scorers, { side, playerId }] } : prev))
+    setDraft((prev) => (prev ? { ...prev, scorers: [...prev.scorers.filter((s) => s.side === 'home'), { side: 'home', playerId }] } : prev))
   }
 
   function removeScorer(index: number) {
@@ -196,12 +202,14 @@ export default function MatchDetailsPage() {
           home: homeScore,
           away: awayScore,
         },
-        buteurs: draft.scorers.map((s) => ({ side: s.side, playerId: s.playerId })),
+        buteurs: draft.scorers
+          .filter((s) => s.side === 'home')
+          .map((s) => ({ side: s.side, playerId: s.playerId })),
         opponentName: match.opponentName ?? '',
       })
       setMatch(updated)
       setDraft(buildDraft(updated))
-      setIsEditing(false)
+      setIsEditModalOpen(false)
     } catch (err: unknown) {
       uiAlert(`Erreur mise à jour du match: ${toErrorMessage(err)}`)
     } finally {
@@ -216,14 +224,13 @@ export default function MatchDetailsPage() {
   return (
     <div className="match-details-page">
       <header className="match-details-topbar">
-        <button type="button" className="match-back-button" onClick={() => navigate(-1)}>
-          Retour
+        <button type="button" className="back-link-button" onClick={() => navigate(-1)}>
+          <ChevronLeftIcon size={18} />
+          <span>Retour</span>
         </button>
-        {match.plateauId && (
-          <Link className="match-plateau-link" to={`/plateau/${match.plateauId}`}>
-            Voir le plateau
-          </Link>
-        )}
+        <RoundIconButton ariaLabel="Modifier la composition et les buteurs" className="menu-dots-button" onClick={openEditModal}>
+          <DotsHorizontalIcon size={18} />
+        </RoundIconButton>
       </header>
 
       <section className="match-hero">
@@ -256,14 +263,7 @@ export default function MatchDetailsPage() {
             ))}
           </div>
           <div />
-          <div className="hero-scorers-col">
-            {heroAwayScorers.map((name, idx) => (
-              <div className="hero-scorer-line" key={`hero-away-scorer-${idx}-${name}`}>
-                <span className="hero-scorer-ball" aria-hidden="true">⚽</span>
-                <span>{name}</span>
-              </div>
-            ))}
-          </div>
+          <div className="hero-scorers-col" />
         </div>
         <div className="match-result-row">
           <div className={`result-pill ${outcomeClass}`}>{outcomeLabel}</div>
@@ -271,247 +271,175 @@ export default function MatchDetailsPage() {
         {matchDate && <p className="match-meta-line">{matchDate}</p>}
       </section>
 
-      <section className="match-editor-actions">
-        {!isEditing ? (
-          <button type="button" className="edit-action-button" onClick={() => toggleEditing(true)}>
-            Modifier compo et buteurs
-          </button>
-        ) : (
-          <div className="edit-action-group">
-            <button type="button" className="edit-secondary" onClick={() => toggleEditing(false)} disabled={saving}>
-              Annuler
-            </button>
-            <button type="button" className="edit-primary" onClick={() => void saveDraft()} disabled={saving}>
-              {saving ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-          </div>
-        )}
-      </section>
-
       <section className="match-content-grid">
         <article className="match-card">
-          <h3>Compositions</h3>
-          <div className="lineup-grid">
-            <div>
-              <h4>{homeLabel}</h4>
-              {isEditing && (
-                <div className="editor-inline-row">
-                  <select value={selectedHomePlayer} onChange={(e) => setSelectedHomePlayer(e.target.value)}>
-                    <option value="">Joueur...</option>
-                    {sortedPlayers.map((player) => (
-                      <option key={player.id} value={player.id}>{player.name}</option>
-                    ))}
-                  </select>
-                  <select value={selectedHomeRole} onChange={(e) => setSelectedHomeRole(e.target.value as 'starter' | 'sub')}>
-                    <option value="starter">Titulaire</option>
-                    <option value="sub">Remplaçant</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addPlayerToCompo('home', selectedHomeRole, selectedHomePlayer)
-                      setSelectedHomePlayer('')
-                    }}
-                  >
-                    Ajouter
-                  </button>
-                </div>
+          <h3>Composition</h3>
+          <div className="lineup-stack">
+            <p>Titulaires</p>
+            <div className="compo-line-list">
+              {viewDraft.home.starters.length > 0 ? (
+                viewDraft.home.starters.map((playerId, index) => {
+                  const player = playerById.get(playerId)
+                  const name = player?.name || playerId
+                  const maybeAvatar =
+                    (player as Player & { avatarUrl?: string | null; avatar?: string | null; photoUrl?: string | null; imageUrl?: string | null } | undefined)?.avatarUrl
+                    || (player as Player & { avatar?: string | null } | undefined)?.avatar
+                    || (player as Player & { photoUrl?: string | null } | undefined)?.photoUrl
+                    || (player as Player & { imageUrl?: string | null } | undefined)?.imageUrl
+                  return (
+                    <div key={`home-starter-${playerId}-${index}`} className="compo-line-item">
+                      <div className="compo-avatar-chip" title={name}>
+                        {maybeAvatar ? (
+                          <img src={maybeAvatar} alt={name} />
+                        ) : (
+                          <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
+                        )}
+                      </div>
+                      <strong>{name}</strong>
+                    </div>
+                  )
+                })
+              ) : (
+                <p className="muted-inline">Aucun joueur</p>
               )}
-              <div className="lineup-stack">
-                <p>Titulaires</p>
-                <ul>
-                  {viewDraft.home.starters.length > 0 ? (
-                    viewDraft.home.starters.map((playerId, index) => (
-                      <li key={`home-starter-${playerId}-${index}`}>
-                        <span>{playerNameById.get(playerId) || playerId}</span>
-                        {isEditing && (
-                          <button type="button" onClick={() => removePlayerFromCompo('home', 'starter', index)}>
-                            Retirer
-                          </button>
-                        )}
-                      </li>
-                    ))
-                  ) : (
-                    <li>Aucun joueur</li>
-                  )}
-                </ul>
-              </div>
-              <div className="lineup-stack">
-                <p>Remplaçants</p>
-                <ul>
-                  {viewDraft.home.subs.length > 0 ? (
-                    viewDraft.home.subs.map((playerId, index) => (
-                      <li key={`home-sub-${playerId}-${index}`}>
-                        <span>{playerNameById.get(playerId) || playerId}</span>
-                        {isEditing && (
-                          <button type="button" onClick={() => removePlayerFromCompo('home', 'sub', index)}>
-                            Retirer
-                          </button>
-                        )}
-                      </li>
-                    ))
-                  ) : (
-                    <li>Aucun joueur</li>
-                  )}
-                </ul>
-              </div>
             </div>
-            <div>
-              <h4>{awayLabel}</h4>
-              {isEditing && (
-                <div className="editor-inline-row">
-                  <select value={selectedAwayPlayer} onChange={(e) => setSelectedAwayPlayer(e.target.value)}>
-                    <option value="">Joueur...</option>
-                    {sortedPlayers.map((player) => (
-                      <option key={player.id} value={player.id}>{player.name}</option>
-                    ))}
-                  </select>
-                  <select value={selectedAwayRole} onChange={(e) => setSelectedAwayRole(e.target.value as 'starter' | 'sub')}>
-                    <option value="starter">Titulaire</option>
-                    <option value="sub">Remplaçant</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addPlayerToCompo('away', selectedAwayRole, selectedAwayPlayer)
-                      setSelectedAwayPlayer('')
-                    }}
-                  >
-                    Ajouter
-                  </button>
-                </div>
+          </div>
+          <div className="lineup-stack">
+            <p>Remplaçants</p>
+            <div className="compo-line-list">
+              {viewDraft.home.subs.length > 0 ? (
+                viewDraft.home.subs.map((playerId, index) => {
+                  const player = playerById.get(playerId)
+                  const name = player?.name || playerId
+                  const maybeAvatar =
+                    (player as Player & { avatarUrl?: string | null; avatar?: string | null; photoUrl?: string | null; imageUrl?: string | null } | undefined)?.avatarUrl
+                    || (player as Player & { avatar?: string | null } | undefined)?.avatar
+                    || (player as Player & { photoUrl?: string | null } | undefined)?.photoUrl
+                    || (player as Player & { imageUrl?: string | null } | undefined)?.imageUrl
+                  return (
+                    <div key={`home-sub-${playerId}-${index}`} className="compo-line-item">
+                      <div className="compo-avatar-chip" title={name}>
+                        {maybeAvatar ? (
+                          <img src={maybeAvatar} alt={name} />
+                        ) : (
+                          <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
+                        )}
+                      </div>
+                      <strong>{name}</strong>
+                    </div>
+                  )
+                })
+              ) : (
+                <p className="muted-inline">Aucun joueur</p>
               )}
-              <div className="lineup-stack">
-                <p>Titulaires</p>
-                <ul>
-                  {viewDraft.away.starters.length > 0 ? (
-                    viewDraft.away.starters.map((playerId, index) => (
-                      <li key={`away-starter-${playerId}-${index}`}>
-                        <span>{playerNameById.get(playerId) || playerId}</span>
-                        {isEditing && (
-                          <button type="button" onClick={() => removePlayerFromCompo('away', 'starter', index)}>
-                            Retirer
-                          </button>
-                        )}
-                      </li>
-                    ))
-                  ) : (
-                    <li>Aucun joueur</li>
-                  )}
-                </ul>
-              </div>
-              <div className="lineup-stack">
-                <p>Remplaçants</p>
-                <ul>
-                  {viewDraft.away.subs.length > 0 ? (
-                    viewDraft.away.subs.map((playerId, index) => (
-                      <li key={`away-sub-${playerId}-${index}`}>
-                        <span>{playerNameById.get(playerId) || playerId}</span>
-                        {isEditing && (
-                          <button type="button" onClick={() => removePlayerFromCompo('away', 'sub', index)}>
-                            Retirer
-                          </button>
-                        )}
-                      </li>
-                    ))
-                  ) : (
-                    <li>Aucun joueur</li>
-                  )}
-                </ul>
-              </div>
             </div>
           </div>
         </article>
 
-        <article className="match-card">
-          <h3>Buteurs</h3>
-          {pending && !isEditing && <p>Le match n’est pas encore joué.</p>}
-          <div className="scorers-grid">
-            <div>
-              <h4>{homeLabel}</h4>
-              {isEditing && (
-                <div className="editor-inline-row">
-                  <select value={selectedHomeScorer} onChange={(e) => setSelectedHomeScorer(e.target.value)}>
-                    <option value="">Joueur...</option>
-                    {sortedPlayers.map((player) => (
-                      <option key={player.id} value={player.id}>{player.name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addScorer('home', selectedHomeScorer)
-                      setSelectedHomeScorer('')
-                    }}
-                  >
-                    Ajouter
-                  </button>
-                </div>
-              )}
-              {(viewDraft.scorers.filter((s) => s.side === 'home').length > 0) ? (
-                <ul>
-                  {viewDraft.scorers
-                    .map((scorer, idx) => ({ scorer, idx }))
-                    .filter(({ scorer }) => scorer.side === 'home')
-                    .map(({ scorer, idx }) => (
-                      <li key={`${scorer.playerId}-home-${idx}`}>
-                        <span>{playerNameById.get(scorer.playerId) || scorer.playerId}</span>
-                        {isEditing && (
-                          <button type="button" onClick={() => removeScorer(idx)}>
-                            Retirer
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                </ul>
-              ) : (
-                <p>Aucun buteur</p>
-              )}
+      </section>
+
+      {isEditModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeEditModal} />
+          <div className="match-edit-modal" role="dialog" aria-modal="true" aria-label="Modifier composition et buteurs">
+            <div className="drill-modal-head">
+              <h3>Modifier composition et buteurs</h3>
+              <button type="button" onClick={closeEditModal} disabled={saving}>✕</button>
             </div>
-            <div>
-              <h4>{awayLabel}</h4>
-              {isEditing && (
-                <div className="editor-inline-row">
-                  <select value={selectedAwayScorer} onChange={(e) => setSelectedAwayScorer(e.target.value)}>
-                    <option value="">Joueur...</option>
-                    {sortedPlayers.map((player) => (
-                      <option key={player.id} value={player.id}>{player.name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addScorer('away', selectedAwayScorer)
-                      setSelectedAwayScorer('')
-                    }}
-                  >
-                    Ajouter
-                  </button>
-                </div>
-              )}
-              {(viewDraft.scorers.filter((s) => s.side === 'away').length > 0) ? (
+
+            <div className="lineup-stack">
+              <p>Composition</p>
+              <div className="editor-inline-row">
+                <select value={selectedHomePlayer} onChange={(e) => setSelectedHomePlayer(e.target.value)}>
+                  <option value="">Joueur...</option>
+                  {sortedPlayers.map((player) => (
+                    <option key={player.id} value={player.id}>{player.name}</option>
+                  ))}
+                </select>
+                <select value={selectedHomeRole} onChange={(e) => setSelectedHomeRole(e.target.value as 'starter' | 'sub')}>
+                  <option value="starter">Titulaire</option>
+                  <option value="sub">Remplaçant</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    addPlayerToCompo(selectedHomeRole, selectedHomePlayer)
+                    setSelectedHomePlayer('')
+                  }}
+                >
+                  Ajouter
+                </button>
+              </div>
+
+              <div className="lineup-stack">
+                <p>Titulaires</p>
                 <ul>
-                  {viewDraft.scorers
-                    .map((scorer, idx) => ({ scorer, idx }))
-                    .filter(({ scorer }) => scorer.side === 'away')
-                    .map(({ scorer, idx }) => (
-                      <li key={`${scorer.playerId}-away-${idx}`}>
-                        <span>{playerNameById.get(scorer.playerId) || scorer.playerId}</span>
-                        {isEditing && (
-                          <button type="button" onClick={() => removeScorer(idx)}>
-                            Retirer
-                          </button>
-                        )}
-                      </li>
-                    ))}
+                  {viewDraft.home.starters.map((playerId, index) => (
+                    <li key={`modal-home-starter-${playerId}-${index}`}>
+                      <span>{playerNameById.get(playerId) || playerId}</span>
+                      <button type="button" onClick={() => removePlayerFromCompo('starter', index)}>Retirer</button>
+                    </li>
+                  ))}
+                  {viewDraft.home.starters.length === 0 && <li>Aucun joueur</li>}
                 </ul>
-              ) : (
-                <p>Aucun buteur</p>
-              )}
+              </div>
+
+              <div className="lineup-stack">
+                <p>Remplaçants</p>
+                <ul>
+                  {viewDraft.home.subs.map((playerId, index) => (
+                    <li key={`modal-home-sub-${playerId}-${index}`}>
+                      <span>{playerNameById.get(playerId) || playerId}</span>
+                      <button type="button" onClick={() => removePlayerFromCompo('sub', index)}>Retirer</button>
+                    </li>
+                  ))}
+                  {viewDraft.home.subs.length === 0 && <li>Aucun joueur</li>}
+                </ul>
+              </div>
+            </div>
+
+            <div className="lineup-stack">
+              <p>Buteurs</p>
+              <div className="editor-inline-row is-short">
+                <select value={selectedHomeScorer} onChange={(e) => setSelectedHomeScorer(e.target.value)}>
+                  <option value="">Joueur...</option>
+                  {sortedPlayers.map((player) => (
+                    <option key={player.id} value={player.id}>{player.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    addScorer(selectedHomeScorer)
+                    setSelectedHomeScorer('')
+                  }}
+                >
+                  Ajouter
+                </button>
+              </div>
+              <ul>
+                {viewDraft.scorers
+                  .map((scorer, idx) => ({ scorer, idx }))
+                  .filter(({ scorer }) => scorer.side === 'home')
+                  .map(({ scorer, idx }) => (
+                    <li key={`modal-scorer-${scorer.playerId}-${idx}`}>
+                      <span>{playerNameById.get(scorer.playerId) || scorer.playerId}</span>
+                      <button type="button" onClick={() => removeScorer(idx)}>Retirer</button>
+                    </li>
+                  ))}
+                {viewDraft.scorers.filter((s) => s.side === 'home').length === 0 && <li>Aucun buteur</li>}
+              </ul>
+            </div>
+
+            <div className="edit-action-group">
+              <button type="button" className="edit-secondary" onClick={closeEditModal} disabled={saving}>Annuler</button>
+              <button type="button" className="edit-primary" onClick={() => void saveDraft()} disabled={saving}>
+                {saving ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
             </div>
           </div>
-        </article>
-      </section>
+        </>
+      )}
     </div>
   )
 }
