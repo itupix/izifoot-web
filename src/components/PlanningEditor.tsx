@@ -38,7 +38,7 @@ type TeamEntry = {
 type Props = {
   value?: PlanningData | null;               // planning existant à éditer (facultatif)
   onChange?: (data: PlanningData) => void;   // renvoyé à chaque modification (pour sauvegarde)
-  title?: string;                            // titre optionnel
+  onMetaChange?: (meta: { canSave: boolean; hasGeneratedRotation: boolean; warnings: string[] }) => void;
 };
 
 const subtleButtonStyle = {
@@ -46,15 +46,6 @@ const subtleButtonStyle = {
   borderRadius: 999,
   background: '#f8fafc',
   color: '#0f172a',
-  padding: '8px 12px',
-  fontWeight: 700,
-}
-
-const dangerButtonStyle = {
-  border: '1px solid #fecaca',
-  borderRadius: 999,
-  background: '#fff1f2',
-  color: '#be123c',
   padding: '8px 12px',
   fontWeight: 700,
 }
@@ -297,7 +288,7 @@ function mergeUniqueLabels(...lists: string[][]) {
 }
 
 /** ==== Composant principal ==== */
-const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
+const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
   // 1) États (initialisés depuis `value` si présent)
   // Hydratation rudimentaire depuis value: reconstruit l'heure de départ / terrains / etc.
   const initial = value ?? { start: '10:00', pitches: 3, matchMin: 10, breakMin: 2, slots: [] }
@@ -328,6 +319,7 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   const [teamsOpen, setTeamsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [openSlots, setOpenSlots] = useState<number[]>([])
+  const [openSlotsAfterRegenerate, setOpenSlotsAfterRegenerate] = useState(false)
   const [pitches, setPitches] = useState(initial.pitches)
   const [matchMin, setMatchMin] = useState(initial.matchMin)
   const [breakMin, setBreakMin] = useState(initial.breakMin)
@@ -342,7 +334,7 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
     typeof value?.matchesPerTeam === 'number' ? value.matchesPerTeam : 3
   )
   const [restEveryX, setRestEveryX] = useState(
-    typeof value?.restEveryX === 'number' ? value.restEveryX : 1
+    typeof value?.restEveryX === 'number' ? value.restEveryX : 3
   )
   const [allowRematches, setAllowRematches] = useState(
     typeof value?.allowRematches === 'boolean' ? value.allowRematches : false
@@ -356,7 +348,7 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
     setStartHHMM(value.start || '10:00')
     setForbidIntraClub(typeof value.forbidIntraClub === 'boolean' ? value.forbidIntraClub : true)
     setMatchesPerTeam(typeof value.matchesPerTeam === 'number' ? clamp(value.matchesPerTeam, 1) : 3)
-    setRestEveryX(typeof value.restEveryX === 'number' ? clamp(value.restEveryX, 1) : 1)
+    setRestEveryX(typeof value.restEveryX === 'number' ? clamp(value.restEveryX, 1) : 3)
     setAllowRematches(typeof value.allowRematches === 'boolean' ? value.allowRematches : false)
     setRegenKey(typeof value.regenSeed === 'number' ? value.regenSeed : 1)
   }, [
@@ -431,14 +423,28 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
   ])
 
   useEffect(() => {
+    if (openSlotsAfterRegenerate) {
+      setOpenSlots(agenda.map((slot) => slot.timeIndex))
+      setOpenSlotsAfterRegenerate(false)
+      return
+    }
     setOpenSlots([])
-  }, [agenda])
+  }, [agenda, openSlotsAfterRegenerate])
 
   // 4) Avertissements
-  const warnings: string[] = []
-  if (teams.length < 2) warnings.push('Ajoutez au moins 2 équipes.')
-  if (matches.length === 0 && teams.length >= 2) warnings.push("Aucun match possible avec ces contraintes (peut-être trop d'équipes d'un même club ?).")
-  if (matchesPerTeam >= teams.length) warnings.push("Le nombre de matchs par équipe doit être inférieur au nombre d'équipes.")
+  const warnings = useMemo(() => {
+    const nextWarnings: string[] = []
+    if (teams.length < 2) nextWarnings.push('Ajoutez au moins 2 équipes.')
+    if (matches.length === 0 && teams.length >= 2) nextWarnings.push("Aucun match possible avec ces contraintes (peut-être trop d'équipes d'un même club ?).")
+    if (matchesPerTeam >= teams.length) nextWarnings.push("Le nombre de matchs par équipe doit être inférieur au nombre d'équipes.")
+    return nextWarnings
+  }, [matches.length, matchesPerTeam, teams.length])
+  const hasGeneratedRotation = agenda.length > 0
+  const canSave = hasGeneratedRotation
+
+  useEffect(() => {
+    onMetaChange?.({ canSave, hasGeneratedRotation, warnings })
+  }, [canSave, hasGeneratedRotation, onMetaChange, warnings])
 
   // 5) Actions locales
   const addTeam = () => {
@@ -477,15 +483,13 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
     ))
   }
 
+  const regeneratePlanning = () => {
+    setOpenSlotsAfterRegenerate(true)
+    setRegenKey(Date.now())
+  }
+
   return (
     <div className="min-h-[50vh]">
-      <header style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{title ?? 'Éditeur de planning'}</h2>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button type="button" onClick={() => setRegenKey(Date.now())} style={subtleButtonStyle}>Régénérer</button>
-        </div>
-      </header>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
         <div style={{ display: 'grid', gap: 12 }}>
           <AttendanceAccordion
@@ -497,8 +501,17 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
           >
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 8 }}>
-                <label htmlFor="planning-team-input">Ajouter une équipe</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto',
+                    gap: 8,
+                    padding: 12,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    background: '#f8fafc',
+                  }}
+                >
                   <input
                     id="planning-team-input"
                     list="planning-team-suggestions"
@@ -521,7 +534,16 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gap: 8 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 8,
+                  padding: 12,
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 12,
+                  background: '#fff',
+                }}
+              >
                 {teamEntries.map((teamEntry, index) => (
                   <div
                     key={`${teamEntry.label}-${index}`}
@@ -537,19 +559,6 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          background: teamEntry.color,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{teamEntry.label}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <input
                         type="color"
                         aria-label={`Choisir la couleur pour ${teamEntry.label}`}
@@ -562,21 +571,54 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
                           border: '1px solid #dbe5f1',
                           borderRadius: 999,
                           background: '#fff',
+                          flexShrink: 0,
                         }}
                       />
-                      <button type="button" onClick={() => removeTeam(index)} style={dangerButtonStyle}>
-                        Retirer
-                      </button>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{teamEntry.label}</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => removeTeam(index)}
+                      aria-label={`Retirer ${teamEntry.label}`}
+                      style={{
+                        width: 34,
+                        height: 34,
+                        border: '1px solid #fecaca',
+                        borderRadius: 999,
+                        background: '#fff1f2',
+                        color: '#be123c',
+                        fontSize: 20,
+                        lineHeight: 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
+                {teamEntries.length === 0 && (
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      background: '#f8fafc',
+                      color: '#64748b',
+                      fontSize: 14,
+                    }}
+                  >
+                    Aucune équipe ajoutée.
+                  </div>
+                )}
               </div>
             </div>
           </AttendanceAccordion>
 
           <AttendanceAccordion
-            title="Reglages de la rotation"
-            countLabel="Parametres"
+            title="Réglages"
+            countLabel=""
             isOpen={settingsOpen}
             onToggle={() => setSettingsOpen((prev) => !prev)}
             toggleLabel={settingsOpen ? 'Réduire les réglages de la rotation' : 'Ouvrir les réglages de la rotation'}
@@ -640,11 +682,11 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
                   </div>
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  Repos obligatoire (X consécutifs max)
+                  Max matchs d'affilée
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev - 1, 1))} style={stepperButtonStyle} aria-label="Diminuer le repos obligatoire">−</button>
+                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev - 1, 1))} style={stepperButtonStyle} aria-label="Diminuer le nombre maximal de matchs d'affilée">−</button>
                     <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{restEveryX}</output>
-                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev + 1, 1))} style={stepperButtonStyle} aria-label="Augmenter le repos obligatoire">+</button>
+                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev + 1, 1))} style={stepperButtonStyle} aria-label="Augmenter le nombre maximal de matchs d'affilée">+</button>
                   </div>
                 </label>
               </div>
@@ -664,10 +706,14 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
             </div>
           </AttendanceAccordion>
 
-          {warnings.length > 0 && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#8a5a00', background: '#fff8e1', border: '1px solid #ffecb5', borderRadius: 8, padding: 8 }}>
-              {warnings.map((w, i) => <div key={i}>• {w}</div>)}
-            </div>
+          {hasGeneratedRotation && (
+            <button
+              type="button"
+              onClick={regeneratePlanning}
+              style={{ ...subtleButtonStyle, width: '100%' }}
+            >
+              Régénérer
+            </button>
           )}
         </div>
 
@@ -730,10 +776,6 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
             )}
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-            Matchs de {matchMin} min + pause {breakMin} min (total {slotMinutes} min / créneau).<br />
-            Règle de repos : 1 match de repos tous les {restEveryX} match(s) consécutifs max.
-          </div>
         </div>
       </div>
     </div>

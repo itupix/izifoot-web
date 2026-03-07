@@ -7,6 +7,7 @@ import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import type { PlanningData } from '../components/PlanningEditor'
 import PlanningModal from '../components/PlanningModal'
+import CtaButton from '../components/CtaButton'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
@@ -15,7 +16,7 @@ import { isMatchNotPlayed as computeIsMatchNotPlayed } from '../matchStatus'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
-import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
+import type { AttendanceRow, ClubMe, MatchLite, Plateau, Player } from '../types/api'
 import './TrainingDetailsPage.css'
 
 const TEAM_COLORS = [
@@ -24,6 +25,43 @@ const TEAM_COLORS = [
   '#9333ea', '#0f766e', '#be123c', '#1d4ed8', '#15803d',
   '#b45309', '#6d28d9', '#0e7490', '#b91c1c', '#4338ca',
 ]
+
+const PLATEAU_PLANNING_MAP_KEY = 'izifoot.plateauPlanningMap'
+
+function readPlateauPlanningMap() {
+  if (typeof window === 'undefined') return {} as Record<string, string>
+  try {
+    const raw = window.localStorage.getItem(PLATEAU_PLANNING_MAP_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function writePlateauPlanningMap(next: Record<string, string>) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(PLATEAU_PLANNING_MAP_KEY, JSON.stringify(next))
+}
+
+function setPlateauPlanningLink(plateauId: string, planningId: string) {
+  const current = readPlateauPlanningMap()
+  writePlateauPlanningMap({ ...current, [plateauId]: planningId })
+}
+
+function getPlateauPlanningLink(plateauId: string) {
+  const current = readPlateauPlanningMap()
+  return current[plateauId] || ''
+}
+
+function clearPlateauPlanningLink(plateauId: string) {
+  const current = readPlateauPlanningMap()
+  if (!current[plateauId]) return
+  const { [plateauId]: _deleted, ...rest } = current
+  writePlateauPlanningMap(rest)
+}
 
 function getFirstName(fullName: string) {
   return fullName.trim().split(/\s+/)[0] || fullName
@@ -43,13 +81,6 @@ function colorFromName(name: string) {
   return palette[hash % palette.length]
 }
 
-function toDateKey(value?: string | null) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString().slice(0, 10)
-}
-
 function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   const date = dateISO ? new Date(dateISO) : null
   if (date && !Number.isNaN(date.getTime())) {
@@ -66,13 +97,37 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   return '/planning'
 }
 
+function normalizeTeamLabel(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function findPlanningTeamLabel(labels: string[], preferredNames: string[]) {
+  const cleanPreferred = preferredNames
+    .map((name) => normalizeTeamLabel(name))
+    .filter(Boolean)
+  if (!cleanPreferred.length) return ''
+  for (const preferred of cleanPreferred) {
+    const found = labels.find((label) => {
+      const current = normalizeTeamLabel(label)
+      return current === preferred || current.includes(preferred) || preferred.includes(current)
+    })
+    if (found) return found
+  }
+  return ''
+}
+
 export default function PlateauDetailsPage() {
   const { me } = useAuth()
-  const { selectedTeamId, requiresSelection } = useTeamScope()
+  const { selectedTeamId, requiresSelection, teamOptions } = useTeamScope()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [plateau, setPlateau] = useState<Plateau | null>(null)
+  const [clubName, setClubName] = useState('')
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
   const [plateauMatches, setPlateauMatches] = useState<MatchLite[]>([])
@@ -92,7 +147,9 @@ export default function PlateauDetailsPage() {
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [editingPlanning, setEditingPlanning] = useState<Planning | null>(null)
   const [selectedPlanningTeam, setSelectedPlanningTeam] = useState('')
-  const [rotationMenuOpen, setRotationMenuOpen] = useState(false)
+  const [matchSourceMode, setMatchSourceMode] = useState<'MANUAL' | 'ROTATION'>('MANUAL')
+  const [matchModeConfirm, setMatchModeConfirm] = useState<null | 'TO_MANUAL' | 'TO_ROTATION'>(null)
+  const [planningModalOpenedFromSwitch, setPlanningModalOpenedFromSwitch] = useState(false)
   const [infoTab, setInfoTab] = useState<'LIEU' | 'HORAIRES'>('LIEU')
   const [infoModal, setInfoModal] = useState<null | 'ADDRESS' | 'START' | 'MEETING'>(null)
   const [addressDraft, setAddressDraft] = useState('')
@@ -117,24 +174,23 @@ export default function PlateauDetailsPage() {
 
   const loadPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
-    const [p, ps, matches, attends, plannings] = await Promise.all([
+    const [p, ps, matches, attends, plannings, club] = await Promise.all([
       apiGet<Plateau>(apiRoutes.plateaus.byId(id)),
       apiGet<Player[]>(apiRoutes.players.list),
       apiGet<MatchLite[]>(apiRoutes.matches.byPlateau(id)),
       apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', id)),
       api.listPlannings(),
+      apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
     ])
     if (isCancelled()) return
     setPlateau(p)
+    setClubName(club?.name?.trim() || '')
     setPlayers(ps)
     setPlateauMatches(matches)
     setPlateauAttendance(new Set(attends.map(a => a.playerId)))
-    setPlateauPlannings(
-      plannings
-        .filter((planning) => toDateKey(planning.date) === toDateKey(p.date))
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-        .slice(0, 1)
-    )
+    const linkedPlanningId = getPlateauPlanningLink(p.id)
+    const linkedPlanning = linkedPlanningId ? plannings.find((planning) => planning.id === linkedPlanningId) ?? null : null
+    setPlateauPlannings(linkedPlanning ? [linkedPlanning] : [])
   }, [id])
 
   const { loading, error } = useAsyncLoader(loadPlateau)
@@ -186,6 +242,46 @@ export default function PlateauDetailsPage() {
       })
       .filter((slot) => slot.games.length > 0)
   }, [plateauPlanningData, selectedPlanningTeam])
+  const visibleRotationMatches = useMemo(() => {
+    const opponentSeenCount = new Map<string, number>()
+    const matchesByOpponent = new Map<string, MatchLite[]>()
+    const activePlateauTeamName = (() => {
+      const activeId = selectedTeamId || plateau?.teamId
+      if (!activeId) return ''
+      return teamOptions.find((team) => team.id === activeId)?.name || ''
+    })()
+    const clubPlanningTeam = findPlanningTeamLabel(plateauPlanningTeams, [clubName, activePlateauTeamName])
+    for (const match of plateauMatches) {
+      const key = (match.opponentName || '').trim()
+      if (!matchesByOpponent.has(key)) matchesByOpponent.set(key, [])
+      matchesByOpponent.get(key)?.push(match)
+    }
+    return visiblePlanningSlots.map((slot) => ({
+      ...slot,
+      games: slot.games.map((game) => {
+        const isClubGame = Boolean(clubPlanningTeam) && (game.A === clubPlanningTeam || game.B === clubPlanningTeam)
+        const opponent = isClubGame
+          ? (game.A === clubPlanningTeam ? game.B : game.A)
+          : ''
+        let linkedMatch: MatchLite | null = null
+        if (isClubGame) {
+          const occurrence = opponentSeenCount.get(opponent) ?? 0
+          opponentSeenCount.set(opponent, occurrence + 1)
+          linkedMatch = matchesByOpponent.get(opponent)?.[occurrence] ?? null
+        }
+        return { ...game, isClubGame, opponent, linkedMatch }
+      }),
+    }))
+  }, [clubName, plateau?.teamId, plateauMatches, plateauPlanningTeams, selectedTeamId, teamOptions, visiblePlanningSlots])
+  const activeTeamName = useMemo(() => {
+    const activeId = selectedTeamId || plateau?.teamId
+    if (!activeId) return ''
+    return teamOptions.find((team) => team.id === activeId)?.name || ''
+  }, [plateau?.teamId, selectedTeamId, teamOptions])
+  const inferredPlanningTeamLabel = useMemo(() => {
+    if (plateauPlanningTeams.length === 0) return ''
+    return findPlanningTeamLabel(plateauPlanningTeams, [clubName, activeTeamName])
+  }, [activeTeamName, clubName, plateauPlanningTeams])
   const plateauStartTimeLabel = useMemo(() => {
     if (plateau?.startTime) return plateau.startTime
     if (plateauPlanningData?.start) return plateauPlanningData.start
@@ -225,6 +321,10 @@ export default function PlateauDetailsPage() {
   )
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
+
+  useEffect(() => {
+    setMatchSourceMode(plateauPlanning ? 'ROTATION' : 'MANUAL')
+  }, [plateauPlanning?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -273,17 +373,6 @@ export default function PlateauDetailsPage() {
       })
     } catch (err: unknown) {
       uiAlert(`Erreur présence (plateau): ${toErrorMessage(err)}`)
-    }
-  }
-
-  async function deleteMatch(matchId: string) {
-    if (!writable) return
-    if (!uiConfirm('Supprimer définitivement ce match ?')) return
-    try {
-      await apiDelete(apiRoutes.matches.byId(matchId))
-      setPlateauMatches(prev => prev.filter(m => m.id !== matchId))
-    } catch (err: unknown) {
-      uiAlert(`Erreur suppression du match: ${toErrorMessage(err)}`)
     }
   }
 
@@ -384,24 +473,20 @@ export default function PlateauDetailsPage() {
     }
   }
 
-  function openCreatePlanningModal() {
-    if (!writable) return
-    if (plateauPlanning) return
-    setRotationMenuOpen(false)
-    setEditingPlanning(null)
-    setIsPlanningModalOpen(true)
-  }
-
   function openEditPlanningModal(planning: Planning) {
     if (!writable) return
-    setRotationMenuOpen(false)
     setEditingPlanning(planning)
+    setPlanningModalOpenedFromSwitch(false)
     setIsPlanningModalOpen(true)
   }
 
   function closePlanningModal() {
     setIsPlanningModalOpen(false)
     setEditingPlanning(null)
+    if (planningModalOpenedFromSwitch) {
+      setMatchSourceMode('MANUAL')
+      setPlanningModalOpenedFromSwitch(false)
+    }
   }
 
   async function openShareModal() {
@@ -451,35 +536,128 @@ export default function PlateauDetailsPage() {
   }
 
   function upsertPlanning(savedPlanning: Planning) {
+    if (id) setPlateauPlanningLink(id, savedPlanning.id)
     setPlateauPlannings([savedPlanning])
+    setMatchSourceMode('ROTATION')
+    setPlanningModalOpenedFromSwitch(false)
     setSelectedPlanningTeam('')
+    void generateMatchesFromRotation(savedPlanning)
   }
 
-  async function deletePlanningItem(planningId: string) {
+  async function deletePlanningItem(planningId: string, options?: { skipConfirm?: boolean }) {
     if (!writable) return
-    if (!uiConfirm('Supprimer cette rotation ?')) return
-    setRotationMenuOpen(false)
+    if (!options?.skipConfirm && !uiConfirm('Supprimer cette rotation ?')) return
     try {
       await api.deletePlanning(planningId)
+      if (id) clearPlateauPlanningLink(id)
       setPlateauPlannings([])
       setSelectedPlanningTeam('')
+      setMatchSourceMode('MANUAL')
     } catch (err: unknown) {
       uiAlert(`Erreur suppression rotation: ${toErrorMessage(err)}`)
     }
   }
 
-  function openEditMatchModal(match: MatchLite) {
+  async function generateMatchesFromRotation(planningArg?: Planning | null) {
     if (!writable) return
-    const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
-    const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
-    setEditingMatchId(match.id)
-    setHomeScore(home)
-    setAwayScore(away)
-    setScorers(match.scorers.filter((s) => s.side === 'home').map((s) => s.playerId))
-    setNewScorerPlayerId('')
-    setOpponentName(match.opponentName || '')
-    setIsMatchNotPlayed(computeIsMatchNotPlayed(match, { referenceDate: plateau?.date ?? null }))
-    setIsMatchModalOpen(true)
+    if (!id) return
+    const planningData = (planningArg?.data as PlanningData | undefined) ?? plateauPlanningData
+    if (!planningData?.slots?.length) {
+      uiAlert('Aucune rotation disponible pour générer des matchs.')
+      return
+    }
+    const planningTeams = Array.from(new Set(planningData.slots.flatMap((slot) => slot.games.flatMap((game) => [game.A, game.B]))))
+    const inferredFromCurrentPlanning = findPlanningTeamLabel(planningTeams, [clubName, activeTeamName])
+    const teamLabel = selectedPlanningTeam || inferredPlanningTeamLabel || inferredFromCurrentPlanning
+    if (!teamLabel) {
+      uiAlert('Sélectionnez votre équipe dans la rotation avant de générer les matchs.')
+      return
+    }
+    const generated = planningData.slots.flatMap((slot) =>
+      slot.games
+        .filter((game) => game.A === teamLabel || game.B === teamLabel)
+        .map((game) => ({ opponent: game.A === teamLabel ? game.B : game.A }))
+    )
+    if (!generated.length) {
+      uiAlert(`Aucun match de l'équipe "${teamLabel}" trouvé dans la rotation.`)
+      return
+    }
+
+    try {
+      if (plateauMatches.length > 0) {
+        await Promise.all(plateauMatches.map((match) => apiDelete(apiRoutes.matches.byId(match.id))))
+      }
+      const created = await Promise.all(
+        generated.map((matchItem) =>
+          apiPost<MatchLite>(apiRoutes.matches.list, {
+            type: 'PLATEAU' as const,
+            plateauId: id,
+            sides: {
+              home: { starters: [], subs: [] },
+              away: { starters: [], subs: [] },
+            },
+            score: { home: 0, away: 0 },
+            buteurs: [],
+            opponentName: matchItem.opponent,
+          })
+        )
+      )
+      setPlateauMatches(created)
+      setMatchSourceMode('ROTATION')
+    } catch (err: unknown) {
+      uiAlert(`Erreur génération des matchs depuis la rotation: ${toErrorMessage(err)}`)
+    }
+  }
+
+  async function switchToManualMode() {
+    if (!writable) return
+    if (matchSourceMode === 'MANUAL') return
+    if (plateauPlanning) {
+      setMatchModeConfirm('TO_MANUAL')
+      return
+    }
+    setMatchSourceMode('MANUAL')
+  }
+
+  async function switchToRotationMode() {
+    if (!writable) return
+    if (matchSourceMode === 'ROTATION') return
+    if (
+      matchSourceMode === 'MANUAL'
+      && plateauMatches.length > 0
+    ) {
+      setMatchModeConfirm('TO_ROTATION')
+      return
+    }
+    setMatchSourceMode('ROTATION')
+    setPlanningModalOpenedFromSwitch(true)
+    setEditingPlanning(plateauPlanning)
+    setIsPlanningModalOpen(true)
+  }
+
+  function closeMatchModeConfirmModal() {
+    setMatchModeConfirm(null)
+  }
+
+  async function confirmMatchModeSwitch() {
+    if (!writable || !matchModeConfirm) return
+    const currentAction = matchModeConfirm
+    setMatchModeConfirm(null)
+    if (currentAction === 'TO_MANUAL') {
+      if (plateauMatches.length > 0) {
+        await Promise.all(plateauMatches.map((match) => apiDelete(apiRoutes.matches.byId(match.id))))
+        setPlateauMatches([])
+      }
+      if (plateauPlanning) {
+        await deletePlanningItem(plateauPlanning.id, { skipConfirm: true })
+      }
+      setMatchSourceMode('MANUAL')
+      return
+    }
+    setMatchSourceMode('ROTATION')
+    setPlanningModalOpenedFromSwitch(true)
+    setEditingPlanning(plateauPlanning)
+    setIsPlanningModalOpen(true)
   }
 
   async function submitMatchForm(e: React.FormEvent) {
@@ -697,148 +875,130 @@ export default function PlateauDetailsPage() {
           </div>
 
           <section className="details-card">
-            <div className="card-head">
-              <h3>Rotation</h3>
-              <div className="head-actions">
-                {!plateauPlanning && (
-                  <button
-                    type="button"
-                    className="add-button"
-                    onClick={openCreatePlanningModal}
-                    disabled={!plateau?.date || !writable}
-                  >
-                    Créer une rotation
-                  </button>
-                )}
-                {plateauPlanning && writable && (
-                  <div className="topbar-menu-wrap">
-                    <RoundIconButton
-                      ariaLabel="Ouvrir le menu de la rotation"
-                      className="menu-dots-button"
-                      onClick={() => setRotationMenuOpen((prev) => !prev)}
-                    >
-                      <DotsHorizontalIcon size={18} />
-                    </RoundIconButton>
-                    {rotationMenuOpen && (
-                      <>
-                        <button
-                          type="button"
-                          className="menu-backdrop"
-                          aria-label="Fermer le menu"
-                          onClick={() => setRotationMenuOpen(false)}
-                        />
-                        <div className="floating-menu">
-                          <button type="button" onClick={() => openEditPlanningModal(plateauPlanning)}>
-                            Modifier la rotation
-                          </button>
-                          <button type="button" className="danger" onClick={() => void deletePlanningItem(plateauPlanning.id)}>
-                            Supprimer la rotation
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {plateauPlanning ? (
-                <>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: '#6b7280' }}>
-                        Mise à jour le {new Date(plateauPlanning.updatedAt).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                  {plateauPlanningTeams.length > 0 && (
-                    <label style={{ display: 'grid', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#64748b' }}>Filtrer par équipe</span>
-                      <select
-                        value={selectedPlanningTeam}
-                        onChange={(e) => setSelectedPlanningTeam(e.target.value)}
-                        style={{ padding: 8, border: '1px solid #dbe5f1', borderRadius: 8 }}
-                      >
-                        <option value="">Toutes les équipes</option>
-                        {plateauPlanningTeams.map((teamLabel) => (
-                          <option key={teamLabel} value={teamLabel}>{teamLabel}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {visiblePlanningSlots.map((slot) => (
-                      <div
-                        key={slot.time}
-                        style={{
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 10,
-                          padding: 10,
-                          background: '#fff',
-                          display: 'grid',
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{slot.time}</div>
-                        <div style={{ display: 'grid', gap: 8 }}>
-                          {slot.games.map((game) => (
-                            <div
-                              key={`${slot.time}-${game.pitch}-${game.A}-${game.B}`}
-                              style={{
-                                border: '1px solid #e2e8f0',
-                                borderRadius: 8,
-                                padding: '8px 10px',
-                                background: '#f8fafc',
-                                display: 'grid',
-                                gap: 6,
-                              }}
-                            >
-                              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Terrain {game.pitch}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                                  <circle cx="6" cy="6" r="6" fill={plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0]} />
-                                </svg>
-                                {game.A}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                                  <circle cx="6" cy="6" r="6" fill={plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1]} />
-                                </svg>
-                                {game.B}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    {selectedPlanningTeam && visiblePlanningSlots.length === 0 && (
-                      <div style={{ color: '#6b7280' }}>Aucun créneau pour cette équipe.</div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div style={{ color: '#6b7280' }}>Aucune rotation enregistrée pour ce plateau.</div>
-              )}
-            </div>
-          </section>
-
-          <section className="details-card" style={{ marginTop: 12 }}>
-            <div className="card-head">
+            <div className="card-head matches-card-head">
               <h3>Matchs</h3>
               <div className="head-actions">
-                <span>{plateauMatches.length}</span>
-                <button
-                  type="button"
-                  className="add-button"
-                  onClick={openCreateMatchModal}
-                  disabled={!writable}
-                >
-                  Ajouter
-                </button>
+                <div className="match-source-toggle" role="tablist" aria-label="Mode de gestion des matchs">
+                  <span
+                    className={`match-source-toggle-thumb ${matchSourceMode === 'ROTATION' ? 'is-rotation' : ''}`}
+                    aria-hidden="true"
+                  />
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={matchSourceMode === 'MANUAL'}
+                    onClick={() => { void switchToManualMode() }}
+                    disabled={!writable}
+                    className={`match-source-toggle-btn ${matchSourceMode === 'MANUAL' ? 'is-active' : ''}`}
+                  >
+                    Manuel
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={matchSourceMode === 'ROTATION'}
+                    onClick={() => { void switchToRotationMode() }}
+                    disabled={!writable}
+                    className={`match-source-toggle-btn ${matchSourceMode === 'ROTATION' ? 'is-active' : ''}`}
+                  >
+                    Rotation
+                  </button>
+                </div>
               </div>
             </div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {plateauMatches.map(m => {
+            <div className="matches-section-body">
+              {matchSourceMode === 'ROTATION' && (
+                <>
+                  {plateauPlanning && (
+                    <div className="rotation-panel-meta">
+                      <span>Mise à jour le {new Date(plateauPlanning.updatedAt).toLocaleString()}</span>
+                      {writable && (
+                        <button type="button" className="rotation-edit-link" onClick={() => openEditPlanningModal(plateauPlanning)}>
+                          Modifier
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {plateauPlanning ? (
+                    <>
+                      {plateauPlanningTeams.length > 0 && (
+                        <label className="rotation-team-select">
+                          <select
+                            value={selectedPlanningTeam}
+                            onChange={(e) => setSelectedPlanningTeam(e.target.value)}
+                          >
+                            <option value="">Toutes les équipes</option>
+                            {plateauPlanningTeams.map((teamLabel) => (
+                              <option key={teamLabel} value={teamLabel}>{teamLabel}</option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <div className="rotation-slots">
+                        {visibleRotationMatches.map((slot) => (
+                          <div key={slot.time} className="rotation-slot-row">
+                            <div className="rotation-slot-time">{slot.time}</div>
+                            <div className="rotation-slot-games">
+                              {slot.games.map((game) => (
+                                <div
+                                  key={`${slot.time}-${game.pitch}-${game.A}-${game.B}`}
+                                  className={`rotation-game-card ${game.isClubGame && game.linkedMatch ? 'is-clickable' : ''}`}
+                                  role={game.isClubGame && game.linkedMatch ? 'button' : undefined}
+                                  tabIndex={game.isClubGame && game.linkedMatch ? 0 : undefined}
+                                  onClick={game.isClubGame && game.linkedMatch ? () => navigate(`/match/${game.linkedMatch?.id}`) : undefined}
+                                  onKeyDown={game.isClubGame && game.linkedMatch ? (e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault()
+                                      navigate(`/match/${game.linkedMatch?.id}`)
+                                    }
+                                  } : undefined}
+                                >
+                                  <div className="rotation-game-pitch">Terrain {game.pitch}</div>
+                                  <div className="rotation-game-teams-row">
+                                    <div className="rotation-game-side is-left">
+                                      <div
+                                        className="rotation-game-team team-left"
+                                        style={{ ['--team-accent' as string]: plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0] }}
+                                      >
+                                        <span>{game.A}</span>
+                                      </div>
+                                    </div>
+                                    <div className="rotation-game-side is-score">
+                                      {game.isClubGame && game.linkedMatch ? (
+                                        <div className="rotation-game-score">
+                                          {(game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0)} - {(game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0)}
+                                        </div>
+                                      ) : (
+                                        <div className="rotation-game-score rotation-game-score-muted">vs</div>
+                                      )}
+                                    </div>
+                                    <div className="rotation-game-side is-right">
+                                      <div
+                                        className="rotation-game-team team-right"
+                                        style={{ ['--team-accent' as string]: plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1] }}
+                                      >
+                                        <span>{game.B}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {visibleRotationMatches.length === 0 && (
+                          <div className="rotation-empty-state">
+                            {selectedPlanningTeam ? 'Aucun créneau pour cette équipe.' : 'Aucun créneau disponible.'}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
+                  )}
+                </>
+              )}
+              {matchSourceMode === 'MANUAL' && plateauMatches.map(m => {
                 const home = m.teams.find(t => t.side === 'home')
                 const away = m.teams.find(t => t.side === 'away')
                 const homeScoreValue = home?.score ?? 0
@@ -849,13 +1009,6 @@ export default function PlateauDetailsPage() {
                   : homeScoreValue < awayScoreValue
                     ? 'loss'
                     : 'draw'
-                const outcomeLabel = isNotPlayed
-                  ? 'Pas encore joué'
-                  : outcome === 'win'
-                  ? 'Victoire'
-                  : outcome === 'loss'
-                    ? 'Défaite'
-                    : 'Nul'
                 const outcomeColor = isNotPlayed
                   ? '#94a3b8'
                   : outcome === 'win'
@@ -863,9 +1016,6 @@ export default function PlateauDetailsPage() {
                   : outcome === 'loss'
                     ? '#dc2626'
                     : '#94a3b8'
-                const ourScorers = m.scorers
-                  .filter(s => s.side === 'home')
-                  .map(s => players.find(p => p.id === s.playerId)?.name || s.playerId)
                 return (
                   <div
                     key={m.id}
@@ -891,46 +1041,27 @@ export default function PlateauDetailsPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                       <div>
                         <div style={{ fontWeight: 700 }}>{m.opponentName || 'Adversaire'}</div>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>
-                          {outcomeLabel}
-                        </div>
                       </div>
                       <div style={{ fontWeight: 700, fontSize: 18 }}>{homeScoreValue} - {awayScoreValue}</div>
-                    </div>
-                    {!isNotPlayed && (
-                      <div style={{ marginTop: 6, fontSize: 13, color: '#374151' }}>
-                        <strong>Buteurs:</strong> {ourScorers.length ? ourScorers.join(', ') : '—'}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openEditMatchModal(m)
-                        }}
-                        disabled={!writable}
-                        style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteMatch(m.id)
-                        }}
-                        disabled={!writable}
-                        style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
-                      >
-                        Supprimer
-                      </button>
                     </div>
                   </div>
                 )
               })}
               {plateauMatches.length === 0 && (
-                <div style={{ color: '#6b7280' }}>Aucun match encore enregistré pour ce plateau.</div>
+                <div className="matches-empty-state">
+                  {matchSourceMode === 'ROTATION'
+                    ? 'Aucun match généré depuis la rotation pour le moment.'
+                    : 'Aucun match encore enregistré pour ce plateau.'}
+                </div>
+              )}
+              {matchSourceMode === 'MANUAL' && writable && (
+                <CtaButton
+                  type="button"
+                  onClick={openCreateMatchModal}
+                  style={{ width: '100%' }}
+                >
+                  Ajouter un match
+                </CtaButton>
               )}
             </div>
           </section>
@@ -1175,6 +1306,7 @@ export default function PlateauDetailsPage() {
         <PlanningModal
           dateISO={plateau.date}
           planning={editingPlanning}
+          initialTeamLabel={clubName || activeTeamName}
           onClose={closePlanningModal}
           onSaved={upsertPlanning}
         />
@@ -1250,6 +1382,39 @@ export default function PlateauDetailsPage() {
                 style={{ border: '1px solid #ef4444', borderRadius: 8, background: '#ef4444', color: '#fff', padding: '8px 12px' }}
               >
                 {deletingPlateau ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {writable && matchModeConfirm && (
+        <>
+          <div className="modal-overlay" onClick={closeMatchModeConfirmModal} />
+          <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Confirmer le changement de mode des matchs">
+            <div className="drill-modal-head">
+              <h3>{matchModeConfirm === 'TO_MANUAL' ? 'Passer en manuel ?' : 'Passer en rotation ?'}</h3>
+              <button type="button" onClick={closeMatchModeConfirmModal}>✕</button>
+            </div>
+            <p className="muted-line">
+              {matchModeConfirm === 'TO_MANUAL'
+                ? 'La rotation actuelle sera supprimée pour revenir à une gestion manuelle des matchs.'
+                : 'Les matchs manuels actuels seront remplacés par les matchs issus de la rotation.'}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                onClick={closeMatchModeConfirmModal}
+                style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', padding: '8px 12px' }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmMatchModeSwitch()}
+                style={{ border: '1px solid #0b65c2', borderRadius: 8, background: '#0b65c2', color: '#fff', padding: '8px 12px' }}
+              >
+                Confirmer
               </button>
             </div>
           </div>

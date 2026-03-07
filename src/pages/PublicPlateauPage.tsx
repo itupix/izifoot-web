@@ -44,6 +44,7 @@ export default function PublicPlateauPage() {
   const [plateau, setPlateau] = useState<Plateau | null>(null)
   const [rotation, setRotation] = useState<PublicPlateauResponse['rotation']>(null)
   const [selectedTeam, setSelectedTeam] = useState('')
+  const [infoTab, setInfoTab] = useState<'LIEU' | 'HORAIRES'>('LIEU')
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [shareQrDataUrl, setShareQrDataUrl] = useState('')
@@ -103,6 +104,33 @@ export default function PublicPlateauPage() {
     }
     return map
   }, [rotation, teamLabels])
+  const plateauStartTimeLabel = useMemo(() => {
+    if (plateau?.startTime) return plateau.startTime
+    if (rotation?.slots?.[0]?.time) return rotation.slots[0].time
+    if (!plateau?.date) return 'À définir'
+    const date = new Date(plateau.date)
+    if (Number.isNaN(date.getTime())) return 'À définir'
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    if (hh === '00' && mm === '00') return 'À définir'
+    return `${hh}:${mm}`
+  }, [plateau?.date, plateau?.startTime, rotation?.slots])
+  const plateauAddressLabel = useMemo(
+    () => plateau?.address?.trim() || plateau?.lieu || 'À définir',
+    [plateau?.address, plateau?.lieu]
+  )
+  const rendezVousTimeLabel = useMemo(() => {
+    if (plateau?.meetingTime) return plateau.meetingTime
+    const source = plateauStartTimeLabel
+    const match = source.match(/^(\d{2}):(\d{2})$/)
+    if (!match) return 'À définir'
+    const hour = Number(match[1])
+    const minute = Number(match[2])
+    const total = Math.max(0, hour * 60 + minute - 30)
+    const hh = String(Math.floor(total / 60)).padStart(2, '0')
+    const mm = String(total % 60).padStart(2, '0')
+    return `${hh}:${mm}`
+  }, [plateau?.meetingTime, plateauStartTimeLabel])
   const publicPlateauUrl = useMemo(() => {
     if (!token) return ''
     if (typeof window === 'undefined') return ''
@@ -158,10 +186,17 @@ export default function PublicPlateauPage() {
 
   return (
     <div className="training-details-page">
-      <header className="topbar" style={{ gridTemplateColumns: '1fr' }}>
-        <div className="topbar-title">
-          <h2>Plateau</h2>
-          <p>{dateLabel}</p>
+      <header className="details-page-head">
+        <div className="details-page-mainrow">
+          <div className="details-page-title-wrap">
+            <h1 className="details-page-title">Plateau</h1>
+            <p className="details-page-subtitle">{dateLabel}</p>
+          </div>
+          <div className="topbar-menu-wrap">
+            <button type="button" className="add-button" onClick={() => setIsShareModalOpen(true)}>
+              Partager le plateau
+            </button>
+          </div>
         </div>
       </header>
 
@@ -171,35 +206,79 @@ export default function PublicPlateauPage() {
 
       {plateau && (
         <>
-          <section className="details-card">
-            <div className="card-head">
-              <h3>Informations</h3>
-            </div>
-            <div style={{ color: '#374151' }}>Lieu : <strong>{plateau.lieu}</strong></div>
-          </section>
+          <div className="training-details-grid">
+            <section className="details-card">
+              <div className="info-tabs" role="tablist" aria-label="Informations du plateau">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={infoTab === 'LIEU'}
+                  className={`info-tab ${infoTab === 'LIEU' ? 'is-active' : ''}`}
+                  onClick={() => setInfoTab('LIEU')}
+                >
+                  Lieu
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={infoTab === 'HORAIRES'}
+                  className={`info-tab ${infoTab === 'HORAIRES' ? 'is-active' : ''}`}
+                  onClick={() => setInfoTab('HORAIRES')}
+                >
+                  Horaires
+                </button>
+              </div>
+              {infoTab === 'LIEU' ? (
+                <div className="info-pane-grid">
+                  <div className="map-preview-wrap">
+                    <iframe
+                      title="Aperçu carte du lieu"
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(plateauAddressLabel)}&z=14&output=embed`}
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  </div>
+                  <div className="info-address">
+                    <div className="info-row-head">
+                      <p className="info-label">Adresse</p>
+                    </div>
+                    <p className="info-value">{plateauAddressLabel}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="info-hours-grid">
+                  <div className="info-hour-card">
+                    <div className="info-row-head">
+                      <p className="info-label">Début du plateau</p>
+                    </div>
+                    <p className="info-value">{plateauStartTimeLabel}</p>
+                  </div>
+                  <div className="info-hour-card">
+                    <div className="info-row-head">
+                      <p className="info-label">Rendez-vous sur le lieu</p>
+                    </div>
+                    <p className="info-value">{rendezVousTimeLabel}</p>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
 
           <section className="details-card">
             <div className="card-head">
               <h3>Rotation</h3>
-              <div className="head-actions">
-                <button type="button" className="add-button" onClick={() => setIsShareModalOpen(true)}>
-                  Partager le plateau
-                </button>
-              </div>
             </div>
-            <div style={{ display: 'grid', gap: 10 }}>
+            <div className="matches-section-body">
               {rotation ? (
                 <>
-                  <div style={{ fontSize: 12, color: '#6b7280' }}>
+                  <div className="rotation-panel-meta">
                     Mise à jour le {new Date(rotation.updatedAt).toLocaleString()}
                   </div>
                   {teamLabels.length > 0 && (
-                    <label style={{ display: 'grid', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#64748b' }}>Filtrer par équipe</span>
+                    <label className="rotation-team-select">
                       <select
                         value={selectedTeam}
                         onChange={(e) => setSelectedTeam(e.target.value)}
-                        style={{ padding: 8, border: '1px solid #dbe5f1', borderRadius: 8 }}
                       >
                         <option value="">Toutes les équipes</option>
                         {teamLabels.map((team) => (
@@ -208,45 +287,34 @@ export default function PublicPlateauPage() {
                       </select>
                     </label>
                   )}
-                  <div style={{ display: 'grid', gap: 8 }}>
+                  <div className="rotation-slots">
                     {visibleSlots.map((slot) => (
-                      <div
-                        key={slot.time}
-                        style={{
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 10,
-                          padding: 10,
-                          background: '#fff',
-                          display: 'grid',
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{slot.time}</div>
-                        <div style={{ display: 'grid', gap: 8 }}>
+                      <div key={slot.time} className="rotation-slot-row">
+                        <div className="rotation-slot-time">{slot.time}</div>
+                        <div className="rotation-slot-games">
                           {slot.games.map((game) => (
-                            <div
-                              key={`${slot.time}-${game.pitch}-${game.A}-${game.B}`}
-                              style={{
-                                border: '1px solid #e2e8f0',
-                                borderRadius: 8,
-                                padding: '8px 10px',
-                                background: '#f8fafc',
-                                display: 'grid',
-                                gap: 6,
-                              }}
-                            >
-                              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Terrain {game.pitch}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                                  <circle cx="6" cy="6" r="6" fill={teamColorMap.get(game.A) ?? TEAM_COLORS[0]} />
-                                </svg>
-                                {game.A}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                                  <circle cx="6" cy="6" r="6" fill={teamColorMap.get(game.B) ?? TEAM_COLORS[1]} />
-                                </svg>
-                                {game.B}
+                            <div key={`${slot.time}-${game.pitch}-${game.A}-${game.B}`} className="rotation-game-card">
+                              <div className="rotation-game-pitch">Terrain {game.pitch}</div>
+                              <div className="rotation-game-teams-row">
+                                <div className="rotation-game-side is-left">
+                                  <div
+                                    className="rotation-game-team team-left"
+                                    style={{ ['--team-accent' as string]: teamColorMap.get(game.A) ?? TEAM_COLORS[0] }}
+                                  >
+                                    <span>{game.A}</span>
+                                  </div>
+                                </div>
+                                <div className="rotation-game-side is-score">
+                                  <div className="rotation-game-score rotation-game-score-muted">vs</div>
+                                </div>
+                                <div className="rotation-game-side is-right">
+                                  <div
+                                    className="rotation-game-team team-right"
+                                    style={{ ['--team-accent' as string]: teamColorMap.get(game.B) ?? TEAM_COLORS[1] }}
+                                  >
+                                    <span>{game.B}</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -254,12 +322,15 @@ export default function PublicPlateauPage() {
                       </div>
                     ))}
                     {selectedTeam && visibleSlots.length === 0 && (
-                      <div style={{ color: '#6b7280' }}>Aucun créneau pour cette équipe.</div>
+                      <div className="rotation-empty-state">Aucun créneau pour cette équipe.</div>
+                    )}
+                    {!selectedTeam && visibleSlots.length === 0 && (
+                      <div className="rotation-empty-state">Aucun créneau disponible.</div>
                     )}
                   </div>
                 </>
               ) : (
-                <div style={{ color: '#6b7280' }}>Aucune rotation enregistrée pour ce plateau.</div>
+                <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
               )}
             </div>
           </section>

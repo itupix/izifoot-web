@@ -74,6 +74,8 @@ export default function MatchDetailsPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<MatchDraft | null>(null)
+  const [editHomeScore, setEditHomeScore] = useState(0)
+  const [editAwayScore, setEditAwayScore] = useState(0)
   const [selectedHomePlayer, setSelectedHomePlayer] = useState('')
   const [selectedHomeRole, setSelectedHomeRole] = useState<'starter' | 'sub'>('starter')
   const [selectedHomeScorer, setSelectedHomeScorer] = useState('')
@@ -137,6 +139,8 @@ export default function MatchDetailsPage() {
 
   function openEditModal() {
     if (match) setDraft(buildDraft(match))
+    setEditHomeScore(homeScore)
+    setEditAwayScore(awayScore)
     setSelectedHomePlayer('')
     setSelectedHomeScorer('')
     setIsEditModalOpen(true)
@@ -199,8 +203,8 @@ export default function MatchDetailsPage() {
           },
         },
         score: {
-          home: homeScore,
-          away: awayScore,
+          home: Math.max(0, editHomeScore),
+          away: Math.max(0, editAwayScore),
         },
         buteurs: draft.scorers
           .filter((s) => s.side === 'home')
@@ -340,8 +344,30 @@ export default function MatchDetailsPage() {
           <div className="modal-overlay" onClick={closeEditModal} />
           <div className="match-edit-modal" role="dialog" aria-modal="true" aria-label="Modifier composition et buteurs">
             <div className="drill-modal-head">
-              <h3>Modifier composition et buteurs</h3>
+              <h3>Modifier le match</h3>
               <button type="button" onClick={closeEditModal} disabled={saving}>✕</button>
+            </div>
+
+            <div className="lineup-stack">
+              <p>Score</p>
+              <div className="modal-score-grid">
+                <div className="modal-score-item">
+                  <span>Nous</span>
+                  <div className="modal-score-controls">
+                    <button type="button" onClick={() => setEditHomeScore((v) => Math.max(0, v - 1))}>−</button>
+                    <strong>{editHomeScore}</strong>
+                    <button type="button" onClick={() => setEditHomeScore((v) => v + 1)}>+</button>
+                  </div>
+                </div>
+                <div className="modal-score-item">
+                  <span>Adversaire</span>
+                  <div className="modal-score-controls">
+                    <button type="button" onClick={() => setEditAwayScore((v) => Math.max(0, v - 1))}>−</button>
+                    <strong>{editAwayScore}</strong>
+                    <button type="button" onClick={() => setEditAwayScore((v) => v + 1)}>+</button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="lineup-stack">

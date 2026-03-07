@@ -9,6 +9,7 @@ type PlanningModalProps = {
   planning?: Planning | null
   onClose: () => void
   onSaved: (planning: Planning) => void
+  initialTeamLabel?: string
 }
 
 const DEFAULT_PLANNING_DATA: PlanningData = {
@@ -16,6 +17,7 @@ const DEFAULT_PLANNING_DATA: PlanningData = {
   pitches: 3,
   matchMin: 10,
   breakMin: 2,
+  restEveryX: 3,
   slots: [],
 }
 
@@ -33,19 +35,32 @@ export default function PlanningModal({
   planning,
   onClose,
   onSaved,
+  initialTeamLabel,
 }: PlanningModalProps) {
-  const [dataObj, setDataObj] = useState<PlanningData | null>((planning?.data as PlanningData) ?? DEFAULT_PLANNING_DATA)
+  const initialData = useMemo<PlanningData>(() => {
+    if (planning?.data) return planning.data as PlanningData
+    const label = String(initialTeamLabel || '').trim()
+    if (!label) return DEFAULT_PLANNING_DATA
+    return {
+      ...DEFAULT_PLANNING_DATA,
+      teams: [{ label, color: '#1d4ed8' }],
+    }
+  }, [initialTeamLabel, planning?.data])
+
+  const [dataObj, setDataObj] = useState<PlanningData | null>(initialData)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editorMeta, setEditorMeta] = useState({
+    canSave: Boolean(initialData.slots?.length),
+    hasGeneratedRotation: Boolean(initialData.slots?.length),
+    warnings: [] as string[],
+  })
 
   const isEditing = Boolean(planning)
-  const dateLabel = useMemo(() => {
-    if (!dateISO) return ''
-    return new Date(dateISO).toLocaleDateString()
-  }, [dateISO])
+  const minTeamsWarning = editorMeta.warnings.find((warning) => warning === 'Ajoutez au moins 2 équipes.')
 
   async function savePlanning() {
-    if (!dataObj) return
+    if (!dataObj || !editorMeta.canSave) return
     setError(null)
     setSaving(true)
     try {
@@ -72,8 +87,7 @@ export default function PlanningModal({
       <div className="drill-modal planning-modal" role="dialog" aria-modal="true" aria-labelledby="planning-modal-title">
         <div className="drill-modal-head">
           <div>
-            <h3 id="planning-modal-title">{isEditing ? 'Modifier la rotation' : 'Créer une rotation'}</h3>
-            <p>{dateLabel}</p>
+            <h3 id="planning-modal-title">Créer une rotation</h3>
           </div>
           <button
             type="button"
@@ -97,10 +111,16 @@ export default function PlanningModal({
 
         <PlanningEditor
           key={planning?.id ?? `new-${dateISO}`}
-          value={(planning?.data as PlanningData) ?? DEFAULT_PLANNING_DATA}
+          value={initialData}
           onChange={setDataObj}
-          title="Préparer la rotation"
+          onMetaChange={setEditorMeta}
         />
+
+        {minTeamsWarning && (
+          <div style={{ marginTop: 12, fontSize: 12, color: '#8a5a00', background: '#fff8e1', border: '1px solid #ffecb5', borderRadius: 10, padding: '10px 12px' }}>
+            {minTeamsWarning}
+          </div>
+        )}
 
         <div className="planning-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button
@@ -114,7 +134,7 @@ export default function PlanningModal({
           <CtaButton
             type="button"
             onClick={() => void savePlanning()}
-            disabled={!dataObj || saving}
+            disabled={!dataObj || saving || !editorMeta.canSave}
             style={{ minHeight: 42, padding: '10px 16px', fontSize: 15 }}
           >
             {saving ? 'Enregistrement…' : isEditing ? 'Enregistrer' : 'Créer la rotation'}
