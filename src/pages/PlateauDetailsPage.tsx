@@ -276,17 +276,6 @@ export default function PlateauDetailsPage() {
     }
   }
 
-  async function deleteMatch(matchId: string) {
-    if (!writable) return
-    if (!uiConfirm('Supprimer définitivement ce match ?')) return
-    try {
-      await apiDelete(apiRoutes.matches.byId(matchId))
-      setPlateauMatches(prev => prev.filter(m => m.id !== matchId))
-    } catch (err: unknown) {
-      uiAlert(`Erreur suppression du match: ${toErrorMessage(err)}`)
-    }
-  }
-
   async function deletePlateau() {
     if (!writable) return
     if (!id) return
@@ -466,20 +455,6 @@ export default function PlateauDetailsPage() {
     } catch (err: unknown) {
       uiAlert(`Erreur suppression rotation: ${toErrorMessage(err)}`)
     }
-  }
-
-  function openEditMatchModal(match: MatchLite) {
-    if (!writable) return
-    const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
-    const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
-    setEditingMatchId(match.id)
-    setHomeScore(home)
-    setAwayScore(away)
-    setScorers(match.scorers.filter((s) => s.side === 'home').map((s) => s.playerId))
-    setNewScorerPlayerId('')
-    setOpponentName(match.opponentName || '')
-    setIsMatchNotPlayed(computeIsMatchNotPlayed(match, { referenceDate: plateau?.date ?? null }))
-    setIsMatchModalOpen(true)
   }
 
   async function submitMatchForm(e: React.FormEvent) {
@@ -849,13 +824,6 @@ export default function PlateauDetailsPage() {
                   : homeScoreValue < awayScoreValue
                     ? 'loss'
                     : 'draw'
-                const outcomeLabel = isNotPlayed
-                  ? 'Pas encore joué'
-                  : outcome === 'win'
-                  ? 'Victoire'
-                  : outcome === 'loss'
-                    ? 'Défaite'
-                    : 'Nul'
                 const outcomeColor = isNotPlayed
                   ? '#94a3b8'
                   : outcome === 'win'
@@ -863,9 +831,6 @@ export default function PlateauDetailsPage() {
                   : outcome === 'loss'
                     ? '#dc2626'
                     : '#94a3b8'
-                const ourScorers = m.scorers
-                  .filter(s => s.side === 'home')
-                  .map(s => players.find(p => p.id === s.playerId)?.name || s.playerId)
                 return (
                   <div
                     key={m.id}
@@ -891,40 +856,8 @@ export default function PlateauDetailsPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                       <div>
                         <div style={{ fontWeight: 700 }}>{m.opponentName || 'Adversaire'}</div>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>
-                          {outcomeLabel}
-                        </div>
                       </div>
                       <div style={{ fontWeight: 700, fontSize: 18 }}>{homeScoreValue} - {awayScoreValue}</div>
-                    </div>
-                    {!isNotPlayed && (
-                      <div style={{ marginTop: 6, fontSize: 13, color: '#374151' }}>
-                        <strong>Buteurs:</strong> {ourScorers.length ? ourScorers.join(', ') : '—'}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openEditMatchModal(m)
-                        }}
-                        disabled={!writable}
-                        style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteMatch(m.id)
-                        }}
-                        disabled={!writable}
-                        style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
-                      >
-                        Supprimer
-                      </button>
                     </div>
                   </div>
                 )
