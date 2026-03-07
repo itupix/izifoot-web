@@ -12,7 +12,7 @@ type AuthState = {
   canWrite: boolean;
   canManageClub: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, clubName: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };

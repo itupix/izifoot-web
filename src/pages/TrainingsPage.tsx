@@ -193,10 +193,15 @@ export default function TrainingsPage() {
     if (!normalizedLieu) return
     setIsCreatingPlateau(true)
     try {
+      const activeTeam = teamOptions.find((team) => team.id === selectedTeamId)
       const created = await apiPost<Plateau>(apiRoutes.plateaus.list, {
         date: day.toISOString(),
         lieu: normalizedLieu,
         teamId: selectedTeamId || undefined,
+        team_id: selectedTeamId || undefined,
+        teamName: activeTeam?.name || undefined,
+        activeTeamId: selectedTeamId || undefined,
+        active_team_id: selectedTeamId || undefined,
       })
       setPlateaus(prev => [created, ...prev])
       setPlateauLocation('')
@@ -214,7 +219,15 @@ export default function TrainingsPage() {
   async function createTrainingForDay(day: Date) {
     if (!teamScopedWritable) return
     try {
-      const created = await apiPost<Training>(apiRoutes.trainings.list, { date: day.toISOString(), teamId: selectedTeamId || undefined })
+      const activeTeam = teamOptions.find((team) => team.id === selectedTeamId)
+      const created = await apiPost<Training>(apiRoutes.trainings.list, {
+        date: day.toISOString(),
+        teamId: selectedTeamId || undefined,
+        team_id: selectedTeamId || undefined,
+        teamName: activeTeam?.name || undefined,
+        activeTeamId: selectedTeamId || undefined,
+        active_team_id: selectedTeamId || undefined,
+      })
       setTrainings(prev => [created, ...prev])
     } catch (err: unknown) {
       uiAlert(`Erreur création entraînement: ${toErrorMessage(err)}`)

@@ -6,6 +6,7 @@ import { type AccountRole } from '../authz'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
+import { useTeamScope } from '../useTeamScope'
 import { uiAlert } from '../ui'
 import type { AccountInvitation, ClubMe, Team } from '../types/api'
 
@@ -13,9 +14,13 @@ interface InviteAccountPayload {
   email: string
   role: AccountRole
   teamId?: string
+  team_id?: string
   managedTeamIds?: string[]
+  managed_team_ids?: string[]
   linkedPlayerUserId?: string
+  linked_player_user_id?: string
   expiresInDays?: number
+  expires_in_days?: number
 }
 
 const ACCOUNT_CREATION_ROLES: AccountRole[] = ['DIRECTION', 'COACH', 'PLAYER', 'PARENT']
@@ -38,8 +43,21 @@ function getSentAt(invitation: AccountInvitation): string | undefined {
   return invitation.sentAt || invitation.createdAt
 }
 
+function normalizeTeam(team: unknown): Team | null {
+  const raw = (team && typeof team === 'object' ? team : {}) as Record<string, unknown>
+  const id = typeof raw.id === 'string' ? raw.id : (typeof raw.teamId === 'string' ? raw.teamId : (typeof raw.team_id === 'string' ? raw.team_id : ''))
+  if (!id) return null
+  const name = typeof raw.name === 'string'
+    ? raw.name
+    : (typeof raw.teamName === 'string' ? raw.teamName : (typeof raw.team_name === 'string' ? raw.team_name : id))
+  const category = typeof raw.category === 'string' ? raw.category : null
+  const clubId = typeof raw.clubId === 'string' ? raw.clubId : (typeof raw.club_id === 'string' ? raw.club_id : null)
+  return { id, name, category, clubId }
+}
+
 export default function ClubManagementPage() {
   const { me } = useAuth()
+  const { setSelectedTeamId, refreshTeamScope, selectedTeamId } = useTeamScope()
   const navigate = useNavigate()
 
   const [club, setClub] = useState<ClubMe | null>(null)
@@ -75,7 +93,10 @@ export default function ClubManagementPage() {
 
     setClub(clubData)
     setClubName(clubData?.name ?? '')
-    setTeams(Array.isArray(teamData) ? teamData : [])
+    const normalizedTeams = (Array.isArray(teamData) ? teamData : [])
+      .map(normalizeTeam)
+      .filter((team): team is Team => Boolean(team))
+    setTeams(normalizedTeams)
     setInvitations(Array.isArray(invitationData) ? invitationData : [])
   }, [])
 
@@ -134,11 +155,23 @@ export default function ClubManagementPage() {
 
     setCreatingTeam(true)
     try {
+      const normalizedTeamName = teamName.trim()
       const created = await apiPost<Team>(apiRoutes.teams.list, {
-        name: teamName.trim(),
+        name: normalizedTeamName,
+        teamName: normalizedTeamName,
         category: teamCategory.trim() || undefined,
       })
-      setTeams((prev) => [...prev, created])
+      const normalizedCreated = normalizeTeam(created) ?? { id: '', name: normalizedTeamName }
+      if (!normalizedCreated.id) {
+        uiAlert('Équipe créée mais identifiant introuvable dans la réponse backend.')
+        await refreshTeamScope()
+        return
+      }
+      setTeams((prev) => [...prev, normalizedCreated])
+      if (!selectedTeamId) {
+        setSelectedTeamId(normalizedCreated.id)
+      }
+      await refreshTeamScope()
       setTeamName('')
       setTeamCategory('')
     } catch (err: unknown) {
@@ -157,11 +190,22 @@ export default function ClubManagementPage() {
       email: email.trim(),
       role,
       expiresInDays,
+      expires_in_days: expiresInDays,
     }
 
-    if ((role === 'COACH' || role === 'PLAYER') && teamId) payload.teamId = teamId
-    if (role === 'COACH' && managedTeamIds.length > 0) payload.managedTeamIds = managedTeamIds
-    if (role === 'PARENT' && linkedPlayerUserId.trim()) payload.linkedPlayerUserId = linkedPlayerUserId.trim()
+    if ((role === 'COACH' || role === 'PLAYER') && teamId) {
+      payload.teamId = teamId
+      payload.team_id = teamId
+    }
+    if (role === 'COACH' && managedTeamIds.length > 0) {
+      payload.managedTeamIds = managedTeamIds
+      payload.managed_team_ids = managedTeamIds
+    }
+    if (role === 'PARENT' && linkedPlayerUserId.trim()) {
+      const linkedId = linkedPlayerUserId.trim()
+      payload.linkedPlayerUserId = linkedId
+      payload.linked_player_user_id = linkedId
+    }
 
     setCreatingInvitation(true)
     try {

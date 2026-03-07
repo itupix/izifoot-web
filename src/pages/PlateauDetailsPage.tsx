@@ -65,6 +65,13 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   return '/planning'
 }
 
+function isMatchNotPlayedFromData(match: MatchLite) {
+  const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
+  const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
+  const homeScorersCount = match.scorers.filter((s) => s.side === 'home').length
+  return home === 0 && away === 0 && homeScorersCount === 0
+}
+
 export default function PlateauDetailsPage() {
   const { me } = useAuth()
   const { selectedTeamId, requiresSelection } = useTeamScope()
@@ -102,6 +109,7 @@ export default function PlateauDetailsPage() {
   const [scorers, setScorers] = useState<string[]>([])
   const [newScorerPlayerId, setNewScorerPlayerId] = useState<string>('')
   const [opponentName, setOpponentName] = useState<string>('')
+  const [isMatchNotPlayed, setIsMatchNotPlayed] = useState<boolean>(true)
   const matchResult = homeScore > awayScore ? 'WIN' : homeScore < awayScore ? 'LOSS' : 'DRAW'
   const matchResultLabel = matchResult === 'WIN' ? 'Victoire' : matchResult === 'LOSS' ? 'Défaite' : 'Nul'
 
@@ -306,6 +314,25 @@ export default function PlateauDetailsPage() {
     setScorers([])
     setNewScorerPlayerId('')
     setOpponentName('')
+    setIsMatchNotPlayed(true)
+  }
+
+  function setHomeScoreFromControls(next: number) {
+    setIsMatchNotPlayed(false)
+    setHomeScore(Math.max(0, next))
+  }
+
+  function setAwayScoreFromControls(next: number) {
+    setIsMatchNotPlayed(false)
+    setAwayScore(Math.max(0, next))
+  }
+
+  function toggleMatchNotPlayed(checked: boolean) {
+    setIsMatchNotPlayed(checked)
+    if (checked) {
+      setHomeScore(0)
+      setAwayScore(0)
+    }
   }
 
   function closeMatchModal() {
@@ -435,6 +462,7 @@ export default function PlateauDetailsPage() {
     setScorers(match.scorers.filter((s) => s.side === 'home').map((s) => s.playerId))
     setNewScorerPlayerId('')
     setOpponentName(match.opponentName || '')
+    setIsMatchNotPlayed(isMatchNotPlayedFromData(match))
     setIsMatchModalOpen(true)
   }
 
@@ -454,8 +482,8 @@ export default function PlateauDetailsPage() {
           home: { starters: [], subs: [] },
           away: { starters: [], subs: [] },
         },
-        score: { home: homeScore, away: awayScore },
-        buteurs: scorers.map((playerId) => ({ playerId, side: 'home' as const })),
+        score: { home: isMatchNotPlayed ? 0 : homeScore, away: isMatchNotPlayed ? 0 : awayScore },
+        buteurs: isMatchNotPlayed ? [] : scorers.map((playerId) => ({ playerId, side: 'home' as const })),
         opponentName: opponentName.trim(),
       }
       if (editingMatchId) {
@@ -800,17 +828,22 @@ export default function PlateauDetailsPage() {
                 const away = m.teams.find(t => t.side === 'away')
                 const homeScoreValue = home?.score ?? 0
                 const awayScoreValue = away?.score ?? 0
+                const isNotPlayed = isMatchNotPlayedFromData(m)
                 const outcome = homeScoreValue > awayScoreValue
                   ? 'win'
                   : homeScoreValue < awayScoreValue
                     ? 'loss'
                     : 'draw'
-                const outcomeLabel = outcome === 'win'
+                const outcomeLabel = isNotPlayed
+                  ? 'Pas encore joué'
+                  : outcome === 'win'
                   ? 'Victoire'
                   : outcome === 'loss'
                     ? 'Défaite'
                     : 'Nul'
-                const outcomeColor = outcome === 'win'
+                const outcomeColor = isNotPlayed
+                  ? '#94a3b8'
+                  : outcome === 'win'
                   ? '#16a34a'
                   : outcome === 'loss'
                     ? '#dc2626'
@@ -838,9 +871,11 @@ export default function PlateauDetailsPage() {
                       </div>
                       <div style={{ fontWeight: 700, fontSize: 18 }}>{homeScoreValue} - {awayScoreValue}</div>
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 13, color: '#374151' }}>
-                      <strong>Buteurs:</strong> {ourScorers.length ? ourScorers.join(', ') : '—'}
-                    </div>
+                    {!isNotPlayed && (
+                      <div style={{ marginTop: 6, fontSize: 13, color: '#374151' }}>
+                        <strong>Buteurs:</strong> {ourScorers.length ? ourScorers.join(', ') : '—'}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
                       <button
                         type="button"
@@ -885,6 +920,14 @@ export default function PlateauDetailsPage() {
                 onChange={e => setOpponentName(e.target.value)}
                 style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
               />
+              <label className="match-not-played-toggle">
+                <input
+                  type="checkbox"
+                  checked={isMatchNotPlayed}
+                  onChange={(e) => toggleMatchNotPlayed(e.target.checked)}
+                />
+                <span>Match pas encore joué</span>
+              </label>
               <div className="match-score-grid">
                 <div className="match-score-card">
                   <span className="match-score-label">Nos buts</span>
@@ -892,7 +935,7 @@ export default function PlateauDetailsPage() {
                     <button
                       type="button"
                       className="match-score-btn"
-                      onClick={() => setHomeScore((prev) => Math.max(0, prev - 1))}
+                      onClick={() => setHomeScoreFromControls(homeScore - 1)}
                       aria-label="Retirer un but à notre score"
                     >
                       −
@@ -901,7 +944,7 @@ export default function PlateauDetailsPage() {
                     <button
                       type="button"
                       className="match-score-btn"
-                      onClick={() => setHomeScore((prev) => prev + 1)}
+                      onClick={() => setHomeScoreFromControls(homeScore + 1)}
                       aria-label="Ajouter un but à notre score"
                     >
                       +
@@ -914,7 +957,7 @@ export default function PlateauDetailsPage() {
                     <button
                       type="button"
                       className="match-score-btn"
-                      onClick={() => setAwayScore((prev) => Math.max(0, prev - 1))}
+                      onClick={() => setAwayScoreFromControls(awayScore - 1)}
                       aria-label="Retirer un but au score adverse"
                     >
                       −
@@ -923,7 +966,7 @@ export default function PlateauDetailsPage() {
                     <button
                       type="button"
                       className="match-score-btn"
-                      onClick={() => setAwayScore((prev) => prev + 1)}
+                      onClick={() => setAwayScoreFromControls(awayScore + 1)}
                       aria-label="Ajouter un but au score adverse"
                     >
                       +
@@ -943,6 +986,7 @@ export default function PlateauDetailsPage() {
                   <select
                     value={newScorerPlayerId}
                     onChange={e => setNewScorerPlayerId(e.target.value)}
+                    disabled={isMatchNotPlayed}
                     style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}
                   >
                     <option value="">— Choisir un joueur —</option>
@@ -951,11 +995,17 @@ export default function PlateauDetailsPage() {
                   <button
                     type="button"
                     onClick={addScorer}
+                    disabled={isMatchNotPlayed}
                     style={{ border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6', padding: '6px 10px' }}
                   >
                     Ajouter
                   </button>
                 </div>
+                {isMatchNotPlayed && (
+                  <span style={{ fontSize: 12, color: '#6b7280' }}>
+                    Le score restera à 0-0 et les buteurs ne seront pas enregistrés.
+                  </span>
+                )}
                 {scorers.length > 0 && (
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
                     {scorers.map((playerId, i) => (

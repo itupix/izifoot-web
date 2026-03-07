@@ -50,6 +50,7 @@ export default function App() {
   const { selectedTeamId, setSelectedTeamId, teamOptions, loading: teamLoading, canSelectTeam, requiresSelection } = useTeamScope()
   const location = useLocation()
   const navigate = useNavigate()
+  const needsClubSetup = Boolean(me?.role === 'DIRECTION' && !teamLoading && !selectedTeamId)
 
   const isHome = location.pathname === '/'
   const isPublicPlateau = location.pathname.startsWith('/plateau/public/')
@@ -68,8 +69,16 @@ export default function App() {
 
   const navItems = React.useMemo(() => {
     if (!me) return [] as NavItem[]
-    return NAV_ITEMS.filter((item) => item.roles.includes(me.role))
-  }, [me])
+    const roleItems = NAV_ITEMS.filter((item) => item.roles.includes(me.role))
+    if (!needsClubSetup) return roleItems
+    return roleItems.filter((item) => item.to === '/club')
+  }, [me, needsClubSetup])
+
+  React.useEffect(() => {
+    if (!needsClubSetup) return
+    if (location.pathname === '/club') return
+    navigate('/club', { replace: true })
+  }, [location.pathname, navigate, needsClubSetup])
 
   return (
     <>
@@ -169,7 +178,7 @@ export default function App() {
                     onChange={(e) => setSelectedTeamId(e.target.value || null)}
                     disabled={teamLoading}
                   >
-                    <option value="">{requiresSelection ? 'Sélectionner une équipe' : 'Toutes les équipes'}</option>
+                    {!requiresSelection && <option value="">Toutes les équipes</option>}
                     {teamOptions.map((team) => (
                       <option key={team.id} value={team.id}>{team.name}</option>
                     ))}

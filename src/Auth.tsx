@@ -51,10 +51,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, clubName: string) => {
     setLoading(true);
     try {
-      const u = await api.register(email, password);
+      const u = await api.register(email, password, clubName);
       setMe(u);
     } finally {
       setLoading(false);

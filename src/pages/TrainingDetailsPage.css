@@ -605,6 +605,14 @@
   gap: 8px;
 }
 
+.match-not-played-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #334155;
+}
+
 .match-score-card {
   border: 1px solid #e2e8f0;
   border-radius: 8px;

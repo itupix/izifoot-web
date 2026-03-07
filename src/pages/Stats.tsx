@@ -27,6 +27,13 @@ function buildLinePath(points: SeriesPoint[], w: number, h: number, pad = 24) {
 
 function prettyAvg(v: number) { return (Math.round(v * 100) / 100).toFixed(2) }
 
+function isMatchNotPlayed(match: MatchLite) {
+  const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
+  const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
+  const homeScorersCount = match.scorers.filter((s) => s.side === 'home').length
+  return home === 0 && away === 0 && homeScorersCount === 0
+}
+
 export default function StatsPage() {
   const [matches, setMatches] = useState<MatchLite[]>([])
   const [players, setPlayers] = useState<Player[]>([])
@@ -52,12 +59,13 @@ export default function StatsPage() {
   const { loading, error } = useAsyncLoader(loadStats)
 
   const ordered = useMemo(() => sortByDateAsc(matches), [matches])
+  const playedMatches = useMemo(() => ordered.filter((m) => !isMatchNotPlayed(m)), [ordered])
 
   // Group matches by plateau (only type PLATEAU) and order groups by earliest createdAt, with plateau label
   const plateauGroups = useMemo(() => {
     const plateauById = new Map(plateaus.map(p => [p.id, p]))
     const byId = new Map<string, { id: string; createdAt: number; matches: MatchLite[]; label: string }>()
-    for (const m of ordered) {
+    for (const m of playedMatches) {
       if (m.type !== 'PLATEAU') continue
       const pid = m.plateauId ?? undefined
       const key = pid || `__no_plateau__:${m.id}`
@@ -68,7 +76,7 @@ export default function StatsPage() {
       rec.createdAt = Math.min(rec.createdAt, new Date(m.createdAt).getTime())
     }
     return Array.from(byId.values()).sort((a, b) => a.createdAt - b.createdAt)
-  }, [ordered, plateaus])
+  }, [playedMatches, plateaus])
   const plateauBands = useMemo(() => {
     const palette = ['#fef3c7', '#e0f2fe', '#e9d5ff', '#dcfce7', '#ffe4e6']
     return plateauGroups.map((g, i) => ({ index: i + 1, label: g.label, color: palette[i % palette.length] }))
@@ -77,7 +85,7 @@ export default function StatsPage() {
   // KPIs computed per match (home = nous)
   const { wins, draws, losses } = useMemo(() => {
     let w = 0, d = 0, l = 0
-    ordered.forEach((m) => {
+    playedMatches.forEach((m) => {
       const home = m.teams.find(t => t.side === 'home')
       const away = m.teams.find(t => t.side === 'away')
       const gf = home?.score ?? 0
@@ -85,19 +93,19 @@ export default function StatsPage() {
       if (gf > ga) w++; else if (gf === ga) d++; else l++
     })
     return { wins: w, draws: d, losses: l }
-  }, [ordered])
+  }, [playedMatches])
 
   // Total goals scored and conceded (home = nous)
   const { totalFor, totalAgainst } = useMemo(() => {
     let totalFor = 0, totalAgainst = 0
-    ordered.forEach((m) => {
+    playedMatches.forEach((m) => {
       const home = m.teams.find(t => t.side === 'home')
       const away = m.teams.find(t => t.side === 'away')
       totalFor += home?.score ?? 0
       totalAgainst += away?.score ?? 0
     })
     return { totalFor, totalAgainst }
-  }, [ordered])
+  }, [playedMatches])
 
   // Build series for charts, switchable per match / per plateau
   const { avgForSeries, avgAgainstSeries, lastAvgFor, lastAvgAgainst } = useMemo(() => {
@@ -105,7 +113,7 @@ export default function StatsPage() {
     const pm_for: { x: number; y: number }[] = []
     const pm_against: { x: number; y: number }[] = []
     let sumFor = 0, sumAgainst = 0
-    ordered.forEach((m, i) => {
+    playedMatches.forEach((m, i) => {
       const gf = m.teams.find(t => t.side === 'home')?.score ?? 0
       const ga = m.teams.find(t => t.side === 'away')?.score ?? 0
       sumFor += gf; sumAgainst += ga
@@ -142,12 +150,12 @@ export default function StatsPage() {
       lastAvgFor: F.length ? F[F.length - 1].y : 0,
       lastAvgAgainst: A.length ? A[A.length - 1].y : 0
     }
-  }, [ordered, plateauGroups, viewMode])
+  }, [playedMatches, plateauGroups, viewMode])
 
   const scorerTable = useMemo(() => {
     // Map playerId -> goals (we count only 'home' side as notre équipe)
     const tally = new Map<string, number>()
-    for (const m of ordered) {
+    for (const m of playedMatches) {
       const list = m.scorers || []
       for (const s of list) {
         if (s.side !== 'home') continue
@@ -163,7 +171,7 @@ export default function StatsPage() {
     }))
     rows.sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name))
     return rows
-  }, [ordered, players])
+  }, [playedMatches, players])
 
   // Attendance presence rankings
   const { trainingPresence, plateauPresence } = useMemo(() => {
@@ -205,7 +213,7 @@ export default function StatsPage() {
       <header className="page-head">
         <div className="page-title-row">
           <h2 className="page-title">Statistiques</h2>
-          <p className="panel-note">{ordered.length} match(s) analysé(s)</p>
+          <p className="panel-note">{playedMatches.length} match(s) joué(s) analysé(s)</p>
         </div>
         <p className="page-subtitle">Vue synthétique des résultats, classements et évolutions.</p>
       </header>

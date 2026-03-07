@@ -120,6 +120,7 @@ export default function Home() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [clubName, setClubName] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
@@ -144,13 +145,18 @@ export default function Home() {
         setAuthError('Les mots de passe ne correspondent pas.');
         return;
       }
+      if (mode === 'register' && !clubName.trim()) {
+        setAuthError('Le nom du club est requis.');
+        return;
+      }
       setAuthLoading(true);
       if (mode === 'login') {
         await login(email, password);
+        navigate('/planning');
       } else {
-        await register(email, password);
+        await register(email, password, clubName.trim());
+        navigate('/club');
       }
-      navigate('/planning');
     } catch (err: unknown) {
       setAuthError(toErrorMessage(err));
     } finally {
@@ -193,6 +199,22 @@ export default function Home() {
                   ✓
                 </span>
               </div>
+              {mode === 'register' && (
+                <>
+                  <label style={{ fontSize: 12, color: '#64748b' }}>Nom du club</label>
+                  <div style={fieldRow}>
+                    <input
+                      value={clubName}
+                      onChange={e => setClubName(e.target.value)}
+                      type="text"
+                      required
+                      minLength={2}
+                      style={inputStyle}
+                    />
+                    <span style={checkDot(clubName.trim().length >= 2)}>✓</span>
+                  </div>
+                </>
+              )}
               {mode === 'register' && (
                 <div style={{ display: 'grid', gap: 6 }}>
                   <div style={{ height: 8, background: '#e2e8f0', borderRadius: 999 }}>
