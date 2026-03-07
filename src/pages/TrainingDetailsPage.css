@@ -593,6 +593,84 @@
   width: min(460px, calc(100vw - 24px));
 }
 
+.match-modal {
+  width: min(560px, calc(100vw - 24px));
+  max-height: 92vh;
+  overflow: auto;
+}
+
+.match-score-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.match-score-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.match-score-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.match-score-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.match-score-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.match-score-value {
+  min-width: 28px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.match-result-chip {
+  width: fit-content;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 600;
+}
+
+.match-result-chip.is-win {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.match-result-chip.is-loss {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.match-result-chip.is-draw {
+  background: #e2e8f0;
+  color: #334155;
+}
+
 .share-content {
   display: grid;
   gap: 10px;
@@ -661,6 +739,18 @@
 }
 
 @media (max-width: 640px) {
+  .match-modal {
+    width: calc(100vw - 16px);
+    top: 2vh;
+    transform: translateX(-50%);
+    max-height: 96vh;
+    padding: 12px;
+  }
+
+  .match-score-grid {
+    grid-template-columns: 1fr;
+  }
+
   .planning-modal {
     width: calc(100vw - 16px);
     top: 2vh;

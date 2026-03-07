@@ -99,10 +99,11 @@ export default function PlateauDetailsPage() {
 
   const [homeScore, setHomeScore] = useState<number>(0)
   const [awayScore, setAwayScore] = useState<number>(0)
-  const [matchResult, setMatchResult] = useState<'WIN' | 'LOSS' | 'DRAW'>('WIN')
   const [scorers, setScorers] = useState<string[]>([])
   const [newScorerPlayerId, setNewScorerPlayerId] = useState<string>('')
   const [opponentName, setOpponentName] = useState<string>('')
+  const matchResult = homeScore > awayScore ? 'WIN' : homeScore < awayScore ? 'LOSS' : 'DRAW'
+  const matchResultLabel = matchResult === 'WIN' ? 'Victoire' : matchResult === 'LOSS' ? 'Défaite' : 'Nul'
 
   const loadPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -302,7 +303,6 @@ export default function PlateauDetailsPage() {
     setEditingMatchId(null)
     setHomeScore(0)
     setAwayScore(0)
-    setMatchResult('WIN')
     setScorers([])
     setNewScorerPlayerId('')
     setOpponentName('')
@@ -432,7 +432,6 @@ export default function PlateauDetailsPage() {
     setEditingMatchId(match.id)
     setHomeScore(home)
     setAwayScore(away)
-    setMatchResult(home > away ? 'WIN' : home < away ? 'LOSS' : 'DRAW')
     setScorers(match.scorers.filter((s) => s.side === 'home').map((s) => s.playerId))
     setNewScorerPlayerId('')
     setOpponentName(match.opponentName || '')
@@ -445,18 +444,6 @@ export default function PlateauDetailsPage() {
     if (!id) return
     if (!opponentName.trim()) {
       uiAlert('Merci de renseigner le nom de l’adversaire.')
-      return
-    }
-    if (matchResult === 'WIN' && homeScore <= awayScore) {
-      uiAlert('Le score doit refléter une victoire.')
-      return
-    }
-    if (matchResult === 'LOSS' && homeScore >= awayScore) {
-      uiAlert('Le score doit refléter une défaite.')
-      return
-    }
-    if (matchResult === 'DRAW' && homeScore !== awayScore) {
-      uiAlert('Le score doit refléter un match nul.')
       return
     }
     try {
@@ -886,7 +873,7 @@ export default function PlateauDetailsPage() {
       {writable && isMatchModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeMatchModal} />
-          <div className="drill-modal" role="dialog" aria-modal="true">
+          <div className="drill-modal match-modal" role="dialog" aria-modal="true">
             <div className="drill-modal-head">
               <h3>{editingMatchId ? 'Modifier le match' : 'Ajouter un match'}</h3>
               <button type="button" onClick={closeMatchModal}>✕</button>
@@ -898,48 +885,56 @@ export default function PlateauDetailsPage() {
                 onChange={e => setOpponentName(e.target.value)}
                 style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
               />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <input
-                  type="number"
-                  min={0}
-                  value={homeScore}
-                  onChange={e => setHomeScore(Number(e.target.value))}
-                  placeholder="Nos buts"
-                  style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={awayScore}
-                  onChange={e => setAwayScore(Number(e.target.value))}
-                  placeholder="Buts adverses"
-                  style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-                />
+              <div className="match-score-grid">
+                <div className="match-score-card">
+                  <span className="match-score-label">Nos buts</span>
+                  <div className="match-score-controls">
+                    <button
+                      type="button"
+                      className="match-score-btn"
+                      onClick={() => setHomeScore((prev) => Math.max(0, prev - 1))}
+                      aria-label="Retirer un but à notre score"
+                    >
+                      −
+                    </button>
+                    <span className="match-score-value" aria-live="polite">{homeScore}</span>
+                    <button
+                      type="button"
+                      className="match-score-btn"
+                      onClick={() => setHomeScore((prev) => prev + 1)}
+                      aria-label="Ajouter un but à notre score"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div className="match-score-card">
+                  <span className="match-score-label">Buts adverses</span>
+                  <div className="match-score-controls">
+                    <button
+                      type="button"
+                      className="match-score-btn"
+                      onClick={() => setAwayScore((prev) => Math.max(0, prev - 1))}
+                      aria-label="Retirer un but au score adverse"
+                    >
+                      −
+                    </button>
+                    <span className="match-score-value" aria-live="polite">{awayScore}</span>
+                    <button
+                      type="button"
+                      className="match-score-btn"
+                      onClick={() => setAwayScore((prev) => prev + 1)}
+                      aria-label="Ajouter un but au score adverse"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
               <div style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontSize: 12, color: '#6b7280' }}>Résultat</span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => setMatchResult('WIN')}
-                    style={{ border: '1px solid #d1d5db', borderRadius: 999, padding: '6px 10px', background: matchResult === 'WIN' ? '#dcfce7' : '#fff' }}
-                  >
-                    Victoire
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMatchResult('LOSS')}
-                    style={{ border: '1px solid #d1d5db', borderRadius: 999, padding: '6px 10px', background: matchResult === 'LOSS' ? '#fee2e2' : '#fff' }}
-                  >
-                    Défaite
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMatchResult('DRAW')}
-                    style={{ border: '1px solid #d1d5db', borderRadius: 999, padding: '6px 10px', background: matchResult === 'DRAW' ? '#e2e8f0' : '#fff' }}
-                  >
-                    Nul
-                  </button>
+                <div className={`match-result-chip ${matchResult === 'WIN' ? 'is-win' : matchResult === 'LOSS' ? 'is-loss' : 'is-draw'}`}>
+                  {matchResultLabel}
                 </div>
               </div>
               <div style={{ display: 'grid', gap: 8 }}>
