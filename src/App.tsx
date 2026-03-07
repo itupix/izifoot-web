@@ -17,6 +17,7 @@ import DrillDetailsPage from './pages/DrillDetailsPage'
 import DrillsPage from './pages/Drills'
 import Home from './pages/Home'
 import MatchDay from './pages/MatchDay'
+import MatchDetailsPage from './pages/MatchDetailsPage'
 import PlateauDetailsPage from './pages/PlateauDetailsPage'
 import PlayersPage from './pages/PlayersPage'
 import PublicPlateauPage from './pages/PublicPlateauPage'
@@ -299,6 +300,14 @@ export default function App() {
                 <RequireRole roles={['DIRECTION', 'COACH']}>
                   <MatchDay />
                 </RequireRole>
+              }
+            />
+            <Route
+              path="/match/:id"
+              element={
+                <RequireAuth>
+                  <MatchDetailsPage />
+                </RequireAuth>
               }
             />
 

@@ -860,12 +860,23 @@ export default function PlateauDetailsPage() {
                 return (
                   <div
                     key={m.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Ouvrir le détail du match contre ${m.opponentName || 'Adversaire'}`}
+                    onClick={() => navigate(`/match/${m.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(`/match/${m.id}`)
+                      }
+                    }}
                     style={{
                       border: '1px solid #e5e7eb',
                       borderLeft: `6px solid ${outcomeColor}`,
                       borderRadius: 8,
                       padding: 10,
                       background: '#fff',
+                      cursor: 'pointer',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -885,7 +896,10 @@ export default function PlateauDetailsPage() {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
                       <button
                         type="button"
-                        onClick={() => openEditMatchModal(m)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEditMatchModal(m)
+                        }}
                         disabled={!writable}
                         style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}
                       >
@@ -893,7 +907,10 @@ export default function PlateauDetailsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => deleteMatch(m.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteMatch(m.id)
+                        }}
                         disabled={!writable}
                         style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
                       >
