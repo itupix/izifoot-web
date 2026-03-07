@@ -111,7 +111,13 @@ export default function PlateauDetailsPage() {
   const [opponentName, setOpponentName] = useState<string>('')
   const [isMatchNotPlayed, setIsMatchNotPlayed] = useState<boolean>(true)
   const matchResult = homeScore > awayScore ? 'WIN' : homeScore < awayScore ? 'LOSS' : 'DRAW'
-  const matchResultLabel = matchResult === 'WIN' ? 'Victoire' : matchResult === 'LOSS' ? 'Défaite' : 'Nul'
+  const matchResultLabel = isMatchNotPlayed
+    ? 'Pas encore joué'
+    : matchResult === 'WIN'
+      ? 'Victoire'
+      : matchResult === 'LOSS'
+        ? 'Défaite'
+        : 'Nul'
 
   const loadPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -923,10 +929,10 @@ export default function PlateauDetailsPage() {
               <label className="match-not-played-toggle">
                 <input
                   type="checkbox"
-                  checked={isMatchNotPlayed}
-                  onChange={(e) => toggleMatchNotPlayed(e.target.checked)}
+                  checked={!isMatchNotPlayed}
+                  onChange={(e) => toggleMatchNotPlayed(!e.target.checked)}
                 />
-                <span>Match pas encore joué</span>
+                <span>Match joué</span>
               </label>
               <div className="match-score-grid">
                 <div className="match-score-card">
@@ -976,7 +982,7 @@ export default function PlateauDetailsPage() {
               </div>
               <div style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontSize: 12, color: '#6b7280' }}>Résultat</span>
-                <div className={`match-result-chip ${matchResult === 'WIN' ? 'is-win' : matchResult === 'LOSS' ? 'is-loss' : 'is-draw'}`}>
+                <div className={`match-result-chip ${isMatchNotPlayed ? 'is-pending' : matchResult === 'WIN' ? 'is-win' : matchResult === 'LOSS' ? 'is-loss' : 'is-draw'}`}>
                   {matchResultLabel}
                 </div>
               </div>
@@ -1003,7 +1009,7 @@ export default function PlateauDetailsPage() {
                 </div>
                 {isMatchNotPlayed && (
                   <span style={{ fontSize: 12, color: '#6b7280' }}>
-                    Le score restera à 0-0 et les buteurs ne seront pas enregistrés.
+                    Active le switch pour saisir le score et les buteurs.
                   </span>
                 )}
                 {scorers.length > 0 && (

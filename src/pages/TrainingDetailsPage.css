@@ -679,6 +679,11 @@
   color: #334155;
 }
 
+.match-result-chip.is-pending {
+  background: #f1f5f9;
+  color: #475569;
+}
+
 .share-content {
   display: grid;
   gap: 10px;
