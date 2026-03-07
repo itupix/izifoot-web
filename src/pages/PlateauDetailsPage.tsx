@@ -82,6 +82,8 @@ export default function PlateauDetailsPage() {
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false)
   const [isPlanningModalOpen, setIsPlanningModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+  const [isDeletePlateauModalOpen, setIsDeletePlateauModalOpen] = useState(false)
+  const [deletingPlateau, setDeletingPlateau] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [sharedPublicUrl, setSharedPublicUrl] = useState('')
@@ -288,12 +290,15 @@ export default function PlateauDetailsPage() {
   async function deletePlateau() {
     if (!writable) return
     if (!id) return
-    if (!uiConfirm('Supprimer définitivement ce plateau (et tous ses matchs) ?')) return
+    setDeletingPlateau(true)
     try {
       await apiDelete(apiRoutes.plateaus.byId(id))
       navigate(backToPlanningUrl)
     } catch (err: unknown) {
       uiAlert(`Erreur suppression plateau: ${toErrorMessage(err)}`)
+    } finally {
+      setDeletingPlateau(false)
+      setIsDeletePlateauModalOpen(false)
     }
   }
 
@@ -424,6 +429,17 @@ export default function PlateauDetailsPage() {
     setShareQrLoading(false)
   }
 
+  function openDeletePlateauModal() {
+    if (!writable) return
+    setActionsMenuOpen(false)
+    setIsDeletePlateauModalOpen(true)
+  }
+
+  function closeDeletePlateauModal() {
+    if (deletingPlateau) return
+    setIsDeletePlateauModalOpen(false)
+  }
+
   async function copyShareLink() {
     if (!publicPlateauUrl) return
     try {
@@ -543,8 +559,7 @@ export default function PlateauDetailsPage() {
                         type="button"
                         className="danger"
                         onClick={() => {
-                          setActionsMenuOpen(false)
-                          deletePlateau()
+                          openDeletePlateauModal()
                         }}
                       >
                         Supprimer le plateau
@@ -1203,6 +1218,39 @@ export default function PlateauDetailsPage() {
                   <img src={shareQrDataUrl} alt="QR code du lien public du plateau" width={220} height={220} />
                 </div>
               )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {writable && isDeletePlateauModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeDeletePlateauModal} />
+          <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Confirmer la suppression du plateau">
+            <div className="drill-modal-head">
+              <h3>Supprimer le plateau ?</h3>
+              <button type="button" onClick={closeDeletePlateauModal} disabled={deletingPlateau}>✕</button>
+            </div>
+            <p className="muted-line">
+              Cette action est définitive. Tous les matchs liés à ce plateau seront supprimés.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                onClick={closeDeletePlateauModal}
+                disabled={deletingPlateau}
+                style={{ border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', padding: '8px 12px' }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => void deletePlateau()}
+                disabled={deletingPlateau}
+                style={{ border: '1px solid #ef4444', borderRadius: 8, background: '#ef4444', color: '#fff', padding: '8px 12px' }}
+              >
+                {deletingPlateau ? 'Suppression…' : 'Supprimer'}
+              </button>
             </div>
           </div>
         </>
