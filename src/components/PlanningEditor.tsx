@@ -38,7 +38,6 @@ type TeamEntry = {
 type Props = {
   value?: PlanningData | null;               // planning existant à éditer (facultatif)
   onChange?: (data: PlanningData) => void;   // renvoyé à chaque modification (pour sauvegarde)
-  title?: string;                            // titre optionnel
 };
 
 const subtleButtonStyle = {
@@ -297,7 +296,7 @@ function mergeUniqueLabels(...lists: string[][]) {
 }
 
 /** ==== Composant principal ==== */
-const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
+const PlanningEditor: React.FC<Props> = ({ value, onChange }) => {
   // 1) États (initialisés depuis `value` si présent)
   // Hydratation rudimentaire depuis value: reconstruit l'heure de départ / terrains / etc.
   const initial = value ?? { start: '10:00', pitches: 3, matchMin: 10, breakMin: 2, slots: [] }
@@ -479,13 +478,6 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
 
   return (
     <div className="min-h-[50vh]">
-      <header style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>{title ?? 'Éditeur de planning'}</h2>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button type="button" onClick={() => setRegenKey(Date.now())} style={subtleButtonStyle}>Régénérer</button>
-        </div>
-      </header>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
         <div style={{ display: 'grid', gap: 12 }}>
           <AttendanceAccordion
@@ -575,7 +567,7 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
           </AttendanceAccordion>
 
           <AttendanceAccordion
-            title="Reglages de la rotation"
+            title="Réglages"
             countLabel="Parametres"
             isOpen={settingsOpen}
             onToggle={() => setSettingsOpen((prev) => !prev)}
@@ -661,6 +653,13 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
                 <input type="checkbox" checked={allowRematches} onChange={(e) => setAllowRematches(e.target.checked)} />
                 Autoriser les rematches si nécessaire (équilibrage)
               </label>
+              <button
+                type="button"
+                onClick={() => setRegenKey(Date.now())}
+                style={{ ...subtleButtonStyle, width: '100%' }}
+              >
+                Régénérer
+              </button>
             </div>
           </AttendanceAccordion>
 
@@ -730,10 +729,6 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, title }) => {
             )}
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-            Matchs de {matchMin} min + pause {breakMin} min (total {slotMinutes} min / créneau).<br />
-            Règle de repos : 1 match de repos tous les {restEveryX} match(s) consécutifs max.
-          </div>
         </div>
       </div>
     </div>

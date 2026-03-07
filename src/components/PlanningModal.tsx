@@ -9,6 +9,7 @@ type PlanningModalProps = {
   planning?: Planning | null
   onClose: () => void
   onSaved: (planning: Planning) => void
+  initialTeamLabel?: string
 }
 
 const DEFAULT_PLANNING_DATA: PlanningData = {
@@ -33,16 +34,23 @@ export default function PlanningModal({
   planning,
   onClose,
   onSaved,
+  initialTeamLabel,
 }: PlanningModalProps) {
-  const [dataObj, setDataObj] = useState<PlanningData | null>((planning?.data as PlanningData) ?? DEFAULT_PLANNING_DATA)
+  const initialData = useMemo<PlanningData>(() => {
+    if (planning?.data) return planning.data as PlanningData
+    const label = String(initialTeamLabel || '').trim()
+    if (!label) return DEFAULT_PLANNING_DATA
+    return {
+      ...DEFAULT_PLANNING_DATA,
+      teams: [{ label, color: '#1d4ed8' }],
+    }
+  }, [initialTeamLabel, planning?.data])
+
+  const [dataObj, setDataObj] = useState<PlanningData | null>(initialData)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isEditing = Boolean(planning)
-  const dateLabel = useMemo(() => {
-    if (!dateISO) return ''
-    return new Date(dateISO).toLocaleDateString()
-  }, [dateISO])
 
   async function savePlanning() {
     if (!dataObj) return
@@ -72,8 +80,7 @@ export default function PlanningModal({
       <div className="drill-modal planning-modal" role="dialog" aria-modal="true" aria-labelledby="planning-modal-title">
         <div className="drill-modal-head">
           <div>
-            <h3 id="planning-modal-title">{isEditing ? 'Modifier la rotation' : 'Créer une rotation'}</h3>
-            <p>{dateLabel}</p>
+            <h3 id="planning-modal-title">Rotation</h3>
           </div>
           <button
             type="button"
@@ -97,9 +104,8 @@ export default function PlanningModal({
 
         <PlanningEditor
           key={planning?.id ?? `new-${dateISO}`}
-          value={(planning?.data as PlanningData) ?? DEFAULT_PLANNING_DATA}
+          value={initialData}
           onChange={setDataObj}
-          title="Préparer la rotation"
         />
 
         <div className="planning-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
