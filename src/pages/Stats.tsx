@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { apiGet } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { isMatchNotPlayed } from '../matchStatus'
 import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
 
 // ---- Helpers ----
@@ -26,13 +27,6 @@ function buildLinePath(points: SeriesPoint[], w: number, h: number, pad = 24) {
 }
 
 function prettyAvg(v: number) { return (Math.round(v * 100) / 100).toFixed(2) }
-
-function isMatchNotPlayed(match: MatchLite) {
-  const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
-  const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
-  const homeScorersCount = match.scorers.filter((s) => s.side === 'home').length
-  return home === 0 && away === 0 && homeScorersCount === 0
-}
 
 export default function StatsPage() {
   const [matches, setMatches] = useState<MatchLite[]>([])
@@ -59,7 +53,11 @@ export default function StatsPage() {
   const { loading, error } = useAsyncLoader(loadStats)
 
   const ordered = useMemo(() => sortByDateAsc(matches), [matches])
-  const playedMatches = useMemo(() => ordered.filter((m) => !isMatchNotPlayed(m)), [ordered])
+  const plateauDateById = useMemo(() => new Map(plateaus.map((p) => [p.id, p.date] as const)), [plateaus])
+  const playedMatches = useMemo(
+    () => ordered.filter((m) => !isMatchNotPlayed(m, { referenceDate: m.plateauId ? (plateauDateById.get(m.plateauId) ?? null) : null })),
+    [ordered, plateauDateById]
+  )
 
   // Group matches by plateau (only type PLATEAU) and order groups by earliest createdAt, with plateau label
   const plateauGroups = useMemo(() => {

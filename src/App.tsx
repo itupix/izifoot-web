@@ -51,7 +51,7 @@ export default function App() {
   const { selectedTeamId, setSelectedTeamId, teamOptions, loading: teamLoading, canSelectTeam, requiresSelection } = useTeamScope()
   const location = useLocation()
   const navigate = useNavigate()
-  const needsClubSetup = Boolean(me?.role === 'DIRECTION' && !teamLoading && !selectedTeamId)
+  const needsClubSetup = Boolean(me?.role === 'DIRECTION' && requiresSelection && !teamLoading && !selectedTeamId)
 
   const isHome = location.pathname === '/'
   const isPublicPlateau = location.pathname.startsWith('/plateau/public/')

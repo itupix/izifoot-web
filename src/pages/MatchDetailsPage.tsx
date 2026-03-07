@@ -6,7 +6,8 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import type { ClubMe, MatchLite, MatchTeamLite, Player } from '../types/api'
+import { isMatchNotPlayed } from '../matchStatus'
+import type { ClubMe, MatchLite, MatchTeamLite, Plateau, Player } from '../types/api'
 import { uiAlert } from '../ui'
 import './MatchDetailsPage.css'
 import './TrainingDetailsPage.css'
@@ -31,13 +32,6 @@ function colorFromName(name: string) {
 
 function getTeam(match: MatchLite, side: 'home' | 'away'): MatchTeamLite | undefined {
   return match.teams.find((team) => team.side === side)
-}
-
-function isNotPlayed(match: MatchLite) {
-  const home = getTeam(match, 'home')?.score ?? 0
-  const away = getTeam(match, 'away')?.score ?? 0
-  const homeScorersCount = match.scorers.filter((s) => s.side === 'home').length
-  return home === 0 && away === 0 && homeScorersCount === 0
 }
 
 type SideDraft = {
@@ -74,6 +68,7 @@ export default function MatchDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [match, setMatch] = useState<MatchDetailsData | null>(null)
+  const [plateauDateISO, setPlateauDateISO] = useState<string>('')
   const [clubName, setClubName] = useState<string>('Club')
   const [players, setPlayers] = useState<Player[]>([])
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -95,6 +90,12 @@ export default function MatchDetailsPage() {
     setDraft(buildDraft(payload))
     setPlayers(roster)
     if (club?.name?.trim()) setClubName(club.name.trim())
+    if (payload.plateauId) {
+      const plateau = await apiGet<Plateau>(apiRoutes.plateaus.byId(payload.plateauId)).catch(() => null)
+      if (!isCancelled()) setPlateauDateISO(plateau?.date || '')
+    } else {
+      setPlateauDateISO('')
+    }
   }, [id])
 
   const { loading, error } = useAsyncLoader(loadMatch)
@@ -103,24 +104,23 @@ export default function MatchDetailsPage() {
   const away = useMemo(() => (match ? getTeam(match, 'away') : undefined), [match])
   const homeScore = home?.score ?? 0
   const awayScore = away?.score ?? 0
-  const pending = match ? isNotPlayed(match) : false
+  const pending = match ? isMatchNotPlayed(match) : false
   const outcomeLabel = pending ? 'Pas encore joué' : homeScore > awayScore ? 'Victoire' : homeScore < awayScore ? 'Défaite' : 'Nul'
   const outcomeClass = pending ? 'pending' : homeScore > awayScore ? 'win' : homeScore < awayScore ? 'loss' : 'draw'
   const homeLabel = clubName
   const awayLabel = match?.opponentName || 'Adversaire'
   const matchDate = useMemo(() => {
-    if (!match?.createdAt) return ''
-    const date = new Date(match.createdAt)
+    const source = plateauDateISO || match?.createdAt
+    if (!source) return ''
+    const date = new Date(source)
     if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleString('fr-FR', {
       weekday: 'long',
       day: '2-digit',
       month: 'long',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     })
-  }, [match?.createdAt])
+  }, [match?.createdAt, plateauDateISO])
   const playerNameById = useMemo(() => new Map(players.map((p) => [p.id, p.name] as const)), [players])
   const sortedPlayers = useMemo(
     () => players.slice().sort((a, b) => a.name.localeCompare(b.name)),
@@ -275,7 +275,6 @@ export default function MatchDetailsPage() {
         <article className="match-card">
           <h3>Composition</h3>
           <div className="lineup-stack">
-            <p>Titulaires</p>
             <div className="compo-line-list">
               {viewDraft.home.starters.length > 0 ? (
                 viewDraft.home.starters.map((playerId, index) => {
@@ -304,11 +303,11 @@ export default function MatchDetailsPage() {
               )}
             </div>
           </div>
-          <div className="lineup-stack">
-            <p>Remplaçants</p>
-            <div className="compo-line-list">
-              {viewDraft.home.subs.length > 0 ? (
-                viewDraft.home.subs.map((playerId, index) => {
+          {viewDraft.home.subs.length > 0 && (
+            <div className="lineup-stack">
+              <p>Remplaçants</p>
+              <div className="compo-line-list">
+                {viewDraft.home.subs.map((playerId, index) => {
                   const player = playerById.get(playerId)
                   const name = player?.name || playerId
                   const maybeAvatar =
@@ -328,12 +327,10 @@ export default function MatchDetailsPage() {
                       <strong>{name}</strong>
                     </div>
                   )
-                })
-              ) : (
-                <p className="muted-inline">Aucun joueur</p>
-              )}
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </article>
 
       </section>

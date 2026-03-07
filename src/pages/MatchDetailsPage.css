@@ -226,7 +226,8 @@
 
 .lineup-stack {
   display: grid;
-  gap: 6px;
+  gap: 10px;
+  margin-top: 6px;
 }
 
 .lineup-stack > p {

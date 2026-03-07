@@ -11,6 +11,7 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { isMatchNotPlayed as computeIsMatchNotPlayed } from '../matchStatus'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
@@ -63,13 +64,6 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   }
 
   return '/planning'
-}
-
-function isMatchNotPlayedFromData(match: MatchLite) {
-  const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
-  const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
-  const homeScorersCount = match.scorers.filter((s) => s.side === 'home').length
-  return home === 0 && away === 0 && homeScorersCount === 0
 }
 
 export default function PlateauDetailsPage() {
@@ -468,7 +462,7 @@ export default function PlateauDetailsPage() {
     setScorers(match.scorers.filter((s) => s.side === 'home').map((s) => s.playerId))
     setNewScorerPlayerId('')
     setOpponentName(match.opponentName || '')
-    setIsMatchNotPlayed(isMatchNotPlayedFromData(match))
+    setIsMatchNotPlayed(computeIsMatchNotPlayed(match, { referenceDate: plateau?.date ?? null }))
     setIsMatchModalOpen(true)
   }
 
@@ -834,7 +828,7 @@ export default function PlateauDetailsPage() {
                 const away = m.teams.find(t => t.side === 'away')
                 const homeScoreValue = home?.score ?? 0
                 const awayScoreValue = away?.score ?? 0
-                const isNotPlayed = isMatchNotPlayedFromData(m)
+                const isNotPlayed = computeIsMatchNotPlayed(m, { referenceDate: plateau?.date ?? null })
                 const outcome = homeScoreValue > awayScoreValue
                   ? 'win'
                   : homeScoreValue < awayScoreValue
