@@ -13,7 +13,6 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import { isMatchNotPlayed as computeIsMatchNotPlayed } from '../matchStatus'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
@@ -286,13 +285,47 @@ export default function PlateauDetailsPage() {
         teamAColor: plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0],
         teamBColor: plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1],
         isClickable: game.isClubGame && Boolean(game.linkedMatch),
-        scoreLabel: game.isClubGame && game.linkedMatch
+        showLinkIndicator: game.isClubGame && Boolean(game.linkedMatch),
+        scoreLabel: game.isClubGame && game.linkedMatch && (
+          (game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0) !== 0
+          || (game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0) !== 0
+          || (game.linkedMatch.scorers?.length ?? 0) > 0
+        )
           ? `${game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0} - ${game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0}`
           : null,
         onOpen: game.isClubGame && game.linkedMatch ? () => navigate(`/match/${game.linkedMatch?.id}`) : undefined,
       })),
     }))
   ), [navigate, plateauPlanningTeamColorMap, visibleRotationMatches])
+  const manualDisplaySlots = useMemo(() => {
+    if (matchSourceMode !== 'MANUAL' || plateauMatches.length === 0) return []
+    const activePlateauTeamName = (() => {
+      const activeId = selectedTeamId || plateau?.teamId
+      if (!activeId) return ''
+      return teamOptions.find((team) => team.id === activeId)?.name || ''
+    })()
+    return [{
+      key: 'manual-matches',
+      games: plateauMatches.map((match) => {
+        const home = match.teams.find((team) => team.side === 'home')
+        const away = match.teams.find((team) => team.side === 'away')
+        const homeScoreValue = home?.score ?? 0
+        const awayScoreValue = away?.score ?? 0
+        const isNotPlayed = homeScoreValue === 0 && awayScoreValue === 0 && (match.scorers?.length ?? 0) === 0
+        return {
+          key: match.id,
+          teamA: clubName || activePlateauTeamName || 'Nous',
+          teamB: match.opponentName || 'Adversaire',
+          teamAColor: '#1d4ed8',
+          teamBColor: '#64748b',
+          isClickable: true,
+          showLinkIndicator: false,
+          scoreLabel: isNotPlayed ? null : `${homeScoreValue} - ${awayScoreValue}`,
+          onOpen: () => navigate(`/match/${match.id}`),
+        }
+      }),
+    }]
+  }, [clubName, matchSourceMode, navigate, plateau?.teamId, plateauMatches, selectedTeamId, teamOptions])
   const activeTeamName = useMemo(() => {
     const activeId = selectedTeamId || plateau?.teamId
     if (!activeId) return ''
@@ -898,55 +931,15 @@ export default function PlateauDetailsPage() {
                   )}
                 </>
               )}
-              {matchSourceMode === 'MANUAL' && plateauMatches.map(m => {
-                const home = m.teams.find(t => t.side === 'home')
-                const away = m.teams.find(t => t.side === 'away')
-                const homeScoreValue = home?.score ?? 0
-                const awayScoreValue = away?.score ?? 0
-                const isNotPlayed = computeIsMatchNotPlayed(m, { referenceDate: plateau?.date ?? null })
-                const outcome = homeScoreValue > awayScoreValue
-                  ? 'win'
-                  : homeScoreValue < awayScoreValue
-                    ? 'loss'
-                    : 'draw'
-                const outcomeColor = isNotPlayed
-                  ? '#94a3b8'
-                  : outcome === 'win'
-                  ? '#16a34a'
-                  : outcome === 'loss'
-                    ? '#dc2626'
-                    : '#94a3b8'
-                return (
-                  <div
-                    key={m.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Ouvrir le détail du match contre ${m.opponentName || 'Adversaire'}`}
-                    onClick={() => navigate(`/match/${m.id}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        navigate(`/match/${m.id}`)
-                      }
-                    }}
-                    style={{
-                      border: '1px solid #e5e7eb',
-                      borderLeft: `6px solid ${outcomeColor}`,
-                      borderRadius: 8,
-                      padding: 10,
-                      background: '#fff',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{m.opponentName || 'Adversaire'}</div>
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: 18 }}>{homeScoreValue} - {awayScoreValue}</div>
-                    </div>
-                  </div>
-                )
-              })}
+              {matchSourceMode === 'MANUAL' && plateauMatches.length > 0 && (
+                <PlateauRotationContent
+                  filterValue=""
+                  filterOptions={[]}
+                  onFilterChange={() => {}}
+                  slots={manualDisplaySlots}
+                  emptyMessage="Aucun match encore enregistré pour ce plateau."
+                />
+              )}
               {plateauMatches.length === 0 && (
                 <div className="matches-empty-state">
                   {matchSourceMode === 'ROTATION'
@@ -999,6 +992,7 @@ export default function PlateauDetailsPage() {
                       type="button"
                       className="match-score-btn"
                       onClick={() => setHomeScoreFromControls(homeScore - 1)}
+                      disabled={isMatchNotPlayed}
                       aria-label="Retirer un but à notre score"
                     >
                       −
@@ -1008,6 +1002,7 @@ export default function PlateauDetailsPage() {
                       type="button"
                       className="match-score-btn"
                       onClick={() => setHomeScoreFromControls(homeScore + 1)}
+                      disabled={isMatchNotPlayed}
                       aria-label="Ajouter un but à notre score"
                     >
                       +
@@ -1021,6 +1016,7 @@ export default function PlateauDetailsPage() {
                       type="button"
                       className="match-score-btn"
                       onClick={() => setAwayScoreFromControls(awayScore - 1)}
+                      disabled={isMatchNotPlayed}
                       aria-label="Retirer un but au score adverse"
                     >
                       −
@@ -1030,6 +1026,7 @@ export default function PlateauDetailsPage() {
                       type="button"
                       className="match-score-btn"
                       onClick={() => setAwayScoreFromControls(awayScore + 1)}
+                      disabled={isMatchNotPlayed}
                       aria-label="Ajouter un but au score adverse"
                     >
                       +

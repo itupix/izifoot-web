@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { apiGet, apiPut } from '../apiClient'
+import { apiDelete, apiGet, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
@@ -72,10 +72,14 @@ export default function MatchDetailsPage() {
   const [clubName, setClubName] = useState<string>('Club')
   const [players, setPlayers] = useState<Player[]>([])
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [draft, setDraft] = useState<MatchDraft | null>(null)
   const [editHomeScore, setEditHomeScore] = useState(0)
   const [editAwayScore, setEditAwayScore] = useState(0)
+  const [editIsPlayed, setEditIsPlayed] = useState(false)
   const [selectedHomePlayer, setSelectedHomePlayer] = useState('')
   const [selectedHomeRole, setSelectedHomeRole] = useState<'starter' | 'sub'>('starter')
   const [selectedHomeScorer, setSelectedHomeScorer] = useState('')
@@ -106,7 +110,11 @@ export default function MatchDetailsPage() {
   const away = useMemo(() => (match ? getTeam(match, 'away') : undefined), [match])
   const homeScore = home?.score ?? 0
   const awayScore = away?.score ?? 0
-  const pending = match ? isMatchNotPlayed(match) : false
+  const pending = match ? (
+    match.type === 'PLATEAU'
+      ? homeScore === 0 && awayScore === 0 && (match.scorers?.length ?? 0) === 0
+      : isMatchNotPlayed(match)
+  ) : false
   const outcomeLabel = pending ? 'Pas encore joué' : homeScore > awayScore ? 'Victoire' : homeScore < awayScore ? 'Défaite' : 'Nul'
   const outcomeClass = pending ? 'pending' : homeScore > awayScore ? 'win' : homeScore < awayScore ? 'loss' : 'draw'
   const homeLabel = clubName
@@ -138,9 +146,11 @@ export default function MatchDetailsPage() {
   const playerById = useMemo(() => new Map(players.map((p) => [p.id, p] as const)), [players])
 
   function openEditModal() {
+    setMenuOpen(false)
     if (match) setDraft(buildDraft(match))
     setEditHomeScore(homeScore)
     setEditAwayScore(awayScore)
+    setEditIsPlayed(!pending)
     setSelectedHomePlayer('')
     setSelectedHomeScorer('')
     setIsEditModalOpen(true)
@@ -149,6 +159,16 @@ export default function MatchDetailsPage() {
   function closeEditModal() {
     if (saving) return
     setIsEditModalOpen(false)
+  }
+
+  function openDeleteModal() {
+    setMenuOpen(false)
+    setIsDeleteModalOpen(true)
+  }
+
+  function closeDeleteModal() {
+    if (deleting) return
+    setIsDeleteModalOpen(false)
   }
 
   function addPlayerToCompo(role: 'starter' | 'sub', playerId: string) {
@@ -177,12 +197,22 @@ export default function MatchDetailsPage() {
   }
 
   function addScorer(playerId: string) {
-    if (!playerId) return
+    if (!playerId || !editIsPlayed) return
     setDraft((prev) => (prev ? { ...prev, scorers: [...prev.scorers.filter((s) => s.side === 'home'), { side: 'home', playerId }] } : prev))
   }
 
   function removeScorer(index: number) {
     setDraft((prev) => (prev ? { ...prev, scorers: prev.scorers.filter((_, i) => i !== index) } : prev))
+  }
+
+  function toggleEditIsPlayed(checked: boolean) {
+    setEditIsPlayed(checked)
+    if (!checked) {
+      setEditHomeScore(0)
+      setEditAwayScore(0)
+      setDraft((prev) => (prev ? { ...prev, scorers: prev.scorers.filter((s) => s.side !== 'home') } : prev))
+      setSelectedHomeScorer('')
+    }
   }
 
   async function saveDraft() {
@@ -203,12 +233,14 @@ export default function MatchDetailsPage() {
           },
         },
         score: {
-          home: Math.max(0, editHomeScore),
-          away: Math.max(0, editAwayScore),
+          home: editIsPlayed ? Math.max(0, editHomeScore) : 0,
+          away: editIsPlayed ? Math.max(0, editAwayScore) : 0,
         },
-        buteurs: draft.scorers
+        buteurs: editIsPlayed
+          ? draft.scorers
           .filter((s) => s.side === 'home')
-          .map((s) => ({ side: s.side, playerId: s.playerId })),
+          .map((s) => ({ side: s.side, playerId: s.playerId }))
+          : [],
         opponentName: match.opponentName ?? '',
       })
       setMatch(updated)
@@ -218,6 +250,20 @@ export default function MatchDetailsPage() {
       uiAlert(`Erreur mise à jour du match: ${toErrorMessage(err)}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function deleteMatch() {
+    if (!id) return
+    setDeleting(true)
+    try {
+      await apiDelete(apiRoutes.matches.byId(id))
+      navigate(-1)
+    } catch (err: unknown) {
+      uiAlert(`Erreur suppression du match: ${toErrorMessage(err)}`)
+    } finally {
+      setDeleting(false)
+      setIsDeleteModalOpen(false)
     }
   }
 
@@ -232,9 +278,20 @@ export default function MatchDetailsPage() {
           <ChevronLeftIcon size={18} />
           <span>Retour</span>
         </button>
-        <RoundIconButton ariaLabel="Modifier la composition et les buteurs" className="menu-dots-button" onClick={openEditModal}>
-          <DotsHorizontalIcon size={18} />
-        </RoundIconButton>
+        <div className="topbar-menu-wrap">
+          <RoundIconButton ariaLabel="Ouvrir les actions du match" className="menu-dots-button" onClick={() => setMenuOpen((prev) => !prev)}>
+            <DotsHorizontalIcon size={18} />
+          </RoundIconButton>
+          {menuOpen && (
+            <>
+              <button type="button" className="menu-backdrop" aria-label="Fermer le menu" onClick={() => setMenuOpen(false)} />
+              <div className="floating-menu">
+                <button type="button" onClick={openEditModal}>Modifier</button>
+                <button type="button" className="danger" onClick={openDeleteModal}>Supprimer</button>
+              </div>
+            </>
+          )}
+        </div>
       </header>
 
       <section className="match-hero">
@@ -246,9 +303,15 @@ export default function MatchDetailsPage() {
           </div>
           <div className="match-scoreboard">
             <div className="score-line">
-              <span>{homeScore}</span>
-              <span>-</span>
-              <span>{awayScore}</span>
+              {pending ? (
+                <span>vs</span>
+              ) : (
+                <>
+                  <span>{homeScore}</span>
+                  <span>-</span>
+                  <span>{awayScore}</span>
+                </>
+              )}
             </div>
           </div>
           <div className="match-team-block is-away">
@@ -349,22 +412,33 @@ export default function MatchDetailsPage() {
             </div>
 
             <div className="lineup-stack">
+              <label className="match-not-played-toggle">
+                <input
+                  type="checkbox"
+                  checked={editIsPlayed}
+                  onChange={(e) => toggleEditIsPlayed(e.target.checked)}
+                />
+                <span>Match joué</span>
+              </label>
+            </div>
+
+            <div className="lineup-stack">
               <p>Score</p>
               <div className="modal-score-grid">
                 <div className="modal-score-item">
                   <span>Nous</span>
                   <div className="modal-score-controls">
-                    <button type="button" onClick={() => setEditHomeScore((v) => Math.max(0, v - 1))}>−</button>
+                    <button type="button" disabled={!editIsPlayed} onClick={() => setEditHomeScore((v) => Math.max(0, v - 1))}>−</button>
                     <strong>{editHomeScore}</strong>
-                    <button type="button" onClick={() => setEditHomeScore((v) => v + 1)}>+</button>
+                    <button type="button" disabled={!editIsPlayed} onClick={() => setEditHomeScore((v) => v + 1)}>+</button>
                   </div>
                 </div>
                 <div className="modal-score-item">
                   <span>Adversaire</span>
                   <div className="modal-score-controls">
-                    <button type="button" onClick={() => setEditAwayScore((v) => Math.max(0, v - 1))}>−</button>
+                    <button type="button" disabled={!editIsPlayed} onClick={() => setEditAwayScore((v) => Math.max(0, v - 1))}>−</button>
                     <strong>{editAwayScore}</strong>
-                    <button type="button" onClick={() => setEditAwayScore((v) => v + 1)}>+</button>
+                    <button type="button" disabled={!editIsPlayed} onClick={() => setEditAwayScore((v) => v + 1)}>+</button>
                   </div>
                 </div>
               </div>
@@ -424,7 +498,7 @@ export default function MatchDetailsPage() {
             <div className="lineup-stack">
               <p>Buteurs</p>
               <div className="editor-inline-row is-short">
-                <select value={selectedHomeScorer} onChange={(e) => setSelectedHomeScorer(e.target.value)}>
+                <select value={selectedHomeScorer} onChange={(e) => setSelectedHomeScorer(e.target.value)} disabled={!editIsPlayed}>
                   <option value="">Joueur...</option>
                   {sortedPlayers.map((player) => (
                     <option key={player.id} value={player.id}>{player.name}</option>
@@ -432,6 +506,7 @@ export default function MatchDetailsPage() {
                 </select>
                 <button
                   type="button"
+                  disabled={!editIsPlayed}
                   onClick={() => {
                     addScorer(selectedHomeScorer)
                     setSelectedHomeScorer('')
@@ -440,6 +515,7 @@ export default function MatchDetailsPage() {
                   Ajouter
                 </button>
               </div>
+              {!editIsPlayed && <p className="muted-inline">Active le switch pour saisir le score et les buteurs.</p>}
               <ul>
                 {viewDraft.scorers
                   .map((scorer, idx) => ({ scorer, idx }))
@@ -458,6 +534,25 @@ export default function MatchDetailsPage() {
               <button type="button" className="edit-secondary" onClick={closeEditModal} disabled={saving}>Annuler</button>
               <button type="button" className="edit-primary" onClick={() => void saveDraft()} disabled={saving}>
                 {saving ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {isDeleteModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeDeleteModal} />
+          <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Supprimer le match">
+            <div className="drill-modal-head">
+              <h3>Supprimer le match ?</h3>
+              <button type="button" onClick={closeDeleteModal} disabled={deleting}>✕</button>
+            </div>
+            <p className="muted-line">Cette action est définitive.</p>
+            <div className="edit-action-group">
+              <button type="button" className="edit-secondary" onClick={closeDeleteModal} disabled={deleting}>Annuler</button>
+              <button type="button" className="edit-primary" onClick={() => void deleteMatch()} disabled={deleting}>
+                {deleting ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
           </div>

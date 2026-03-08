@@ -2,19 +2,20 @@ import type { ReactNode } from 'react'
 
 export type PlateauRotationDisplayGame = {
   key: string
-  pitch: string | number
+  pitch?: string | number
   teamA: string
   teamB: string
   teamAColor: string
   teamBColor: string
   isClickable?: boolean
+  showLinkIndicator?: boolean
   scoreLabel?: string | null
   onOpen?: () => void
 }
 
 export type PlateauRotationDisplaySlot = {
   key: string
-  time: string
+  time?: string
   games: PlateauRotationDisplayGame[]
 }
 
@@ -163,7 +164,7 @@ export function PlateauRotationContent({
       <div className="rotation-slots">
         {slots.map((slot) => (
           <div key={slot.key} className="rotation-slot-row">
-            <div className="rotation-slot-time">{slot.time}</div>
+            {slot.time ? <div className="rotation-slot-time">{slot.time}</div> : null}
             <div className="rotation-slot-games">
               {slot.games.map((game) => (
                 <div
@@ -179,7 +180,12 @@ export function PlateauRotationContent({
                     }
                   } : undefined}
                 >
-                  <div className="rotation-game-pitch">Terrain {game.pitch}</div>
+                  {(game.pitch != null || game.showLinkIndicator) ? (
+                    <div className="rotation-game-head">
+                      {game.pitch != null ? <div className="rotation-game-pitch">Terrain {game.pitch}</div> : <div />}
+                      {game.showLinkIndicator ? <span className="rotation-game-link-indicator" aria-hidden="true">›</span> : null}
+                    </div>
+                  ) : null}
                   <div className="rotation-game-teams-row">
                     <div className="rotation-game-side is-left">
                       <div
@@ -190,8 +196,10 @@ export function PlateauRotationContent({
                       </div>
                     </div>
                     <div className="rotation-game-side is-score">
-                      <div className={`rotation-game-score ${game.scoreLabel ? '' : 'rotation-game-score-muted'}`}>
-                        {game.scoreLabel || 'vs'}
+                      <div className="rotation-game-score-wrap">
+                        <div className={`rotation-game-score ${game.scoreLabel ? '' : 'rotation-game-score-muted'}`}>
+                          {game.scoreLabel || 'vs'}
+                        </div>
                       </div>
                     </div>
                     <div className="rotation-game-side is-right">

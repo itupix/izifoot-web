@@ -383,6 +383,7 @@
 
 .rotation-game-card.is-clickable {
   cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease;
 }
 
 .rotation-game-card.is-clickable:focus,
@@ -391,11 +392,23 @@
   border-color: #e2e8f0;
 }
 
+.rotation-game-card.is-clickable:hover {
+  transform: translateY(-1px);
+  background: #f1f5f9;
+}
+
 .rotation-game-pitch {
   font-size: 12px;
   font-weight: 700;
   color: #64748b;
   margin-bottom: 2px;
+}
+
+.rotation-game-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .rotation-game-team {
@@ -458,7 +471,19 @@
   min-width: 48px;
 }
 
+.rotation-game-score-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .rotation-game-score-muted {
+  color: #94a3b8;
+}
+
+.rotation-game-link-indicator {
+  font-size: 18px;
+  line-height: 1;
   color: #94a3b8;
 }
 
