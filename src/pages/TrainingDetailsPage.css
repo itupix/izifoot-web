@@ -1006,6 +1006,16 @@
   .modal-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .public-plateau-page .details-page-mainrow {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  .public-plateau-page .public-plateau-grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 920px;
+  }
 }
 
 @media (max-width: 640px) {

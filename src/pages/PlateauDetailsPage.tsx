@@ -6,6 +6,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import type { PlanningData } from '../components/PlanningEditor'
+import { PlateauInfoSection, PlateauPageHeader, PlateauRotationContent } from '../components/PlateauSharedSections'
 import PlanningModal from '../components/PlanningModal'
 import CtaButton from '../components/CtaButton'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
@@ -273,6 +274,25 @@ export default function PlateauDetailsPage() {
       }),
     }))
   }, [clubName, plateau?.teamId, plateauMatches, plateauPlanningTeams, selectedTeamId, teamOptions, visiblePlanningSlots])
+  const rotationDisplaySlots = useMemo(() => (
+    visibleRotationMatches.map((slot) => ({
+      key: slot.time,
+      time: slot.time,
+      games: slot.games.map((game) => ({
+        key: `${slot.time}-${game.pitch}-${game.A}-${game.B}`,
+        pitch: game.pitch,
+        teamA: game.A,
+        teamB: game.B,
+        teamAColor: plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0],
+        teamBColor: plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1],
+        isClickable: game.isClubGame && Boolean(game.linkedMatch),
+        scoreLabel: game.isClubGame && game.linkedMatch
+          ? `${game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0} - ${game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0}`
+          : null,
+        onOpen: game.isClubGame && game.linkedMatch ? () => navigate(`/match/${game.linkedMatch?.id}`) : undefined,
+      })),
+    }))
+  ), [navigate, plateauPlanningTeamColorMap, visibleRotationMatches])
   const activeTeamName = useMemo(() => {
     const activeId = selectedTeamId || plateau?.teamId
     if (!activeId) return ''
@@ -695,61 +715,57 @@ export default function PlateauDetailsPage() {
 
   return (
     <div className="training-details-page">
-      <header className="details-page-head">
-        <button type="button" className="back-link-button" onClick={() => navigate(backToPlanningUrl)}>
-          <ChevronLeftIcon size={18} />
-          <span>Retour au planning</span>
-        </button>
-        <div className="details-page-mainrow">
-          <div className="details-page-title-wrap">
-            <h1 className="details-page-title">Plateau</h1>
-            <p className="details-page-subtitle">{dateLabel}</p>
-          </div>
-          <div className="topbar-menu-wrap">
-            {writable && (
+      <PlateauPageHeader
+        title="Plateau"
+        subtitle={dateLabel}
+        backAction={(
+          <button type="button" className="back-link-button" onClick={() => navigate(backToPlanningUrl)}>
+            <ChevronLeftIcon size={18} />
+            <span>Retour au planning</span>
+          </button>
+        )}
+        action={writable ? (
+          <>
+            <RoundIconButton
+              ariaLabel="Ouvrir le menu d'actions"
+              className="menu-dots-button"
+              onClick={() => setActionsMenuOpen((prev) => !prev)}
+            >
+              <DotsHorizontalIcon size={18} />
+            </RoundIconButton>
+            {actionsMenuOpen && (
               <>
-                <RoundIconButton
-                  ariaLabel="Ouvrir le menu d'actions"
-                  className="menu-dots-button"
-                  onClick={() => setActionsMenuOpen((prev) => !prev)}
-                >
-                  <DotsHorizontalIcon size={18} />
-                </RoundIconButton>
-                {actionsMenuOpen && (
-                  <>
-                    <button
-                      type="button"
-                      className="menu-backdrop"
-                      aria-label="Fermer le menu"
-                      onClick={() => setActionsMenuOpen(false)}
-                    />
-                    <div className="floating-menu">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionsMenuOpen(false)
-                          void openShareModal()
-                        }}
-                      >
-                        Partager le plateau
-                      </button>
-                      <button
-                        type="button"
-                        className="danger"
-                        onClick={() => {
-                          openDeletePlateauModal()
-                        }}
-                      >
-                        Supprimer le plateau
-                      </button>
-                    </div>
-                  </>
-                )}
+                <button
+                  type="button"
+                  className="menu-backdrop"
+                  aria-label="Fermer le menu"
+                  onClick={() => setActionsMenuOpen(false)}
+                />
+                <div className="floating-menu">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionsMenuOpen(false)
+                      void openShareModal()
+                    }}
+                  >
+                    Partager le plateau
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => {
+                      openDeletePlateauModal()
+                    }}
+                  >
+                    Supprimer le plateau
+                  </button>
+                </div>
               </>
             )}
-          </div>
-        </div>
-      </header>
+          </>
+        ) : null}
+      />
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}
@@ -758,76 +774,28 @@ export default function PlateauDetailsPage() {
         <>
           {!writable && <p className="muted-line">Mode lecture seule: actions de modification désactivées.</p>}
           <div className="training-details-grid">
-            <section className="details-card">
-              <div className="info-tabs" role="tablist" aria-label="Informations du plateau">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={infoTab === 'LIEU'}
-                  className={`info-tab ${infoTab === 'LIEU' ? 'is-active' : ''}`}
-                  onClick={() => setInfoTab('LIEU')}
-                >
-                  Lieu
+            <PlateauInfoSection
+              tab={infoTab}
+              onTabChange={setInfoTab}
+              addressLabel={plateauAddressLabel}
+              startTimeLabel={plateauStartTimeLabel}
+              meetingTimeLabel={rendezVousTimeLabel}
+              addressAction={writable ? (
+                <button type="button" className="info-edit-button" onClick={openAddressModal}>
+                  Modifier
                 </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={infoTab === 'HORAIRES'}
-                  className={`info-tab ${infoTab === 'HORAIRES' ? 'is-active' : ''}`}
-                  onClick={() => setInfoTab('HORAIRES')}
-                >
-                  Horaires
+              ) : undefined}
+              startTimeAction={writable ? (
+                <button type="button" className="info-edit-button" onClick={openStartTimeModal}>
+                  Modifier
                 </button>
-              </div>
-              {infoTab === 'LIEU' ? (
-                <div className="info-pane-grid">
-                  <div className="map-preview-wrap">
-                    <iframe
-                      title="Aperçu carte du lieu"
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent(plateauAddressLabel)}&z=14&output=embed`}
-                      loading="lazy"
-                      referrerPolicy="no-referrer-when-downgrade"
-                    />
-                  </div>
-                  <div className="info-address">
-                    <div className="info-row-head">
-                      <p className="info-label">Adresse</p>
-                      {writable && (
-                        <button type="button" className="info-edit-button" onClick={openAddressModal}>
-                          Modifier
-                        </button>
-                      )}
-                    </div>
-                    <p className="info-value">{plateauAddressLabel}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="info-hours-grid">
-                  <div className="info-hour-card">
-                    <div className="info-row-head">
-                      <p className="info-label">Début du plateau</p>
-                      {writable && (
-                        <button type="button" className="info-edit-button" onClick={openStartTimeModal}>
-                          Modifier
-                        </button>
-                      )}
-                    </div>
-                    <p className="info-value">{plateauStartTimeLabel}</p>
-                  </div>
-                  <div className="info-hour-card">
-                    <div className="info-row-head">
-                      <p className="info-label">Rendez-vous sur le lieu</p>
-                      {writable && (
-                        <button type="button" className="info-edit-button" onClick={openMeetingTimeModal}>
-                          Modifier
-                        </button>
-                      )}
-                    </div>
-                    <p className="info-value">{rendezVousTimeLabel}</p>
-                  </div>
-                </div>
-              )}
-            </section>
+              ) : undefined}
+              meetingTimeAction={writable ? (
+                <button type="button" className="info-edit-button" onClick={openMeetingTimeModal}>
+                  Modifier
+                </button>
+              ) : undefined}
+            />
 
             <section
               className={`details-card players-presence-card ${!writable ? 'is-disabled' : ''}`}
@@ -909,92 +877,24 @@ export default function PlateauDetailsPage() {
             <div className="matches-section-body">
               {matchSourceMode === 'ROTATION' && (
                 <>
-                  {plateauPlanning && (
-                    <div className="rotation-panel-meta">
-                      <span>Mise à jour le {new Date(plateauPlanning.updatedAt).toLocaleString()}</span>
-                      {writable && (
+                  {plateauPlanning ? (
+                    <PlateauRotationContent
+                      updatedAtLabel={`Mise à jour le ${new Date(plateauPlanning.updatedAt).toLocaleString()}`}
+                      filterValue={selectedPlanningTeam}
+                      filterOptions={plateauPlanningTeams}
+                      onFilterChange={setSelectedPlanningTeam}
+                      slots={rotationDisplaySlots}
+                      emptyMessage={selectedPlanningTeam ? 'Aucun créneau pour cette équipe.' : 'Aucun créneau disponible.'}
+                      topAction={writable ? (
                         <button type="button" className="rotation-edit-link" onClick={() => openEditPlanningModal(plateauPlanning)}>
                           Modifier
                         </button>
-                      )}
-                    </div>
-                  )}
-                  {plateauPlanning ? (
-                    <>
-                      {plateauPlanningTeams.length > 0 && (
-                        <label className="rotation-team-select">
-                          <select
-                            value={selectedPlanningTeam}
-                            onChange={(e) => setSelectedPlanningTeam(e.target.value)}
-                          >
-                            <option value="">Toutes les équipes</option>
-                            {plateauPlanningTeams.map((teamLabel) => (
-                              <option key={teamLabel} value={teamLabel}>{teamLabel}</option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      <div className="rotation-slots">
-                        {visibleRotationMatches.map((slot) => (
-                          <div key={slot.time} className="rotation-slot-row">
-                            <div className="rotation-slot-time">{slot.time}</div>
-                            <div className="rotation-slot-games">
-                              {slot.games.map((game) => (
-                                <div
-                                  key={`${slot.time}-${game.pitch}-${game.A}-${game.B}`}
-                                  className={`rotation-game-card ${game.isClubGame && game.linkedMatch ? 'is-clickable' : ''}`}
-                                  role={game.isClubGame && game.linkedMatch ? 'button' : undefined}
-                                  tabIndex={game.isClubGame && game.linkedMatch ? 0 : undefined}
-                                  onClick={game.isClubGame && game.linkedMatch ? () => navigate(`/match/${game.linkedMatch?.id}`) : undefined}
-                                  onKeyDown={game.isClubGame && game.linkedMatch ? (e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.preventDefault()
-                                      navigate(`/match/${game.linkedMatch?.id}`)
-                                    }
-                                  } : undefined}
-                                >
-                                  <div className="rotation-game-pitch">Terrain {game.pitch}</div>
-                                  <div className="rotation-game-teams-row">
-                                    <div className="rotation-game-side is-left">
-                                      <div
-                                        className="rotation-game-team team-left"
-                                        style={{ ['--team-accent' as string]: plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0] }}
-                                      >
-                                        <span>{game.A}</span>
-                                      </div>
-                                    </div>
-                                    <div className="rotation-game-side is-score">
-                                      {game.isClubGame && game.linkedMatch ? (
-                                        <div className="rotation-game-score">
-                                          {(game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0)} - {(game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0)}
-                                        </div>
-                                      ) : (
-                                        <div className="rotation-game-score rotation-game-score-muted">vs</div>
-                                      )}
-                                    </div>
-                                    <div className="rotation-game-side is-right">
-                                      <div
-                                        className="rotation-game-team team-right"
-                                        style={{ ['--team-accent' as string]: plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1] }}
-                                      >
-                                        <span>{game.B}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                        {visibleRotationMatches.length === 0 && (
-                          <div className="rotation-empty-state">
-                            {selectedPlanningTeam ? 'Aucun créneau pour cette équipe.' : 'Aucun créneau disponible.'}
-                          </div>
-                        )}
-                      </div>
-                    </>
+                      ) : undefined}
+                    />
                   ) : (
-                    <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
+                    <div className="matches-section-body">
+                      <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
+                    </div>
                   )}
                 </>
               )}

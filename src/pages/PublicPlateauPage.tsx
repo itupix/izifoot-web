@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { apiGet } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
+import { PlateauInfoSection, PlateauPageHeader, PlateauRotationContent } from '../components/PlateauSharedSections'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import type { Plateau } from '../types/api'
 import './TrainingDetailsPage.css'
@@ -136,6 +137,20 @@ export default function PublicPlateauPage() {
     if (typeof window === 'undefined') return ''
     return `${window.location.origin}/plateau/public/${encodeURIComponent(token)}`
   }, [token])
+  const rotationDisplaySlots = useMemo(() => (
+    visibleSlots.map((slot) => ({
+      key: slot.time,
+      time: slot.time,
+      games: slot.games.map((game) => ({
+        key: `${slot.time}-${game.pitch}-${game.A}-${game.B}`,
+        pitch: game.pitch,
+        teamA: game.A,
+        teamB: game.B,
+        teamAColor: teamColorMap.get(game.A) ?? TEAM_COLORS[0],
+        teamBColor: teamColorMap.get(game.B) ?? TEAM_COLORS[1],
+      })),
+    }))
+  ), [teamColorMap, visibleSlots])
 
   useEffect(() => {
     let cancelled = false
@@ -185,20 +200,16 @@ export default function PublicPlateauPage() {
   }
 
   return (
-    <div className="training-details-page">
-      <header className="details-page-head">
-        <div className="details-page-mainrow">
-          <div className="details-page-title-wrap">
-            <h1 className="details-page-title">Plateau</h1>
-            <p className="details-page-subtitle">{dateLabel}</p>
-          </div>
-          <div className="topbar-menu-wrap">
-            <button type="button" className="add-button" onClick={() => setIsShareModalOpen(true)}>
-              Partager le plateau
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="training-details-page public-plateau-page">
+      <PlateauPageHeader
+        title="Plateau"
+        subtitle={dateLabel}
+        action={(
+          <button type="button" className="add-button" onClick={() => setIsShareModalOpen(true)}>
+            Partager le plateau
+          </button>
+        )}
+      />
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}
@@ -206,133 +217,34 @@ export default function PublicPlateauPage() {
 
       {plateau && (
         <>
-          <div className="training-details-grid">
-            <section className="details-card">
-              <div className="info-tabs" role="tablist" aria-label="Informations du plateau">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={infoTab === 'LIEU'}
-                  className={`info-tab ${infoTab === 'LIEU' ? 'is-active' : ''}`}
-                  onClick={() => setInfoTab('LIEU')}
-                >
-                  Lieu
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={infoTab === 'HORAIRES'}
-                  className={`info-tab ${infoTab === 'HORAIRES' ? 'is-active' : ''}`}
-                  onClick={() => setInfoTab('HORAIRES')}
-                >
-                  Horaires
-                </button>
-              </div>
-              {infoTab === 'LIEU' ? (
-                <div className="info-pane-grid">
-                  <div className="map-preview-wrap">
-                    <iframe
-                      title="Aperçu carte du lieu"
-                      src={`https://maps.google.com/maps?q=${encodeURIComponent(plateauAddressLabel)}&z=14&output=embed`}
-                      loading="lazy"
-                      referrerPolicy="no-referrer-when-downgrade"
-                    />
-                  </div>
-                  <div className="info-address">
-                    <div className="info-row-head">
-                      <p className="info-label">Adresse</p>
-                    </div>
-                    <p className="info-value">{plateauAddressLabel}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="info-hours-grid">
-                  <div className="info-hour-card">
-                    <div className="info-row-head">
-                      <p className="info-label">Début du plateau</p>
-                    </div>
-                    <p className="info-value">{plateauStartTimeLabel}</p>
-                  </div>
-                  <div className="info-hour-card">
-                    <div className="info-row-head">
-                      <p className="info-label">Rendez-vous sur le lieu</p>
-                    </div>
-                    <p className="info-value">{rendezVousTimeLabel}</p>
-                  </div>
-                </div>
-              )}
-            </section>
+          <div className="training-details-grid public-plateau-grid">
+            <PlateauInfoSection
+              tab={infoTab}
+              onTabChange={setInfoTab}
+              addressLabel={plateauAddressLabel}
+              startTimeLabel={plateauStartTimeLabel}
+              meetingTimeLabel={rendezVousTimeLabel}
+            />
           </div>
 
           <section className="details-card">
             <div className="card-head">
               <h3>Rotation</h3>
             </div>
-            <div className="matches-section-body">
-              {rotation ? (
-                <>
-                  <div className="rotation-panel-meta">
-                    Mise à jour le {new Date(rotation.updatedAt).toLocaleString()}
-                  </div>
-                  {teamLabels.length > 0 && (
-                    <label className="rotation-team-select">
-                      <select
-                        value={selectedTeam}
-                        onChange={(e) => setSelectedTeam(e.target.value)}
-                      >
-                        <option value="">Toutes les équipes</option>
-                        {teamLabels.map((team) => (
-                          <option key={team} value={team}>{team}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <div className="rotation-slots">
-                    {visibleSlots.map((slot) => (
-                      <div key={slot.time} className="rotation-slot-row">
-                        <div className="rotation-slot-time">{slot.time}</div>
-                        <div className="rotation-slot-games">
-                          {slot.games.map((game) => (
-                            <div key={`${slot.time}-${game.pitch}-${game.A}-${game.B}`} className="rotation-game-card">
-                              <div className="rotation-game-pitch">Terrain {game.pitch}</div>
-                              <div className="rotation-game-teams-row">
-                                <div className="rotation-game-side is-left">
-                                  <div
-                                    className="rotation-game-team team-left"
-                                    style={{ ['--team-accent' as string]: teamColorMap.get(game.A) ?? TEAM_COLORS[0] }}
-                                  >
-                                    <span>{game.A}</span>
-                                  </div>
-                                </div>
-                                <div className="rotation-game-side is-score">
-                                  <div className="rotation-game-score rotation-game-score-muted">vs</div>
-                                </div>
-                                <div className="rotation-game-side is-right">
-                                  <div
-                                    className="rotation-game-team team-right"
-                                    style={{ ['--team-accent' as string]: teamColorMap.get(game.B) ?? TEAM_COLORS[1] }}
-                                  >
-                                    <span>{game.B}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    {selectedTeam && visibleSlots.length === 0 && (
-                      <div className="rotation-empty-state">Aucun créneau pour cette équipe.</div>
-                    )}
-                    {!selectedTeam && visibleSlots.length === 0 && (
-                      <div className="rotation-empty-state">Aucun créneau disponible.</div>
-                    )}
-                  </div>
-                </>
-              ) : (
+            {rotation ? (
+              <PlateauRotationContent
+                updatedAtLabel={`Mise à jour le ${new Date(rotation.updatedAt).toLocaleString()}`}
+                filterValue={selectedTeam}
+                filterOptions={teamLabels}
+                onFilterChange={setSelectedTeam}
+                slots={rotationDisplaySlots}
+                emptyMessage={selectedTeam ? 'Aucun créneau pour cette équipe.' : 'Aucun créneau disponible.'}
+              />
+            ) : (
+              <div className="matches-section-body">
                 <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
-              )}
-            </div>
+              </div>
+            )}
           </section>
         </>
       )}
