@@ -120,6 +120,7 @@ export interface MatchLite {
   createdAt: string
   type: 'ENTRAINEMENT' | 'PLATEAU'
   plateauId?: string | null
+  played?: boolean
   teams: MatchTeamLite[]
   scorers: MatchScorer[]
   opponentName?: string | null

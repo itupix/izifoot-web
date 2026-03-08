@@ -25,6 +25,10 @@ export function isMatchNotPlayed(
   match: MatchLite,
   options?: { referenceDate?: string | null; now?: Date }
 ): boolean {
+  if (typeof match.played === 'boolean') {
+    return !match.played
+  }
+
   const home = match.teams.find((t) => t.side === 'home')?.score ?? 0
   const away = match.teams.find((t) => t.side === 'away')?.score ?? 0
   const scorersCount = Array.isArray(match.scorers) ? match.scorers.length : 0

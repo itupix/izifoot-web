@@ -110,11 +110,7 @@ export default function MatchDetailsPage() {
   const away = useMemo(() => (match ? getTeam(match, 'away') : undefined), [match])
   const homeScore = home?.score ?? 0
   const awayScore = away?.score ?? 0
-  const pending = match ? (
-    match.type === 'PLATEAU'
-      ? homeScore === 0 && awayScore === 0 && (match.scorers?.length ?? 0) === 0
-      : isMatchNotPlayed(match)
-  ) : false
+  const pending = match ? isMatchNotPlayed(match, { referenceDate: plateauDateISO || null }) : false
   const outcomeLabel = pending ? 'Pas encore joué' : homeScore > awayScore ? 'Victoire' : homeScore < awayScore ? 'Défaite' : 'Nul'
   const outcomeClass = pending ? 'pending' : homeScore > awayScore ? 'win' : homeScore < awayScore ? 'loss' : 'draw'
   const homeLabel = clubName
@@ -242,6 +238,7 @@ export default function MatchDetailsPage() {
           .map((s) => ({ side: s.side, playerId: s.playerId }))
           : [],
         opponentName: match.opponentName ?? '',
+        played: editIsPlayed,
       })
       setMatch(updated)
       setDraft(buildDraft(updated))

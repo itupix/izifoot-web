@@ -13,6 +13,7 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
+import { isMatchNotPlayed as isPendingMatch } from '../matchStatus'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
@@ -286,17 +287,15 @@ export default function PlateauDetailsPage() {
         teamBColor: plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1],
         isClickable: game.isClubGame && Boolean(game.linkedMatch),
         showLinkIndicator: game.isClubGame && Boolean(game.linkedMatch),
-        scoreLabel: game.isClubGame && game.linkedMatch && (
-          (game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0) !== 0
-          || (game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0) !== 0
-          || (game.linkedMatch.scorers?.length ?? 0) > 0
-        )
+        scoreLabel: game.isClubGame && game.linkedMatch && !isPendingMatch(game.linkedMatch, {
+          referenceDate: plateau?.date ?? null,
+        })
           ? `${game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0} - ${game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0}`
           : null,
         onOpen: game.isClubGame && game.linkedMatch ? () => navigate(`/match/${game.linkedMatch?.id}`) : undefined,
       })),
     }))
-  ), [navigate, plateauPlanningTeamColorMap, visibleRotationMatches])
+  ), [navigate, plateau?.date, plateauPlanningTeamColorMap, visibleRotationMatches])
   const manualDisplaySlots = useMemo(() => {
     if (matchSourceMode !== 'MANUAL' || plateauMatches.length === 0) return []
     const activePlateauTeamName = (() => {
@@ -311,7 +310,7 @@ export default function PlateauDetailsPage() {
         const away = match.teams.find((team) => team.side === 'away')
         const homeScoreValue = home?.score ?? 0
         const awayScoreValue = away?.score ?? 0
-        const isNotPlayed = homeScoreValue === 0 && awayScoreValue === 0 && (match.scorers?.length ?? 0) === 0
+        const isNotPlayed = isPendingMatch(match, { referenceDate: plateau?.date ?? null })
         return {
           key: match.id,
           teamA: clubName || activePlateauTeamName || 'Nous',
@@ -648,10 +647,11 @@ export default function PlateauDetailsPage() {
             sides: {
               home: { starters: [], subs: [] },
               away: { starters: [], subs: [] },
-            },
+          },
             score: { home: 0, away: 0 },
             buteurs: [],
             opponentName: matchItem.opponent,
+            played: false,
           })
         )
       )
@@ -732,6 +732,7 @@ export default function PlateauDetailsPage() {
         score: { home: isMatchNotPlayed ? 0 : homeScore, away: isMatchNotPlayed ? 0 : awayScore },
         buteurs: isMatchNotPlayed ? [] : scorers.map((playerId) => ({ playerId, side: 'home' as const })),
         opponentName: opponentName.trim(),
+        played: !isMatchNotPlayed,
       }
       if (editingMatchId) {
         const updated = await apiPut<MatchLite>(apiRoutes.matches.byId(editingMatchId), payload)
