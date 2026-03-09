@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { HttpError } from '../api'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
@@ -8,6 +7,7 @@ import AttendanceAccordion from '../components/AttendanceAccordion'
 import { ChevronLeftIcon, CloseIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
+import { mapTrainingAiError } from '../features/trainingAi'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
@@ -53,6 +53,26 @@ function moveTrainingDrills(items: TrainingDrill[], draggedId: string, targetId:
   const [moved] = next.splice(sourceIndex, 1)
   next.splice(targetIndex, 0, moved)
   return next
+}
+
+function normalizeDrillIntroText(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\*\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getDrillIntro(meta: Drill | null): string {
+  if (!meta) return ''
+  const source = typeof meta.descriptionHtml === 'string' && meta.descriptionHtml.trim()
+    ? meta.descriptionHtml
+    : meta.description
+  const normalized = normalizeDrillIntroText(source || '')
+  if (!normalized) return ''
+  const maxLength = 140
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, maxLength).trimEnd()}…`
 }
 
 const TRAINING_OBJECTIVE_PLACEHOLDERS = [
@@ -289,9 +309,12 @@ export default function TrainingDetailsPage() {
     await persistDrillOrder(previousDrills, nextDrills)
   }
 
-  function openDrill(drillId: string) {
+  function openDrill(drillId: string, trainingDrillId?: string) {
     if (!training) return
-    navigate(`/exercices/${drillId}?fromTraining=${training.id}`)
+    const query = trainingDrillId
+      ? `?fromTraining=${training.id}&fromTrainingDrill=${trainingDrillId}`
+      : `?fromTraining=${training.id}`
+    navigate(`/exercices/${drillId}${query}`)
   }
 
   async function sendTrainingObjective() {
@@ -306,7 +329,7 @@ export default function TrainingDetailsPage() {
     try {
       const generated = await apiPost<GenerateTrainingDrillsResponse>(
         apiRoutes.trainings.generateAiDrills(training.id),
-        { objective },
+        { objective, includeDiagrams: false },
       )
       const generatedDrills = generated.items.map((item) => ({
         ...item.trainingDrill,
@@ -314,19 +337,8 @@ export default function TrainingDetailsPage() {
       }))
       setDrills(sortTrainingDrills(generatedDrills))
       setTrainingObjective('')
-      uiAlert(`${generated.count} exercice${generated.count > 1 ? 's' : ''} genere${generated.count > 1 ? 's' : ''}.`)
     } catch (err: unknown) {
-      if (err instanceof HttpError) {
-        if (err.status === 400) uiAlert('Objectif invalide: entre 10 et 400 caracteres.')
-        else if (err.status === 401) uiAlert('Session expiree. Veuillez vous reconnecter.')
-        else if (err.status === 403) uiAlert('Acces refuse: role COACH ou DIRECTION requis.')
-        else if (err.status === 404) uiAlert('Seance ou equipe introuvable.')
-        else if (err.status === 502) uiAlert('Erreur IA temporaire (OpenAI). Reessayez dans un instant.')
-        else if (err.status === 503) uiAlert('Configuration IA manquante cote serveur (OPENAI_API_KEY).')
-        else uiAlert(`Erreur generation IA: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
-        return
-      }
-      uiAlert(`Erreur generation IA: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+      uiAlert(`Erreur generation IA: ${mapTrainingAiError(err, 'training')}`)
     } finally {
       setSendingObjective(false)
     }
@@ -474,7 +486,7 @@ export default function TrainingDetailsPage() {
                       className="add-button training-objective-submit"
                       disabled={!writable || sendingObjective || trainingObjective.trim().length < TRAINING_OBJECTIVE_MIN_LENGTH}
                     >
-                      {sendingObjective ? 'Generation…' : 'Creer un entrainement'}
+                      {sendingObjective ? 'Generation…' : 'Generer 5 exercices'}
                     </button>
                   </div>
                 </form>
@@ -497,12 +509,13 @@ export default function TrainingDetailsPage() {
                       {drills.map((row) => {
                         const meta = row.meta || catalogById.get(row.drillId) || null
                         const isDragTarget = dragOverDrillId === row.id && draggedDrillId !== row.id
+                        const intro = getDrillIntro(meta)
                         return (
                           <article
                             key={row.id}
                             className={`drill-card ${isDragTarget ? 'is-drag-target' : ''}`}
                             draggable={writable && !savingDrillOrder}
-                            onClick={() => openDrill(row.drillId)}
+                            onClick={() => openDrill(row.drillId, row.id)}
                             onDragStart={(event) => handleDrillDragStart(event, row.id)}
                             onDragEnd={handleDrillDragEnd}
                             onDragOver={(event) => handleDrillDragOver(event, row.id)}
@@ -528,6 +541,7 @@ export default function TrainingDetailsPage() {
                               </RoundIconButton>
                             </div>
                             {meta?.category && <small>{meta.category}</small>}
+                            {!!intro && <p className="drill-card-description">{intro}</p>}
                           </article>
                         )
                       })}

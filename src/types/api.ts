@@ -75,6 +75,7 @@ export interface Drill {
   duration: number
   players: string
   description: string
+  descriptionHtml?: string | null
   tags: string[]
   teamId?: string | null
 }
@@ -103,6 +104,7 @@ export interface AiGeneratedTrainingDrillItem {
     drillId: string
     title?: string
     data?: unknown
+    trainingDrillId?: string
   } | null
 }
 

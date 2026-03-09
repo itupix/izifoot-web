@@ -2,13 +2,14 @@ import { useCallback, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import DiagramComposer from '../components/DiagramComposer'
 import DiagramPlayer from '../components/DiagramPlayer'
-import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
+import { ChevronLeftIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/diagramShared'
 import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
+import { mapTrainingAiError } from '../features/trainingAi'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
@@ -29,6 +30,75 @@ function normalizeDiagramList(input: unknown): Diagram[] {
   return []
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function applyInlineMarkdown(value: string): string {
+  return value
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+}
+
+function markdownToHtml(markdown: string): string {
+  const lines = markdown.split(/\r?\n/)
+  const html: string[] = []
+  let inList = false
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+
+    if (!line) {
+      if (inList) {
+        html.push('</ul>')
+        inList = false
+      }
+      continue
+    }
+
+    const listMatch = line.match(/^[-*]\s+(.+)$/)
+    if (listMatch) {
+      if (!inList) {
+        html.push('<ul>')
+        inList = true
+      }
+      html.push(`<li>${applyInlineMarkdown(escapeHtml(listMatch[1]))}</li>`)
+      continue
+    }
+
+    if (inList) {
+      html.push('</ul>')
+      inList = false
+    }
+
+    const h3 = line.match(/^###\s+(.+)$/)
+    if (h3) {
+      html.push(`<h3>${applyInlineMarkdown(escapeHtml(h3[1]))}</h3>`)
+      continue
+    }
+    const h2 = line.match(/^##\s+(.+)$/)
+    if (h2) {
+      html.push(`<h2>${applyInlineMarkdown(escapeHtml(h2[1]))}</h2>`)
+      continue
+    }
+    const h1 = line.match(/^#\s+(.+)$/)
+    if (h1) {
+      html.push(`<h1>${applyInlineMarkdown(escapeHtml(h1[1]))}</h1>`)
+      continue
+    }
+
+    html.push(`<p>${applyInlineMarkdown(escapeHtml(line))}</p>`)
+  }
+
+  if (inList) html.push('</ul>')
+  return html.join('')
+}
+
 export default function DrillDetailsPage() {
   const { me } = useAuth()
   const { selectedTeamId, requiresSelection } = useTeamScope()
@@ -37,12 +107,19 @@ export default function DrillDetailsPage() {
   const [searchParams] = useSearchParams()
   const drillId = params.id ?? ''
   const fromTrainingId = searchParams.get('fromTraining')
+  const fromTrainingDrillId = searchParams.get('fromTrainingDrill')
   const backTarget = fromTrainingId ? `/training/${fromTrainingId}` : '/exercices'
+  const backLabel = fromTrainingId ? "Retour a l'entrainement" : 'Retour aux exercices'
   const [drill, setDrill] = useState<Drill | null>(null)
   const [diagram, setDiagram] = useState<Diagram | null>(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [generatingDiagram, setGeneratingDiagram] = useState(false)
+  const [manualDiagramOpen, setManualDiagramOpen] = useState(false)
+  const [manualDiagramSaving, setManualDiagramSaving] = useState(false)
+  const [manualDiagramError, setManualDiagramError] = useState<string | null>(null)
+  const [manualDiagramData, setManualDiagramData] = useState<DiagramData>(createEmptyDiagramData())
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -52,16 +129,19 @@ export default function DrillDetailsPage() {
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
 
   const loadDrill = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
+    const diagramsPath = fromTrainingDrillId
+      ? apiRoutes.trainingDrills.diagrams(fromTrainingDrillId)
+      : apiRoutes.drills.diagrams(drillId)
     const [rows, diagramRows] = await Promise.all([
       apiGet<{ items: Drill[] }>(apiRoutes.drills.list),
-      apiGet<unknown>(apiRoutes.drills.diagrams(drillId)).catch(() => []),
+      apiGet<unknown>(diagramsPath).catch(() => []),
     ])
     if (isCancelled()) return
     const found = rows.items.find((item) => item.id === drillId) ?? null
     setDrill(found)
     const diagrams = normalizeDiagramList(diagramRows)
     setDiagram(diagrams[0] ?? null)
-  }, [drillId])
+  }, [drillId, fromTrainingDrillId])
 
   const { loading, error } = useAsyncLoader(loadDrill)
 
@@ -135,54 +215,107 @@ export default function DrillDetailsPage() {
     }
   }
 
+  async function generateAiDiagram() {
+    if (!writable) return
+    if (!drill || generatingDiagram) return
+    try {
+      setGeneratingDiagram(true)
+      const objective = drill.description?.trim()
+      const body = objective ? { objective } : {}
+      if (fromTrainingDrillId) {
+        await apiPost(apiRoutes.trainingDrills.generateAiDiagram(fromTrainingDrillId), body)
+        const diagrams = normalizeDiagramList(await apiGet<unknown>(apiRoutes.trainingDrills.diagrams(fromTrainingDrillId)))
+        setDiagram(diagrams[0] ?? null)
+      } else {
+        await apiPost(apiRoutes.drills.generateAiDiagram(drill.id), body)
+        const diagrams = normalizeDiagramList(await apiGet<unknown>(apiRoutes.drills.diagrams(drill.id)))
+        setDiagram(diagrams[0] ?? null)
+      }
+    } catch (err: unknown) {
+      setEditError(mapTrainingAiError(err, 'diagram'))
+    } finally {
+      setGeneratingDiagram(false)
+    }
+  }
+
+  function openManualDiagramModal() {
+    if (!writable) return
+    setManualDiagramData(createEmptyDiagramData())
+    setManualDiagramError(null)
+    setManualDiagramOpen(true)
+  }
+
+  async function createManualDiagram() {
+    if (!drill || manualDiagramSaving) return
+    try {
+      setManualDiagramSaving(true)
+      setManualDiagramError(null)
+      const payload = { title: 'Diagramme', data: manualDiagramData }
+      let saved: Diagram
+      if (fromTrainingDrillId) {
+        saved = await apiPost<Diagram>(apiRoutes.trainingDrills.diagrams(fromTrainingDrillId), payload)
+      } else {
+        saved = await apiPost<Diagram>(apiRoutes.drills.diagrams(drill.id), payload)
+      }
+      setDiagram(saved)
+      setManualDiagramOpen(false)
+    } catch (err: unknown) {
+      setManualDiagramError(toErrorMessage(err))
+    } finally {
+      setManualDiagramSaving(false)
+    }
+  }
+
   if (loading) return <div>Chargement…</div>
   if (error) return <div style={{ color: 'crimson' }}>{error}</div>
   if (!drill) return <div>Exercice introuvable.</div>
 
   const materials = diagram ? summarizeDiagramMaterials(diagram.data) : []
+  const drillDescriptionHtml = drill.descriptionHtml?.trim()
+    ? drill.descriptionHtml
+    : markdownToHtml(drill.description || '')
 
   return (
     <div className="drill-details-page">
-      <header className="drill-topbar">
-        <RoundIconButton
-          ariaLabel={fromTrainingId ? "Revenir a l'entrainement" : 'Revenir aux exercices'}
-          className="drill-back-button"
-          onClick={() => navigate(backTarget)}
-        >
+      <header className="drill-details-head">
+        <button type="button" className="drill-back-link-button" onClick={() => navigate(backTarget)}>
           <ChevronLeftIcon size={18} />
-        </RoundIconButton>
-        <div className="drill-topbar-title">
-          <h2>{drill.title}</h2>
-          <p>{drill.category}</p>
-        </div>
-        <div className="drill-menu-wrap">
-          {writable && (
-            <>
-              <RoundIconButton
-                ariaLabel="Ouvrir le menu d'actions"
-                className="drill-menu-button"
-                onClick={() => setActionsMenuOpen((prev) => !prev)}
-              >
-                <DotsHorizontalIcon size={18} />
-              </RoundIconButton>
-              {actionsMenuOpen && (
-                <>
-                  <button
-                    type="button"
-                    className="drill-menu-backdrop"
-                    aria-label="Fermer le menu"
-                    onClick={() => setActionsMenuOpen(false)}
-                  />
-                  <div className="drill-floating-menu">
-                    <button type="button" onClick={openEditModal}>Modifier l'exercice</button>
-                    <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
-                      {deleting ? 'Suppression…' : "Supprimer l'exercice"}
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+          <span>{backLabel}</span>
+        </button>
+        <div className="drill-details-mainrow">
+          <div className="drill-details-title-wrap">
+            <h1 className="drill-details-title">{drill.title}</h1>
+            <p className="drill-details-subtitle">{drill.category}</p>
+          </div>
+          <div className="drill-menu-wrap">
+            {writable && (
+              <>
+                <RoundIconButton
+                  ariaLabel="Ouvrir le menu d'actions"
+                  className="drill-menu-button"
+                  onClick={() => setActionsMenuOpen((prev) => !prev)}
+                >
+                  <DotsHorizontalIcon size={18} />
+                </RoundIconButton>
+                {actionsMenuOpen && (
+                  <>
+                    <button
+                      type="button"
+                      className="drill-menu-backdrop"
+                      aria-label="Fermer le menu"
+                      onClick={() => setActionsMenuOpen(false)}
+                    />
+                    <div className="drill-floating-menu">
+                      <button type="button" onClick={openEditModal}>Modifier l'exercice</button>
+                      <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
+                        {deleting ? 'Suppression…' : "Supprimer l'exercice"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -194,9 +327,37 @@ export default function DrillDetailsPage() {
         )}
         <section className="drill-card">
           <h3>Description</h3>
-          {!!drill.description && <p className="drill-description-text">{drill.description}</p>}
-          {!drill.description && <p className="drill-empty-text">Aucune description renseignée.</p>}
-          {diagram ? <DiagramPlayer data={diagram.data} /> : <p className="drill-empty-text">Aucun diagramme disponible.</p>}
+          {!!drillDescriptionHtml && (
+            <div className="drill-description-text" dangerouslySetInnerHTML={{ __html: drillDescriptionHtml }} />
+          )}
+          {!drillDescriptionHtml && <p className="drill-empty-text">Aucune description renseignée.</p>}
+        </section>
+
+        <section className="drill-card">
+          <h3>Diagramme</h3>
+          <div className="drill-diagram-content">
+            {diagram ? <DiagramPlayer data={diagram.data} /> : <p className="drill-empty-text">Aucun diagramme disponible.</p>}
+          </div>
+          {writable && (
+            <div className="drill-diagram-actions">
+              <button
+                type="button"
+                className="drill-create-manual-button"
+                onClick={openManualDiagramModal}
+              >
+                Creer un diagramme
+              </button>
+              <button
+                type="button"
+                className="drill-generate-ai-button"
+                disabled={generatingDiagram}
+                onClick={() => void generateAiDiagram()}
+              >
+                <SparklesIcon size={14} />
+                <span>{generatingDiagram ? 'Generation…' : 'Generer diagramme'}</span>
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="drill-card">
@@ -214,6 +375,27 @@ export default function DrillDetailsPage() {
 
         {editError && !editing && <div style={{ color: 'crimson' }}>{editError}</div>}
       </div>
+
+      {writable && manualDiagramOpen && (
+        <div className="drill-modal-overlay" role="dialog" aria-modal="true" onClick={() => !manualDiagramSaving && setManualDiagramOpen(false)}>
+          <div className="drill-manual-diagram-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drill-manual-diagram-head">
+              <h3>Creer un diagramme</h3>
+              <button type="button" onClick={() => setManualDiagramOpen(false)} disabled={manualDiagramSaving}>×</button>
+            </div>
+            {manualDiagramError && <p className="drill-manual-diagram-error">{manualDiagramError}</p>}
+            <DiagramComposer value={manualDiagramData} onChange={setManualDiagramData} minHeight={320} />
+            <div className="drill-manual-diagram-actions">
+              <button type="button" className="drill-modal-secondary" onClick={() => setManualDiagramOpen(false)} disabled={manualDiagramSaving}>
+                Annuler
+              </button>
+              <button type="button" className="drill-modal-primary" onClick={() => void createManualDiagram()} disabled={manualDiagramSaving}>
+                {manualDiagramSaving ? 'Creation…' : 'Creer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {writable && editing && (
         <div

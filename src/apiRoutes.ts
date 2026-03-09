@@ -50,9 +50,11 @@ export const apiRoutes = {
     list: '/drills',
     byId: (id: string) => `/drills/${enc(id)}`,
     diagrams: (drillId: string) => `/drills/${enc(drillId)}/diagrams`,
+    generateAiDiagram: (drillId: string) => `/drills/${enc(drillId)}/diagrams/generate-ai`,
   },
   trainingDrills: {
     diagrams: (trainingDrillId: string) => `/training-drills/${enc(trainingDrillId)}/diagrams`,
+    generateAiDiagram: (trainingDrillId: string) => `/training-drills/${enc(trainingDrillId)}/diagrams/generate-ai`,
   },
   diagrams: {
     byId: (id: string) => `/diagrams/${enc(id)}`,
