@@ -749,6 +749,56 @@
   background: #eff6ff;
 }
 
+.drill-card-skeleton {
+  cursor: default;
+  padding-right: 10px;
+  background: linear-gradient(120deg, #f8fbff 0%, #eef4ff 48%, #f8fbff 100%);
+  border-color: #d4def5;
+  animation: ai-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.drill-skeleton-line {
+  display: block;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.drill-skeleton-line.is-title {
+  width: min(220px, 70%);
+  height: 14px;
+}
+
+.drill-skeleton-line.is-meta {
+  width: 110px;
+  height: 10px;
+}
+
+.drill-skeleton-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+}
+
+@keyframes ai-skeleton-shimmer {
+  0% {
+    opacity: 0.75;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+  100% {
+    opacity: 0.75;
+    transform: translateY(0);
+  }
+}
+
 .drill-card:active {
   cursor: grabbing;
 }

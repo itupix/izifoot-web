@@ -69,6 +69,7 @@ const TRAINING_OBJECTIVE_PLACEHOLDERS = [
 ]
 const TRAINING_OBJECTIVE_MAX_LENGTH = 400
 const TRAINING_OBJECTIVE_MIN_LENGTH = 10
+const AI_SKELETON_ITEMS = 4
 
 export default function TrainingDetailsPage() {
   const { me } = useAuth()
@@ -479,45 +480,61 @@ export default function TrainingDetailsPage() {
                 </form>
 
                 <div className="drill-cards-grid">
-                  {drills.map((row) => {
-                    const meta = row.meta || catalogById.get(row.drillId) || null
-                    const isDragTarget = dragOverDrillId === row.id && draggedDrillId !== row.id
-                    return (
-                      <article
-                        key={row.id}
-                        className={`drill-card ${isDragTarget ? 'is-drag-target' : ''}`}
-                        draggable={writable && !savingDrillOrder}
-                        onClick={() => openDrill(row.drillId)}
-                        onDragStart={(event) => handleDrillDragStart(event, row.id)}
-                        onDragEnd={handleDrillDragEnd}
-                        onDragOver={(event) => handleDrillDragOver(event, row.id)}
-                        onDrop={(event) => {
-                          event.preventDefault()
-                          void handleDrillDrop(row.id)
-                        }}
-                      >
+                  {sendingObjective ? (
+                    Array.from({ length: AI_SKELETON_ITEMS }, (_, index) => (
+                      <article key={`ai-skeleton-${index}`} className="drill-card drill-card-skeleton" aria-hidden="true">
                         <div className="drill-card-head">
                           <div className="drill-card-title-wrap">
-                            <h4>{meta?.title || 'Exercice'}</h4>
+                            <span className="drill-skeleton-line is-title" />
                           </div>
-                          <RoundIconButton
-                            ariaLabel="Supprimer l'exercice"
-                            className="icon-danger-button card-delete-button"
-                            disabled={savingDrillOrder || !writable}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              removeDrill(row.id)
+                          <span className="drill-skeleton-pill">IA</span>
+                        </div>
+                        <span className="drill-skeleton-line is-meta" />
+                      </article>
+                    ))
+                  ) : (
+                    <>
+                      {drills.map((row) => {
+                        const meta = row.meta || catalogById.get(row.drillId) || null
+                        const isDragTarget = dragOverDrillId === row.id && draggedDrillId !== row.id
+                        return (
+                          <article
+                            key={row.id}
+                            className={`drill-card ${isDragTarget ? 'is-drag-target' : ''}`}
+                            draggable={writable && !savingDrillOrder}
+                            onClick={() => openDrill(row.drillId)}
+                            onDragStart={(event) => handleDrillDragStart(event, row.id)}
+                            onDragEnd={handleDrillDragEnd}
+                            onDragOver={(event) => handleDrillDragOver(event, row.id)}
+                            onDrop={(event) => {
+                              event.preventDefault()
+                              void handleDrillDrop(row.id)
                             }}
                           >
-                            <CloseIcon size={16} />
-                          </RoundIconButton>
-                        </div>
-                        {meta?.category && <small>{meta.category}</small>}
-                      </article>
-                    )
-                  })}
-                  {drills.length === 0 && (
-                    <p className="muted-line training-program-empty-state">Aucun exercice ajouté pour cette séance.</p>
+                            <div className="drill-card-head">
+                              <div className="drill-card-title-wrap">
+                                <h4>{meta?.title || 'Exercice'}</h4>
+                              </div>
+                              <RoundIconButton
+                                ariaLabel="Supprimer l'exercice"
+                                className="icon-danger-button card-delete-button"
+                                disabled={savingDrillOrder || !writable}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  removeDrill(row.id)
+                                }}
+                              >
+                                <CloseIcon size={16} />
+                              </RoundIconButton>
+                            </div>
+                            {meta?.category && <small>{meta.category}</small>}
+                          </article>
+                        )
+                      })}
+                      {drills.length === 0 && (
+                        <p className="muted-line training-program-empty-state">Aucun exercice ajouté pour cette séance.</p>
+                      )}
+                    </>
                   )}
                 </div>
                 {writable && (
