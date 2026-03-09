@@ -33,6 +33,7 @@ export const apiRoutes = {
     list: '/trainings',
     byId: (id: string) => `/trainings/${enc(id)}`,
     drills: (trainingId: string) => `/trainings/${enc(trainingId)}/drills`,
+    generateAiDrills: (trainingId: string) => `/trainings/${enc(trainingId)}/drills/generate-ai`,
     drillById: (trainingId: string, trainingDrillId: string) =>
       `/trainings/${enc(trainingId)}/drills/${enc(trainingDrillId)}`,
   },

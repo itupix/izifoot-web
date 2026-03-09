@@ -95,6 +95,24 @@ export interface TrainingDrill {
   meta?: Drill | null
 }
 
+export interface AiGeneratedTrainingDrillItem {
+  drill: Drill
+  trainingDrill: TrainingDrill
+  diagram?: {
+    id: string
+    drillId: string
+    title?: string
+    data?: unknown
+  } | null
+}
+
+export interface GenerateTrainingDrillsResponse {
+  objective: string
+  ageBand?: string | null
+  count: number
+  items: AiGeneratedTrainingDrillItem[]
+}
+
 export interface MatchTeamPlayer {
   playerId?: string
   role?: 'starter' | 'sub'

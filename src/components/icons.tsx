@@ -12,6 +12,7 @@ import {
   Pause,
   Play,
   RotateCw,
+  Sparkles,
   SkipBack,
   StepBack,
   StepForward,
@@ -90,4 +91,8 @@ export function OrientationIcon(props: IconProps) {
 
 export function FullscreenIcon(props: IconProps) {
   return renderIcon(Maximize, props)
+}
+
+export function SparklesIcon(props: IconProps) {
+  return renderIcon(Sparkles, props)
 }

@@ -1,17 +1,18 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { HttpError } from '../api'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import AttendanceAccordion from '../components/AttendanceAccordion'
-import { ChevronLeftIcon, CloseIcon, DotsHorizontalIcon } from '../components/icons'
+import { ChevronLeftIcon, CloseIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
-import type { AttendanceRow, Drill, Player, Training, TrainingDrill } from '../types/api'
+import type { AttendanceRow, Drill, GenerateTrainingDrillsResponse, Player, Training, TrainingDrill } from '../types/api'
 import './TrainingDetailsPage.css'
 
 function getFirstName(fullName: string) {
@@ -54,6 +55,21 @@ function moveTrainingDrills(items: TrainingDrill[], draggedId: string, targetId:
   return next
 }
 
+const TRAINING_OBJECTIVE_PLACEHOLDERS = [
+  'Ex: travailler la relance courte sous pression puis finir vite en 3 passes maximum.',
+  'Ex: ameliorer le contre-pressing immediat apres perte dans les 6 secondes.',
+  'Ex: renforcer les automatismes defensifs sur centre et deuxieme ballon.',
+  'Ex: accelerer la transition defense-attaque avec des courses de profondeur.',
+  'Ex: corriger le positionnement des milieux pour mieux fermer l axe.',
+  'Ex: preparer un plan de pressing haut coordonne sur sortie adverse.',
+  'Ex: augmenter la qualite technique sous fatigue en fin de seance.',
+  'Ex: travailler les circuits de passe cote faible vers cote fort.',
+  'Ex: ameliorer la finition dans la surface apres debordement sur les ailes.',
+  'Ex: stabiliser le bloc equipe et la communication sur coups de pied arretes.',
+]
+const TRAINING_OBJECTIVE_MAX_LENGTH = 400
+const TRAINING_OBJECTIVE_MIN_LENGTH = 10
+
 export default function TrainingDetailsPage() {
   const { me } = useAuth()
   const { selectedTeamId, requiresSelection } = useTeamScope()
@@ -73,6 +89,11 @@ export default function TrainingDetailsPage() {
   const [draggedDrillId, setDraggedDrillId] = useState<string | null>(null)
   const [dragOverDrillId, setDragOverDrillId] = useState<string | null>(null)
   const [savingDrillOrder, setSavingDrillOrder] = useState(false)
+  const [trainingObjective, setTrainingObjective] = useState('')
+  const [sendingObjective, setSendingObjective] = useState(false)
+  const [trainingObjectivePlaceholder] = useState(
+    () => TRAINING_OBJECTIVE_PLACEHOLDERS[Math.floor(Math.random() * TRAINING_OBJECTIVE_PLACEHOLDERS.length)],
+  )
 
   const loadTraining = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -272,6 +293,44 @@ export default function TrainingDetailsPage() {
     navigate(`/exercices/${drillId}?fromTraining=${training.id}`)
   }
 
+  async function sendTrainingObjective() {
+    if (!writable || isCancelled || sendingObjective) return
+    if (!training) return
+    const objective = trainingObjective.trim()
+    if (objective.length < TRAINING_OBJECTIVE_MIN_LENGTH) {
+      uiAlert(`L'objectif doit contenir au moins ${TRAINING_OBJECTIVE_MIN_LENGTH} caracteres.`)
+      return
+    }
+    setSendingObjective(true)
+    try {
+      const generated = await apiPost<GenerateTrainingDrillsResponse>(
+        apiRoutes.trainings.generateAiDrills(training.id),
+        { objective },
+      )
+      const generatedDrills = generated.items.map((item) => ({
+        ...item.trainingDrill,
+        meta: item.drill,
+      }))
+      setDrills(sortTrainingDrills(generatedDrills))
+      setTrainingObjective('')
+      uiAlert(`${generated.count} exercice${generated.count > 1 ? 's' : ''} genere${generated.count > 1 ? 's' : ''}.`)
+    } catch (err: unknown) {
+      if (err instanceof HttpError) {
+        if (err.status === 400) uiAlert('Objectif invalide: entre 10 et 400 caracteres.')
+        else if (err.status === 401) uiAlert('Session expiree. Veuillez vous reconnecter.')
+        else if (err.status === 403) uiAlert('Acces refuse: role COACH ou DIRECTION requis.')
+        else if (err.status === 404) uiAlert('Seance ou equipe introuvable.')
+        else if (err.status === 502) uiAlert('Erreur IA temporaire (OpenAI). Reessayez dans un instant.')
+        else if (err.status === 503) uiAlert('Configuration IA manquante cote serveur (OPENAI_API_KEY).')
+        else uiAlert(`Erreur generation IA: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+        return
+      }
+      uiAlert(`Erreur generation IA: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setSendingObjective(false)
+    }
+  }
+
   if (!id) return <div>Entraînement introuvable.</div>
 
   return (
@@ -371,65 +430,107 @@ export default function TrainingDetailsPage() {
 
           <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
             <div className="card-head">
-              <h3>Exercices</h3>
-              <div className="head-actions">
-                {!isCancelled && writable && (
-                  <button
-                    type="button"
-                    className="add-button"
-                    onClick={() => setManageDrillsOpen(true)}
-                    aria-label="Ajouter un exercice"
-                  >
-                    Ajouter
-                  </button>
-                )}
-              </div>
+              <h3>Programme</h3>
             </div>
             {isCancelled ? (
               <p className="muted-line">Séance annulée: exercices indisponibles.</p>
             ) : (
-              <div className="drill-cards-grid">
-                {drills.map((row) => {
-                  const meta = row.meta || catalogById.get(row.drillId) || null
-                  const isDragTarget = dragOverDrillId === row.id && draggedDrillId !== row.id
-                  return (
-                    <article
-                      key={row.id}
-                      className={`drill-card ${isDragTarget ? 'is-drag-target' : ''}`}
-                      draggable={writable && !savingDrillOrder}
-                      onClick={() => openDrill(row.drillId)}
-                      onDragStart={(event) => handleDrillDragStart(event, row.id)}
-                      onDragEnd={handleDrillDragEnd}
-                      onDragOver={(event) => handleDrillDragOver(event, row.id)}
-                      onDrop={(event) => {
-                        event.preventDefault()
-                        void handleDrillDrop(row.id)
-                      }}
+              <>
+                <form
+                  className="training-objective-form"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    sendTrainingObjective()
+                  }}
+                >
+                  <div className="training-objective-glow" aria-hidden="true" />
+                  <div className="training-objective-head">
+                    <div className="training-objective-title-wrap">
+                      <span className="training-objective-icon" aria-hidden="true">
+                        <SparklesIcon size={15} />
+                      </span>
+                      <label htmlFor="training-objective" className="training-objective-label">
+                        Objectif d&apos;entrainement
+                      </label>
+                    </div>
+                    <span className="training-objective-badge">AI Coach</span>
+                  </div>
+                  <textarea
+                    id="training-objective"
+                    className="training-objective-input"
+                    value={trainingObjective}
+                    onChange={(event) => setTrainingObjective(event.target.value)}
+                    placeholder={trainingObjectivePlaceholder}
+                    maxLength={TRAINING_OBJECTIVE_MAX_LENGTH}
+                    disabled={!writable || sendingObjective}
+                  />
+                  <div className="training-objective-footer">
+                    <span className="training-objective-counter">
+                      {trainingObjective.length}/{TRAINING_OBJECTIVE_MAX_LENGTH}
+                    </span>
+                    <button
+                      type="submit"
+                      className="add-button training-objective-submit"
+                      disabled={!writable || sendingObjective || trainingObjective.trim().length < TRAINING_OBJECTIVE_MIN_LENGTH}
                     >
-                      <div className="drill-card-head">
-                        <div className="drill-card-title-wrap">
-                          <h4>{meta?.title || 'Exercice'}</h4>
+                      {sendingObjective ? 'Generation…' : 'Creer un entrainement'}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="drill-cards-grid">
+                  {drills.map((row) => {
+                    const meta = row.meta || catalogById.get(row.drillId) || null
+                    const isDragTarget = dragOverDrillId === row.id && draggedDrillId !== row.id
+                    return (
+                      <article
+                        key={row.id}
+                        className={`drill-card ${isDragTarget ? 'is-drag-target' : ''}`}
+                        draggable={writable && !savingDrillOrder}
+                        onClick={() => openDrill(row.drillId)}
+                        onDragStart={(event) => handleDrillDragStart(event, row.id)}
+                        onDragEnd={handleDrillDragEnd}
+                        onDragOver={(event) => handleDrillDragOver(event, row.id)}
+                        onDrop={(event) => {
+                          event.preventDefault()
+                          void handleDrillDrop(row.id)
+                        }}
+                      >
+                        <div className="drill-card-head">
+                          <div className="drill-card-title-wrap">
+                            <h4>{meta?.title || 'Exercice'}</h4>
+                          </div>
+                          <RoundIconButton
+                            ariaLabel="Supprimer l'exercice"
+                            className="icon-danger-button card-delete-button"
+                            disabled={savingDrillOrder || !writable}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeDrill(row.id)
+                            }}
+                          >
+                            <CloseIcon size={16} />
+                          </RoundIconButton>
                         </div>
-                        <RoundIconButton
-                          ariaLabel="Supprimer l'exercice"
-                          className="icon-danger-button card-delete-button"
-                          disabled={savingDrillOrder || !writable}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removeDrill(row.id)
-                          }}
-                        >
-                          <CloseIcon size={16} />
-                        </RoundIconButton>
-                      </div>
-                      {meta?.category && <small>{meta.category}</small>}
-                    </article>
-                  )
-                })}
-                {drills.length === 0 && (
-                  <p className="muted-line">Aucun exercice ajouté pour cette séance.</p>
+                        {meta?.category && <small>{meta.category}</small>}
+                      </article>
+                    )
+                  })}
+                  {drills.length === 0 && (
+                    <p className="muted-line training-program-empty-state">Aucun exercice ajouté pour cette séance.</p>
+                  )}
+                </div>
+                {writable && (
+                  <button
+                    type="button"
+                    className="add-button training-program-add-cta"
+                    onClick={() => setManageDrillsOpen(true)}
+                    aria-label="Ajouter un exercice"
+                  >
+                    Ajouter un exercice
+                  </button>
                 )}
-              </div>
+              </>
             )}
             {!writable && <p className="muted-line">Mode lecture seule: édition des exercices désactivée.</p>}
             {drills.length > 1 && !isCancelled && savingDrillOrder && <p className="muted-line">Enregistrement du nouvel ordre…</p>}
