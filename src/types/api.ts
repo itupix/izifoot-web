@@ -96,6 +96,21 @@ export interface TrainingDrill {
   meta?: Drill | null
 }
 
+export interface TrainingRoleAssignment {
+  id: string
+  trainingId: string
+  role: string
+  playerId: string
+  player?: {
+    id: string
+    name: string
+  }
+}
+
+export interface TrainingRolesResponse {
+  items: TrainingRoleAssignment[]
+}
+
 export interface AiGeneratedTrainingDrillItem {
   drill: Drill
   trainingDrill: TrainingDrill

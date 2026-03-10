@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  Dice5,
   GripVertical,
   Maximize,
   Menu,
@@ -95,4 +96,8 @@ export function FullscreenIcon(props: IconProps) {
 
 export function SparklesIcon(props: IconProps) {
   return renderIcon(Sparkles, props)
+}
+
+export function DiceIcon(props: IconProps) {
+  return renderIcon(Dice5, props)
 }
