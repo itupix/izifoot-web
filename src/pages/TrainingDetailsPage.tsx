@@ -6,6 +6,7 @@ import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import AttendanceAccordion from '../components/AttendanceAccordion'
 import PlayersPresenceSection from '../components/PlayersPresenceSection'
+import SelectionModal from '../components/SelectionModal'
 import { ChevronLeftIcon, CloseIcon, DiceIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
@@ -140,6 +141,7 @@ export default function TrainingDetailsPage() {
   const [savingDrillOrder, setSavingDrillOrder] = useState(false)
   const [trainingObjective, setTrainingObjective] = useState('')
   const [sendingObjective, setSendingObjective] = useState(false)
+  const [updatingCatalogDrillIds, setUpdatingCatalogDrillIds] = useState<Set<string>>(new Set())
   const [roleLines, setRoleLines] = useState<TrainingRoleLine[]>([])
   const [savingRoles, setSavingRoles] = useState(false)
   const [rolesError, setRolesError] = useState<string | null>(null)
@@ -209,7 +211,7 @@ export default function TrainingDetailsPage() {
 
   const filteredCatalog = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    const list = catalog.filter((d) => {
+    return catalog.filter((d) => {
       if (!needle) return true
       return (
         d.title.toLowerCase().includes(needle) ||
@@ -218,9 +220,7 @@ export default function TrainingDetailsPage() {
         d.tags.some((tag) => tag.toLowerCase().includes(needle))
       )
     })
-
-    return list.sort((a, b) => Number(drillIdsInSession.has(a.id)) - Number(drillIdsInSession.has(b.id)))
-  }, [catalog, query, drillIdsInSession])
+  }, [catalog, query])
   const isCancelled = training?.status === 'CANCELLED'
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
   const presentPlayers = useMemo(
@@ -361,6 +361,28 @@ export default function TrainingDetailsPage() {
       setDrills((prev) => prev.filter((d) => d.id !== trainingDrillId))
     } catch (err: unknown) {
       uiAlert(`Erreur suppression exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    }
+  }
+
+  async function toggleCatalogDrillSelection(drillId: string, selected: boolean) {
+    if (!writable) return
+    if (!training || !drillId) return
+    if (updatingCatalogDrillIds.has(drillId)) return
+
+    setUpdatingCatalogDrillIds((prev) => new Set(prev).add(drillId))
+    try {
+      if (selected) {
+        await addDrill(drillId)
+      } else {
+        const trainingDrill = drills.find((row) => row.drillId === drillId)
+        if (trainingDrill) await removeDrill(trainingDrill.id)
+      }
+    } finally {
+      setUpdatingCatalogDrillIds((prev) => {
+        const next = new Set(prev)
+        next.delete(drillId)
+        return next
+      })
     }
   }
 
@@ -901,66 +923,61 @@ export default function TrainingDetailsPage() {
       )}
 
       {manageDrillsOpen && !isCancelled && writable && (
-        <>
-          <div className="modal-overlay" onClick={() => setManageDrillsOpen(false)} />
-          <div className="drill-modal manage-modal" role="dialog" aria-modal="true">
-            <div className="drill-modal-head">
-              <h3>Gérer les exercices</h3>
-              <button type="button" onClick={() => setManageDrillsOpen(false)}>✕</button>
-            </div>
-
-            <div className="drill-search-box">
+        <SelectionModal
+          isOpen={manageDrillsOpen}
+          onClose={() => setManageDrillsOpen(false)}
+          title="Ajouter un exercice"
+          className="manage-modal"
+          titleAside={<span className="selection-modal-count">{drillIdsInSession.size}</span>}
+          topContent={(
+            <div className="drill-search-box manage-modal-search">
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Rechercher un exercice"
               />
             </div>
-
-            <div className="manage-section">
-              <h4>Choisir un exercice</h4>
-              {filteredCatalog.length === 0 && (
-                <p className="muted-line">Aucun exercice trouvé.</p>
-              )}
-              {filteredCatalog.map((item) => {
-                const alreadyAdded = drillIdsInSession.has(item.id)
-                return (
-                  <article key={item.id} className="drill-card">
-                    <div className="drill-card-head">
-                      <h4>{item.title}</h4>
-                      <div className="card-actions">
-                        <button
-                          type="button"
-                          className="add-text"
-                          onClick={() => {
-                            setManageDrillsOpen(false)
-                            setQuery('')
-                            openDrill(item.id)
-                          }}
-                        >
-                          Détails
-                        </button>
-                        <button
-                          type="button"
-                          className="add-text"
-                          disabled={alreadyAdded}
-                          onClick={() => {
-                            addDrill(item.id)
-                            setManageDrillsOpen(false)
-                            setQuery('')
-                          }}
-                        >
-                          {alreadyAdded ? 'Déjà ajouté' : 'Ajouter'}
-                        </button>
-                      </div>
-                    </div>
-                    <small>{item.category || '—'} · {item.duration ?? '—'} min</small>
-                  </article>
-                )
-              })}
-            </div>
-          </div>
-        </>
+          )}
+          bodyClassName="manage-section manage-modal-list"
+        >
+          {filteredCatalog.length === 0 && (
+            <p className="muted-line">Aucun exercice trouvé.</p>
+          )}
+          {filteredCatalog.map((item) => {
+            const alreadyAdded = drillIdsInSession.has(item.id)
+            const isUpdating = updatingCatalogDrillIds.has(item.id)
+            return (
+              <article
+                key={item.id}
+                className={`drill-card manage-drill-card ${alreadyAdded ? 'is-selected' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => { void toggleCatalogDrillSelection(item.id, !alreadyAdded) }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    void toggleCatalogDrillSelection(item.id, !alreadyAdded)
+                  }
+                }}
+                aria-label={`${alreadyAdded ? 'Retirer' : 'Ajouter'} l'exercice ${item.title}`}
+              >
+                <div className="drill-card-head">
+                  <h4>{item.title}</h4>
+                </div>
+                <input
+                  type="checkbox"
+                  className="manage-drill-checkbox"
+                  checked={alreadyAdded}
+                  disabled={isUpdating}
+                  aria-label={`Sélectionner l'exercice ${item.title}`}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => { void toggleCatalogDrillSelection(item.id, event.target.checked) }}
+                />
+                <small>{item.category || '—'} · {item.duration ?? '—'} min</small>
+              </article>
+            )
+          })}
+        </SelectionModal>
       )}
 
     </div>

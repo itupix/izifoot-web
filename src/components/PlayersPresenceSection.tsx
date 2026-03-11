@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type { Player } from '../types/api'
+import SelectionModal from './SelectionModal'
 
 type PlayersPresenceSectionProps = {
   players: Player[]
@@ -94,43 +95,32 @@ export default function PlayersPresenceSection({
         </div>
       </section>
 
-      {isPlayersModalOpen && (
-        <>
-          <div className="modal-overlay" onClick={() => setIsPlayersModalOpen(false)} />
-          <div
-            className="drill-modal players-selection-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Sélection des joueurs présents"
-          >
-            <div className="drill-modal-head players-selection-modal-head">
-              <div className="players-selection-modal-title-wrap">
-                <h3>Joueurs présents</h3>
-                <span className="players-selection-count">{presentPlayerIds.size}/{players.length}</span>
-              </div>
-              <button type="button" onClick={() => setIsPlayersModalOpen(false)}>✕</button>
-            </div>
-            {selectionDisabled && selectionDisabledMessage}
-            <div className="attendance-list-simple players-selection-list">
-              {players.map((player) => {
-                const present = presentPlayerIds.has(player.id)
-                return (
-                  <label key={player.id} className="attendance-row">
-                    <span>{getFirstName(player.name)}</span>
-                    <input
-                      type="checkbox"
-                      className="players-selection-checkbox"
-                      checked={present}
-                      disabled={selectionDisabled}
-                      onChange={(event) => { void onTogglePresence(player.id, event.target.checked) }}
-                    />
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-        </>
-      )}
+      <SelectionModal
+        isOpen={isPlayersModalOpen}
+        onClose={() => setIsPlayersModalOpen(false)}
+        title="Joueurs présents"
+        ariaLabel="Sélection des joueurs présents"
+        className="players-selection-modal"
+        titleAside={<span className="players-selection-count">{presentPlayerIds.size}/{players.length}</span>}
+        topContent={selectionDisabled ? selectionDisabledMessage : undefined}
+        bodyClassName="attendance-list-simple players-selection-list"
+      >
+        {players.map((player) => {
+          const present = presentPlayerIds.has(player.id)
+          return (
+            <label key={player.id} className="attendance-row">
+              <span>{getFirstName(player.name)}</span>
+              <input
+                type="checkbox"
+                className="players-selection-checkbox"
+                checked={present}
+                disabled={selectionDisabled}
+                onChange={(event) => { void onTogglePresence(player.id, event.target.checked) }}
+              />
+            </label>
+          )
+        })}
+      </SelectionModal>
     </>
   )
 }
