@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import AttendanceAccordion from '../components/AttendanceAccordion'
+import PlayersPresenceSection from '../components/PlayersPresenceSection'
 import { ChevronLeftIcon, CloseIcon, DiceIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
@@ -16,10 +17,6 @@ import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
 import type { AttendanceRow, Drill, GenerateTrainingDrillsResponse, Player, Training, TrainingDrill, TrainingRolesResponse } from '../types/api'
 import './TrainingDetailsPage.css'
-
-function getFirstName(fullName: string) {
-  return fullName.trim().split(/\s+/)[0] || fullName
-}
 
 function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   const date = dateISO ? new Date(dateISO) : null
@@ -135,7 +132,6 @@ export default function TrainingDetailsPage() {
   const [drills, setDrills] = useState<TrainingDrill[]>([])
   const [catalog, setCatalog] = useState<Drill[]>([])
   const [query, setQuery] = useState('')
-  const [playersOpen, setPlayersOpen] = useState(false)
   const [rolesOpen, setRolesOpen] = useState(false)
   const [manageDrillsOpen, setManageDrillsOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
@@ -636,31 +632,18 @@ export default function TrainingDetailsPage() {
 
       {training && (
         <div className="training-details-grid">
-          <AttendanceAccordion
-            countLabel={`${attendance.size}/${players.length}`}
-            isOpen={playersOpen}
-            onToggle={() => setPlayersOpen((prev) => !prev)}
-            toggleLabel={playersOpen ? 'Réduire la liste des joueurs' : 'Ouvrir la liste des joueurs'}
-            disabled={isCancelled || !writable}
-            disabledMessage={<p className="muted-line">{isCancelled ? 'Séance annulée: présences indisponibles.' : 'Mode lecture seule: présences indisponibles.'}</p>}
-          >
-            <div className="attendance-list-simple">
-              {players.map((player) => {
-                const present = attendance.has(player.id)
-                return (
-                  <label key={player.id} className="attendance-row">
-                    <span>{getFirstName(player.name)}</span>
-                    <input
-                      type="checkbox"
-                      checked={present}
-                      disabled={!writable}
-                      onChange={(e) => togglePresence(player.id, e.target.checked)}
-                    />
-                  </label>
-                )
-              })}
-            </div>
-          </AttendanceAccordion>
+          <PlayersPresenceSection
+            players={players}
+            presentPlayerIds={attendance}
+            onTogglePresence={togglePresence}
+            cardDisabled={isCancelled || !writable}
+            selectionDisabled={isCancelled || !writable}
+            selectionDisabledMessage={(
+              <p className="muted-line">
+                {isCancelled ? 'Séance annulée: sélection indisponible.' : 'Mode lecture seule: sélection indisponible.'}
+              </p>
+            )}
+          />
 
           <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
             <div className="card-head">

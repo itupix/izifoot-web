@@ -1096,6 +1096,114 @@
   font-size: 18px;
 }
 
+.players-selection-modal {
+  width: min(620px, calc(100vw - 24px));
+  max-height: min(78vh, 720px);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid #dbe5f1;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.22);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(37, 99, 235, 0.1) 0%, rgba(37, 99, 235, 0) 45%),
+    #fff;
+}
+
+.players-selection-modal-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.players-selection-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.players-selection-count {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.players-selection-modal .muted-line {
+  margin: 0;
+  padding: 10px 16px 2px;
+}
+
+.players-selection-list {
+  max-height: min(58vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 10px 12px;
+  gap: 6px;
+}
+
+.players-selection-list .attendance-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.players-selection-list .attendance-row:last-child {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.players-selection-list .attendance-row span {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.players-selection-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid #94a3b8;
+  background: #fff;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease, transform 120ms ease;
+}
+
+.players-selection-checkbox:hover {
+  border-color: #64748b;
+}
+
+.players-selection-checkbox:checked {
+  border-color: #1d4ed8;
+  background-color: #2563eb;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.2 8.4l2.6 2.6 7-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+}
+
+.players-selection-checkbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
+}
+
+.players-selection-checkbox:active {
+  transform: scale(0.96);
+}
+
+.players-selection-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .info-tabs {
   display: inline-flex;
   align-items: center;

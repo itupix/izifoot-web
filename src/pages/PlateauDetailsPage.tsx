@@ -8,6 +8,7 @@ import { canWrite } from '../authz'
 import type { PlanningData } from '../components/PlanningEditor'
 import { PlateauInfoSection, PlateauPageHeader, PlateauRotationContent } from '../components/PlateauSharedSections'
 import PlanningModal from '../components/PlanningModal'
+import PlayersPresenceSection from '../components/PlayersPresenceSection'
 import CtaButton from '../components/CtaButton'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
@@ -61,26 +62,9 @@ function getPlateauPlanningLink(plateauId: string) {
 function clearPlateauPlanningLink(plateauId: string) {
   const current = readPlateauPlanningMap()
   if (!current[plateauId]) return
-  const { [plateauId]: _deleted, ...rest } = current
+  const rest = { ...current }
+  delete rest[plateauId]
   writePlateauPlanningMap(rest)
-}
-
-function getFirstName(fullName: string) {
-  return fullName.trim().split(/\s+/)[0] || fullName
-}
-
-function getInitials(fullName: string) {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase()
-}
-
-function colorFromName(name: string) {
-  const palette = ['#1d4ed8', '#0f766e', '#b45309', '#7c3aed', '#0e7490', '#b91c1c']
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
-  return palette[hash % palette.length]
 }
 
 function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
@@ -134,7 +118,6 @@ export default function PlateauDetailsPage() {
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
   const [plateauMatches, setPlateauMatches] = useState<MatchLite[]>([])
   const [plateauPlannings, setPlateauPlannings] = useState<Planning[]>([])
-  const [isPlayersModalOpen, setIsPlayersModalOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false)
   const [isPlanningModalOpen, setIsPlanningModalOpen] = useState(false)
@@ -368,10 +351,6 @@ export default function PlateauDetailsPage() {
     const mm = String(total % 60).padStart(2, '0')
     return `${hh}:${mm}`
   }, [plateau?.date, plateau?.meetingTime, plateauPlanningData?.start])
-  const presentPlayers = useMemo(
-    () => players.filter((p) => plateauAttendance.has(p.id)),
-    [players, plateauAttendance]
-  )
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
 
@@ -831,49 +810,14 @@ export default function PlateauDetailsPage() {
               ) : undefined}
             />
 
-            <section
-              className={`details-card players-presence-card ${!writable ? 'is-disabled' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => setIsPlayersModalOpen(true)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setIsPlayersModalOpen(true)
-                }
-              }}
-              aria-label="Ouvrir la sélection des joueurs présents"
-            >
-              <div className="card-head">
-                <h3>Joueurs</h3>
-                <div className="head-actions">
-                  <span>{plateauAttendance.size}/{players.length}</span>
-                </div>
-              </div>
-              <div className="players-avatar-stack">
-                {presentPlayers.length === 0 ? (
-                  <p className="muted-line">Aucun joueur présent.</p>
-                ) : (
-                  presentPlayers.slice(0, 12).map((player) => {
-                    const maybeAvatar =
-                      (player as Player & { avatarUrl?: string | null; avatar?: string | null; photoUrl?: string | null; imageUrl?: string | null }).avatarUrl
-                      || (player as Player & { avatar?: string | null }).avatar
-                      || (player as Player & { photoUrl?: string | null }).photoUrl
-                      || (player as Player & { imageUrl?: string | null }).imageUrl
-                    const initials = getInitials(player.name)
-                    return (
-                      <div key={player.id} className="player-avatar-chip" title={player.name}>
-                        {maybeAvatar ? (
-                          <img src={maybeAvatar} alt={player.name} />
-                        ) : (
-                          <span style={{ background: colorFromName(player.name) }}>{initials}</span>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </section>
+            <PlayersPresenceSection
+              players={players}
+              presentPlayerIds={plateauAttendance}
+              onTogglePresence={togglePlateauPresence}
+              cardDisabled={!writable}
+              selectionDisabled={!writable}
+              selectionDisabledMessage={!writable ? <p className="muted-line">Mode lecture seule: sélection indisponible.</p> : undefined}
+            />
           </div>
 
           <section className="details-card">
@@ -1100,35 +1044,6 @@ export default function PlateauDetailsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </>
-      )}
-
-      {isPlayersModalOpen && (
-        <>
-          <div className="modal-overlay" onClick={() => setIsPlayersModalOpen(false)} />
-          <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Sélection des joueurs présents">
-            <div className="drill-modal-head">
-              <h3>Joueurs présents</h3>
-              <button type="button" onClick={() => setIsPlayersModalOpen(false)}>✕</button>
-            </div>
-            {!writable && <p className="muted-line">Mode lecture seule: sélection indisponible.</p>}
-            <div className="attendance-list-simple">
-              {players.map((p) => {
-                const present = plateauAttendance.has(p.id)
-                return (
-                  <label key={p.id} className="attendance-row">
-                    <span>{getFirstName(p.name)}</span>
-                    <input
-                      type="checkbox"
-                      checked={present}
-                      disabled={!writable}
-                      onChange={(e) => void togglePlateauPresence(p.id, e.target.checked)}
-                    />
-                  </label>
-                )
-              })}
-            </div>
           </div>
         </>
       )}
