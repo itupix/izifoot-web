@@ -121,6 +121,8 @@
 }
 
 .trainings-calendar-modal {
+  --training-color: #ef4444;
+  --plateau-color: #3b82f6;
   width: min(560px, 100%);
   background: #fff;
   border: 1px solid #d1d5db;
@@ -305,14 +307,16 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #2563eb;
+  background: var(--training-color);
+  box-shadow: 0 0 0 1.5px #fff;
 }
 
 .trainings-dot-plateau {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #93c5fd;
+  background: var(--plateau-color);
+  box-shadow: 0 0 0 1.5px #fff;
 }
 
 .trainings-legend {
@@ -333,12 +337,14 @@
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: #ef4444;
+  background: var(--training-color);
+  box-shadow: 0 0 0 1.5px #fff;
 }
 
 .trainings-legend-dot-plateau {
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: #3b82f6;
+  background: var(--plateau-color);
+  box-shadow: 0 0 0 1.5px #fff;
 }
