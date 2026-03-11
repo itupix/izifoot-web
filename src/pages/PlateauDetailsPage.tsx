@@ -12,6 +12,7 @@ import CtaButton from '../components/CtaButton'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
+import { applyAttendanceValue, extractPresentPlayerIds, persistAttendanceToggle } from '../features/attendance'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchNotPlayed as isPendingMatch } from '../matchStatus'
 import { useAuth } from '../useAuth'
@@ -188,7 +189,7 @@ export default function PlateauDetailsPage() {
     setClubName(club?.name?.trim() || '')
     setPlayers(ps)
     setPlateauMatches(matches)
-    setPlateauAttendance(new Set(attends.map(a => a.playerId)))
+    setPlateauAttendance(extractPresentPlayerIds(attends))
     const linkedPlanningId = getPlateauPlanningLink(p.id)
     const linkedPlanning = linkedPlanningId ? plannings.find((planning) => planning.id === linkedPlanningId) ?? null : null
     setPlateauPlannings(linkedPlanning ? [linkedPlanning] : [])
@@ -411,19 +412,18 @@ export default function PlateauDetailsPage() {
   async function togglePlateauPresence(playerId: string, present: boolean) {
     if (!writable) return
     if (!id) return
+    const previousPresent = plateauAttendance.has(playerId)
+    setPlateauAttendance((prev) => applyAttendanceValue(prev, playerId, present))
     try {
-      await apiPost(apiRoutes.attendance.list, {
-        session_type: 'PLATEAU',
-        session_id: id,
+      const payload = await persistAttendanceToggle(apiPost, {
+        sessionType: 'PLATEAU',
+        sessionId: id,
         playerId,
-        present
+        present,
       })
-      setPlateauAttendance(prev => {
-        const next = new Set(prev)
-        if (present) next.add(playerId); else next.delete(playerId)
-        return next
-      })
+      console.debug('[attendance][plateau] POST /attendance payload', payload)
     } catch (err: unknown) {
+      setPlateauAttendance((prev) => applyAttendanceValue(prev, playerId, previousPresent))
       uiAlert(`Erreur présence (plateau): ${toErrorMessage(err)}`)
     }
   }

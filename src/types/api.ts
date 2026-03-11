@@ -66,6 +66,7 @@ export interface AttendanceRow {
   session_type: 'TRAINING' | 'PLATEAU'
   session_id: string
   playerId: string
+  present: boolean
 }
 
 export interface Drill {

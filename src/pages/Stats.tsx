@@ -181,6 +181,7 @@ export default function StatsPage() {
     for (const p of players) { tCount.set(p.id, 0); pCount.set(p.id, 0) }
 
     for (const a of attendance) {
+      if (a.present !== true) continue
       if (a.session_type === 'TRAINING') {
         tCount.set(a.playerId, (tCount.get(a.playerId) || 0) + 1)
       } else if (a.session_type === 'PLATEAU') {

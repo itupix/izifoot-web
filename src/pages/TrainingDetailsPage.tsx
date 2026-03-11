@@ -8,6 +8,7 @@ import AttendanceAccordion from '../components/AttendanceAccordion'
 import { ChevronLeftIcon, CloseIcon, DiceIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
+import { applyAttendanceValue, extractPresentPlayerIds, persistAttendanceToggle } from '../features/attendance'
 import { mapTrainingAiError } from '../features/trainingAi'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
@@ -179,7 +180,7 @@ export default function TrainingDetailsPage() {
     setPlayers(ps)
     setCatalog(dr.items)
     setDrills(sortTrainingDrills(ds))
-    setAttendance(new Set(att.map((a) => a.playerId)))
+    setAttendance(extractPresentPlayerIds(att))
     const initialRoleLines = ensureTrailingEmptyRoleLine(
       roles.items.map((item) => makeRoleLine(item.role, item.playerId)),
     )
@@ -329,21 +330,18 @@ export default function TrainingDetailsPage() {
   async function togglePresence(playerId: string, present: boolean) {
     if (!writable) return
     if (!training) return
+    const previousPresent = attendance.has(playerId)
+    setAttendance((prev) => applyAttendanceValue(prev, playerId, present))
     try {
-      await apiPost(apiRoutes.attendance.list, {
-        session_type: 'TRAINING',
-        session_id: training.id,
+      const payload = await persistAttendanceToggle(apiPost, {
+        sessionType: 'TRAINING',
+        sessionId: training.id,
         playerId,
         present,
       })
-
-      setAttendance((prev) => {
-        const next = new Set(prev)
-        if (present) next.add(playerId)
-        else next.delete(playerId)
-        return next
-      })
+      console.debug('[attendance][training] POST /attendance payload', payload)
     } catch (err: unknown) {
+      setAttendance((prev) => applyAttendanceValue(prev, playerId, previousPresent))
       uiAlert(`Erreur présence: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     }
   }
