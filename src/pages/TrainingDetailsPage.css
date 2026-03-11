@@ -710,6 +710,27 @@
   width: min(420px, calc(100vw - 24px));
 }
 
+.training-role-random-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(2, 6, 23, 0.84);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.training-role-random-overlay-name {
+  text-align: center;
+  color: #fff;
+  font-size: clamp(42px, 7vw, 96px);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1.04;
+  text-shadow: 0 10px 26px rgba(15, 23, 42, 0.45);
+}
+
 .training-objective-form {
   position: relative;
   overflow: hidden;

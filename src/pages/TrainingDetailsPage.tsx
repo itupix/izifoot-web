@@ -153,6 +153,8 @@ export default function TrainingDetailsPage() {
   const [roleDraftRole, setRoleDraftRole] = useState(TRAINING_ROLE_OPTIONS[0])
   const [roleDraftPlayerId, setRoleDraftPlayerId] = useState('')
   const [roleRandomizing, setRoleRandomizing] = useState(false)
+  const [roleRandomOverlayOpen, setRoleRandomOverlayOpen] = useState(false)
+  const [roleRandomOverlayName, setRoleRandomOverlayName] = useState('')
   const roleRandomIntervalRef = useRef<number | null>(null)
   const rolesHydratedRef = useRef(false)
   const lastSavedRoleSignatureRef = useRef('[]')
@@ -295,6 +297,8 @@ export default function TrainingDetailsPage() {
       roleRandomIntervalRef.current = null
     }
     setRoleRandomizing(false)
+    setRoleRandomOverlayOpen(false)
+    setRoleRandomOverlayName('')
   }, [roleModalOpen])
 
   async function setTrainingStatus(cancelled: boolean) {
@@ -508,10 +512,15 @@ export default function TrainingDetailsPage() {
     if (roleRandomizing) return
 
     setRoleRandomizing(true)
+    setRoleRandomOverlayOpen(true)
+    setRoleRandomOverlayName(candidates[0]?.name || '...')
     if (roleRandomIntervalRef.current) window.clearInterval(roleRandomIntervalRef.current)
     roleRandomIntervalRef.current = window.setInterval(() => {
       const rolling = candidates[Math.floor(Math.random() * candidates.length)]
-      if (rolling?.id) setRoleDraftPlayerId(rolling.id)
+      if (rolling?.id) {
+        setRoleDraftPlayerId(rolling.id)
+        setRoleRandomOverlayName(rolling.name)
+      }
     }, 85)
 
     window.setTimeout(() => {
@@ -520,9 +529,15 @@ export default function TrainingDetailsPage() {
         roleRandomIntervalRef.current = null
       }
       const winner = candidates[Math.floor(Math.random() * candidates.length)]
-      if (winner?.id) setRoleDraftPlayerId(winner.id)
+      if (winner?.id) {
+        setRoleDraftPlayerId(winner.id)
+        setRoleRandomOverlayName(winner.name)
+      }
       setRoleRandomizing(false)
-    }, 1600)
+      window.setTimeout(() => {
+        setRoleRandomOverlayOpen(false)
+      }, 1000)
+    }, 2500)
   }
 
   async function sendTrainingObjective() {
@@ -894,6 +909,14 @@ export default function TrainingDetailsPage() {
             </div>
           </div>
         </>
+      )}
+
+      {roleRandomOverlayOpen && (
+        <div className="training-role-random-overlay" aria-live="polite">
+          <div className="training-role-random-overlay-name">
+            {roleRandomOverlayName || '...'}
+          </div>
+        </div>
       )}
 
       {manageDrillsOpen && !isCancelled && writable && (
