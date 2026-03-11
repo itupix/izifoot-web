@@ -152,6 +152,8 @@ export default function TrainingDetailsPage() {
   const [roleMenuLineId, setRoleMenuLineId] = useState<string | null>(null)
   const [roleDraftRole, setRoleDraftRole] = useState(TRAINING_ROLE_OPTIONS[0])
   const [roleDraftPlayerId, setRoleDraftPlayerId] = useState('')
+  const [roleRandomizing, setRoleRandomizing] = useState(false)
+  const roleRandomIntervalRef = useRef<number | null>(null)
   const rolesHydratedRef = useRef(false)
   const lastSavedRoleSignatureRef = useRef('[]')
   const [trainingObjectivePlaceholder] = useState(
@@ -279,6 +281,21 @@ export default function TrainingDetailsPage() {
 
     return () => window.clearTimeout(timeoutId)
   }, [duplicateAssignedPlayerName, isCancelled, rolePayload, rolePayloadSignature, training?.id, writable])
+
+  useEffect(() => () => {
+    if (roleRandomIntervalRef.current) {
+      window.clearInterval(roleRandomIntervalRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (roleModalOpen) return
+    if (roleRandomIntervalRef.current) {
+      window.clearInterval(roleRandomIntervalRef.current)
+      roleRandomIntervalRef.current = null
+    }
+    setRoleRandomizing(false)
+  }, [roleModalOpen])
 
   async function setTrainingStatus(cancelled: boolean) {
     if (!writable) return
@@ -488,8 +505,24 @@ export default function TrainingDetailsPage() {
       uiAlert('Aucun joueur disponible pour ce tirage.')
       return
     }
-    const winner = candidates[Math.floor(Math.random() * candidates.length)]
-    if (winner?.id) setRoleDraftPlayerId(winner.id)
+    if (roleRandomizing) return
+
+    setRoleRandomizing(true)
+    if (roleRandomIntervalRef.current) window.clearInterval(roleRandomIntervalRef.current)
+    roleRandomIntervalRef.current = window.setInterval(() => {
+      const rolling = candidates[Math.floor(Math.random() * candidates.length)]
+      if (rolling?.id) setRoleDraftPlayerId(rolling.id)
+    }, 85)
+
+    window.setTimeout(() => {
+      if (roleRandomIntervalRef.current) {
+        window.clearInterval(roleRandomIntervalRef.current)
+        roleRandomIntervalRef.current = null
+      }
+      const winner = candidates[Math.floor(Math.random() * candidates.length)]
+      if (winner?.id) setRoleDraftPlayerId(winner.id)
+      setRoleRandomizing(false)
+    }, 1600)
   }
 
   async function sendTrainingObjective() {
@@ -799,7 +832,7 @@ export default function TrainingDetailsPage() {
               type="button"
               className="add-button training-roles-add-cta"
               onClick={openRoleModal}
-              disabled={!writable || availablePlayersForLine().length === 0}
+              disabled={!writable || presentPlayers.length === 0}
             >
               Ajouter
             </button>
@@ -846,10 +879,13 @@ export default function TrainingDetailsPage() {
                   type="button"
                   className="training-role-modal-random"
                   onClick={pickRandomPlayerForModal}
-                  disabled={availablePlayersForLine(roleModalMode === 'edit' ? roleEditLineId || undefined : undefined).length === 0}
+                  disabled={
+                    roleRandomizing
+                    || availablePlayersForLine(roleModalMode === 'edit' ? roleEditLineId || undefined : undefined).length === 0
+                  }
                 >
                   <DiceIcon size={14} />
-                  <span>Aleatoire</span>
+                  <span>{roleRandomizing ? 'Selection…' : 'Aleatoire'}</span>
                 </button>
                 <button type="button" className="add-button" onClick={confirmRoleModal} disabled={!roleDraftPlayerId}>
                   {roleModalMode === 'edit' ? 'Modifier' : 'Ajouter'}
