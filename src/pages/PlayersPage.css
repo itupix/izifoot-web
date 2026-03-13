@@ -263,6 +263,7 @@
     );
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .tactical-center-line {
@@ -359,6 +360,7 @@
   cursor: grab;
   user-select: none;
   z-index: 4;
+  touch-action: none;
 }
 
 .tactical-token.is-dragging {
