@@ -7,13 +7,25 @@ import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchNotPlayed } from '../matchStatus'
-import type { AttendanceRow, ClubMe, MatchLite, MatchTeamLite, Plateau, Player } from '../types/api'
+import type { ClubMe, MatchLite, MatchTeamLite, Plateau, Player } from '../types/api'
 import { uiAlert } from '../ui'
 import { useTeamScope } from '../useTeamScope'
 import './MatchDetailsPage.css'
 import './TrainingDetailsPage.css'
 
 type MatchDetailsData = MatchLite & {
+  playersById?: Record<string, Player>
+}
+
+type PlateauConvocation = {
+  player: Player
+  status?: 'present' | 'absent' | 'convoque' | 'non_convoque'
+  present?: boolean
+}
+
+type PlateauSummaryResponse = {
+  plateau: Plateau
+  convocations: PlateauConvocation[]
   playersById?: Record<string, Player>
 }
 
@@ -208,17 +220,19 @@ export default function MatchDetailsPage() {
       apiGet<Player[]>(apiRoutes.players.list).catch(() => []),
     ])
 
+    let plateauSummary: PlateauSummaryResponse | null = null
     let nextPlateauDateISO = ''
     let nextPlateauPlayerIds: string[] = []
     if (payload.plateauId) {
-      const [plateau, attendanceRows] = await Promise.all([
-        apiGet<Plateau>(apiRoutes.plateaus.byId(payload.plateauId)).catch(() => null),
-        apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', payload.plateauId)).catch(() => []),
-      ])
-      nextPlateauDateISO = plateau?.date || ''
+      plateauSummary = await apiGet<PlateauSummaryResponse>(apiRoutes.plateaus.summary(payload.plateauId)).catch(() => null)
+      if (plateauSummary?.plateau?.date) nextPlateauDateISO = plateauSummary.plateau.date
       nextPlateauPlayerIds = Array.from(new Set(
-        attendanceRows
-          .map((row) => row.playerId)
+        (plateauSummary?.convocations || [])
+          .filter((convocation) => {
+            const status = convocation.status ?? (convocation.present ? 'present' : 'non_convoque')
+            return status === 'present' || status === 'convoque'
+          })
+          .map((convocation) => convocation.player?.id)
           .filter((playerId): playerId is string => Boolean(playerId)),
       ))
     }
@@ -235,7 +249,20 @@ export default function MatchDetailsPage() {
       : getFormationPointsMap(TACTICAL_DEFAULT_FORMATION)
     setTacticalPresetValue(nextPreset)
     setTacticalPoints(nextPoints)
-    setPlayers(roster)
+    const playersMap = new Map<string, Player>()
+    for (const player of roster) playersMap.set(player.id, player)
+    for (const convocation of plateauSummary?.convocations || []) {
+      if (convocation.player?.id) playersMap.set(convocation.player.id, convocation.player)
+    }
+    for (const player of Object.values(payload.playersById || {})) {
+      if (player?.id) playersMap.set(player.id, player)
+    }
+    for (const team of payload.teams || []) {
+      for (const row of team.players || []) {
+        if (row.player?.id) playersMap.set(row.player.id, row.player)
+      }
+    }
+    setPlayers(Array.from(playersMap.values()))
     setPlateauDateISO(nextPlateauDateISO)
     setPlateauPlayerIds(nextPlateauPlayerIds)
     if (club?.name?.trim()) setClubName(club.name.trim())
@@ -298,22 +325,40 @@ export default function MatchDetailsPage() {
   const viewDraft = draft ?? { home: { starters: [], subs: [] }, away: { starters: [], subs: [] }, scorers: [] }
   const playerById = useMemo(() => new Map(players.map((p) => [p.id, p] as const)), [players])
 
+  const usePlateauEligibility = Boolean(match?.plateauId)
   const compositionPlayers = useMemo(() => {
-    const allowedIds = plateauPlayerIds.length > 0 ? plateauPlayerIds : sortedPlayers.map((player) => player.id)
+    const allowedIds = usePlateauEligibility ? plateauPlayerIds : sortedPlayers.map((player) => player.id)
     const allowedSet = new Set(allowedIds)
     return sortedPlayers.filter((player) => allowedSet.has(player.id))
-  }, [plateauPlayerIds, sortedPlayers])
+  }, [usePlateauEligibility, plateauPlayerIds, sortedPlayers])
+  const eligiblePlayerIds = useMemo(
+    () => compositionPlayers.map((player) => player.id),
+    [compositionPlayers],
+  )
+  const eligiblePlayerIdSet = useMemo(
+    () => new Set(eligiblePlayerIds),
+    [eligiblePlayerIds],
+  )
 
   const compositionPlayerIds = useMemo(() => {
-    const ids = plateauPlayerIds.length > 0
-      ? plateauPlayerIds
-      : sortedPlayers.map((player) => player.id)
+    const ids = usePlateauEligibility ? plateauPlayerIds : sortedPlayers.map((player) => player.id)
     const unique = new Set(ids)
-    for (const playerId of [...viewDraft.home.starters, ...viewDraft.home.subs]) {
-      unique.add(playerId)
+    if (!usePlateauEligibility) {
+      for (const playerId of [...viewDraft.home.starters, ...viewDraft.home.subs]) {
+        unique.add(playerId)
+      }
     }
     return Array.from(unique)
-  }, [plateauPlayerIds, sortedPlayers, viewDraft.home.starters, viewDraft.home.subs])
+  }, [usePlateauEligibility, plateauPlayerIds, sortedPlayers, viewDraft.home.starters, viewDraft.home.subs])
+  const displayedHomeStarters = useMemo(
+    () => (usePlateauEligibility ? viewDraft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId)) : viewDraft.home.starters),
+    [usePlateauEligibility, viewDraft.home.starters, eligiblePlayerIdSet],
+  )
+  const displayedHomeSubs = useMemo(() => {
+    if (!usePlateauEligibility) return viewDraft.home.subs
+    const startersSet = new Set(displayedHomeStarters)
+    return viewDraft.home.subs.filter((playerId) => eligiblePlayerIdSet.has(playerId) && !startersSet.has(playerId))
+  }, [usePlateauEligibility, viewDraft.home.subs, displayedHomeStarters, eligiblePlayerIdSet])
 
   const heroHomeScorers = useMemo(
     () => viewDraft.scorers
@@ -351,10 +396,11 @@ export default function MatchDetailsPage() {
   ) => {
     setDraft((prev) => {
       if (!prev) return prev
+      const availableSet = new Set(availablePlayerIds)
       const starters = Array.from(new Set(
         TACTICAL_TOKENS
           .map((tokenId) => assignments[tokenId])
-          .filter((playerId): playerId is string => Boolean(playerId)),
+          .filter((playerId): playerId is string => Boolean(playerId) && availableSet.has(playerId)),
       ))
       const starterSet = new Set(starters)
       const subs = availablePlayerIds.filter((playerId) => !starterSet.has(playerId))
@@ -372,10 +418,20 @@ export default function MatchDetailsPage() {
     setMenuOpen(false)
     if (match) {
       const nextDraft = buildDraft(match)
-      setDraft(nextDraft)
+      const sanitizedStarters = nextDraft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId))
+      const startersSet = new Set(sanitizedStarters)
+      const sanitizedSubs = nextDraft.home.subs
+        .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !startersSet.has(playerId))
+      setDraft({
+        ...nextDraft,
+        home: {
+          starters: sanitizedStarters,
+          subs: sanitizedSubs,
+        },
+      })
       const initialAssignments: Record<string, string> = {}
       TACTICAL_TOKENS.forEach((tokenId, index) => {
-        initialAssignments[tokenId] = nextDraft.home.starters[index] || ''
+        initialAssignments[tokenId] = sanitizedStarters[index] || ''
       })
       setSlotAssignments(initialAssignments)
       rebuildHomeCompositionFromAssignments(initialAssignments, compositionPlayerIds)
@@ -537,13 +593,17 @@ export default function MatchDetailsPage() {
     if (!match || !id || !draft) return
     setSaving(true)
     try {
+      const sanitizedHomeStarters = draft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId))
+      const sanitizedStarterSet = new Set(sanitizedHomeStarters)
+      const sanitizedHomeSubs = draft.home.subs
+        .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !sanitizedStarterSet.has(playerId))
       const updated = await apiPut<MatchDetailsData>(apiRoutes.matches.byId(id), {
         type: match.type,
         plateauId: match.plateauId ?? undefined,
         sides: {
           home: {
-            starters: draft.home.starters,
-            subs: draft.home.subs,
+            starters: sanitizedHomeStarters,
+            subs: sanitizedHomeSubs,
           },
           away: {
             starters: draft.away.starters,
@@ -675,8 +735,8 @@ export default function MatchDetailsPage() {
           <h3>Composition</h3>
           <div className="lineup-stack">
             <div className="compo-line-list">
-              {viewDraft.home.starters.length > 0 ? (
-                viewDraft.home.starters.map((playerId, index) => {
+              {displayedHomeStarters.length > 0 ? (
+                displayedHomeStarters.map((playerId, index) => {
                   const player = playerById.get(playerId)
                   const name = player?.name || playerId
                   const maybeAvatar = getAvatarUrl(player)
@@ -698,11 +758,11 @@ export default function MatchDetailsPage() {
               )}
             </div>
           </div>
-          {viewDraft.home.subs.length > 0 && (
+          {displayedHomeSubs.length > 0 && (
             <div className="lineup-stack">
               <p>Remplaçants</p>
               <div className="compo-line-list">
-                {viewDraft.home.subs.map((playerId, index) => {
+                {displayedHomeSubs.map((playerId, index) => {
                   const player = playerById.get(playerId)
                   const name = player?.name || playerId
                   const maybeAvatar = getAvatarUrl(player)
@@ -898,24 +958,24 @@ export default function MatchDetailsPage() {
               <div className="lineup-stack">
                 <p>Titulaires</p>
                 <ul>
-                  {viewDraft.home.starters.map((playerId, index) => (
+                  {displayedHomeStarters.map((playerId, index) => (
                     <li key={`modal-home-starter-${playerId}-${index}`}>
                       <span>{playerNameById.get(playerId) || playerId}</span>
                     </li>
                   ))}
-                  {viewDraft.home.starters.length === 0 && <li>Aucun joueur</li>}
+                  {displayedHomeStarters.length === 0 && <li>Aucun joueur</li>}
                 </ul>
               </div>
 
               <div className="lineup-stack">
                 <p>Remplaçants automatiques</p>
                 <ul>
-                  {viewDraft.home.subs.map((playerId, index) => (
+                  {displayedHomeSubs.map((playerId, index) => (
                     <li key={`modal-home-sub-${playerId}-${index}`}>
                       <span>{playerNameById.get(playerId) || playerId}</span>
                     </li>
                   ))}
-                  {viewDraft.home.subs.length === 0 && <li>Aucun remplaçant</li>}
+                  {displayedHomeSubs.length === 0 && <li>Aucun remplaçant</li>}
                 </ul>
               </div>
             </div>
