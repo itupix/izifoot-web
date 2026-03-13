@@ -195,6 +195,8 @@ export default function MatchDetailsPage() {
     pointerId: number
     x: number
     y: number
+    offsetX: number
+    offsetY: number
   } | null>(null)
 
   const loadMatch = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
@@ -467,11 +469,14 @@ export default function MatchDetailsPage() {
     event.stopPropagation()
     const target = event.currentTarget
     target.setPointerCapture(event.pointerId)
+    const rect = target.getBoundingClientRect()
     setDragState({
       playerId,
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
     })
   }
 
@@ -861,8 +866,8 @@ export default function MatchDetailsPage() {
                 <div
                   className="match-drag-ghost"
                   style={{
-                    left: dragState.x,
-                    top: dragState.y,
+                    left: dragState.x - dragState.offsetX,
+                    top: dragState.y - dragState.offsetY,
                   }}
                   aria-hidden="true"
                 >
