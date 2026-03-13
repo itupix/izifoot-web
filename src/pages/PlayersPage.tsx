@@ -1,9 +1,7 @@
-
-
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import FloatingPlusButton from '../components/FloatingPlusButton'
-import SearchSelectBar from '../components/SearchSelectBar'
-import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
+import SearchInput from '../components/SearchInput'
+import { apiDelete, apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
@@ -12,29 +10,182 @@ import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
 import type { Player } from '../types/api'
+import './PlayersPage.css'
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
 
-// -------- UI --------
+type SortKey = 'name' | 'position'
+type TeamTab = 'EFFECTIF' | 'TACTIQUE'
+type TacticalRole = 'GARDIEN' | 'DEFENSEUR' | 'MILIEU' | 'ATTAQUANT'
+type TacticalPoint = { x: number; y: number }
+type FormationKey = '2-1-1' | '1-2-1' | '1-1-2'
+type TacticalToken = { id: string }
+type SavedTactic = {
+  name: string
+  formation: FormationKey
+  points: Record<string, TacticalPoint>
+  savedAt: string
+}
+
+const TACTICAL_TOKENS: TacticalToken[] = [
+  { id: 'gk' },
+  { id: 'p1' },
+  { id: 'p2' },
+  { id: 'p3' },
+  { id: 'p4' },
+]
+const TACTICAL_FORMATIONS: Array<{ key: FormationKey; label: string; points: TacticalPoint[] }> = [
+  {
+    key: '2-1-1',
+    label: '2-1-1',
+    points: [
+      { x: 50, y: 90 },
+      { x: 33, y: 72 },
+      { x: 67, y: 72 },
+      { x: 50, y: 53 },
+      { x: 50, y: 32 },
+    ],
+  },
+  {
+    key: '1-2-1',
+    label: '1-2-1',
+    points: [
+      { x: 50, y: 90 },
+      { x: 50, y: 72 },
+      { x: 36, y: 52 },
+      { x: 64, y: 52 },
+      { x: 50, y: 32 },
+    ],
+  },
+  {
+    key: '1-1-2',
+    label: '1-1-2',
+    points: [
+      { x: 50, y: 90 },
+      { x: 50, y: 72 },
+      { x: 50, y: 53 },
+      { x: 36, y: 32 },
+      { x: 64, y: 32 },
+    ],
+  },
+]
+
+const TACTICAL_SNAP_POINTS: TacticalPoint[] = [
+  ...[{ y: 90, xs: [50] }],
+  ...[{ y: 84, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+  ...[{ y: 74, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+  ...[{ y: 64, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+  ...[{ y: 54, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+  ...[{ y: 44, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+  ...[{ y: 34, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+  ...[{ y: 24, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+  ...[{ y: 14, xs: [8, 20, 32, 44, 50, 56, 68, 80, 92] }],
+]
+  .flatMap(({ y, xs }) => xs.map((x) => ({ x, y })))
+const TACTICAL_DEFAULT_FORMATION: FormationKey = '2-1-1'
+const TACTICAL_TOKEN_SIZE = 56
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
+function distance(a: TacticalPoint, b: TacticalPoint) {
+  const dx = a.x - b.x
+  const dy = a.y - b.y
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+function pointKey(point: TacticalPoint) {
+  return `${point.x.toFixed(1)}-${point.y.toFixed(1)}`
+}
+
+function nearestAllowedPoint(point: TacticalPoint, blockedKeys: Set<string>) {
+  const candidates = TACTICAL_SNAP_POINTS.filter((snapPoint) => !blockedKeys.has(pointKey(snapPoint)))
+  const pool = candidates.length ? candidates : TACTICAL_SNAP_POINTS
+  let nearest: TacticalPoint | null = null
+  let nearestDistance = Number.POSITIVE_INFINITY
+  for (const snapPoint of pool) {
+    const currentDistance = distance(point, snapPoint)
+    if (currentDistance < nearestDistance) {
+      nearestDistance = currentDistance
+      nearest = snapPoint
+    }
+  }
+  return nearest || pool[0] || point
+}
+
+function inferRole(point: TacticalPoint): TacticalRole {
+  if (point.y >= 88) return 'GARDIEN'
+  if (point.y >= 62) return 'DEFENSEUR'
+  if (point.y >= 42) return 'MILIEU'
+  return 'ATTAQUANT'
+}
+
+function normalizePointsMap(points: Record<string, TacticalPoint>) {
+  const blocked = new Set<string>()
+  const normalized: Record<string, TacticalPoint> = {}
+  for (const token of TACTICAL_TOKENS) {
+    const raw = points[token.id] || { x: 50, y: 50 }
+    const nearest = nearestAllowedPoint(raw, blocked)
+    normalized[token.id] = nearest
+    blocked.add(pointKey(nearest))
+  }
+  return normalized
+}
+
+function getInitials(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase()
+}
+
+function colorFromName(name: string) {
+  const palette = ['#1d4ed8', '#0f766e', '#b45309', '#7c3aed', '#0e7490', '#b91c1c']
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return palette[hash % palette.length]
+}
+
+function getAvatarUrl(player: Player) {
+  const withAvatar = player as Player & {
+    avatarUrl?: string | null
+    avatar?: string | null
+    photoUrl?: string | null
+    imageUrl?: string | null
+  }
+  return withAvatar.avatarUrl || withAvatar.avatar || withAvatar.photoUrl || withAvatar.imageUrl || null
+}
+
 export default function PlayersPage() {
   const { me } = useAuth()
   const { selectedTeamId, requiresSelection } = useTeamScope()
+
   const [players, setPlayers] = useState<Player[]>([])
   const [modalOpen, setModalOpen] = useState(false)
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
-  const [detailEdit, setDetailEdit] = useState(false)
+  const [activeTab, setActiveTab] = useState<TeamTab>('EFFECTIF')
+  const [tacticalFormation, setTacticalFormation] = useState<FormationKey>(TACTICAL_DEFAULT_FORMATION)
+  const [tacticalPresetValue, setTacticalPresetValue] = useState(`formation:${TACTICAL_DEFAULT_FORMATION}`)
+  const [tacticName, setTacticName] = useState('Mon systeme')
+  const [savedTactics, setSavedTactics] = useState<SavedTactic[]>([])
+  const [tacticalPoints, setTacticalPoints] = useState<Record<string, TacticalPoint>>(() => normalizePointsMap((() => {
+    const defaultFormation = TACTICAL_FORMATIONS.find((formation) => formation.key === TACTICAL_DEFAULT_FORMATION)
+    const points = defaultFormation?.points || []
+    return TACTICAL_TOKENS.reduce<Record<string, TacticalPoint>>((acc, token, index) => {
+      acc[token.id] = points[index] || { x: 50, y: 50 }
+      return acc
+    }, {})
+  })()))
 
-  // form create
   const [name, setName] = useState('')
   const [primary, setPrimary] = useState<typeof POSITIONS[number]>('MILIEU')
-  const [secondary, setSecondary] = useState<string>('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
 
-  // filters/search
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const writable = me ? canWrite(me.role) : false
   const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
@@ -53,12 +204,81 @@ export default function PlayersPage() {
         ? players.filter((p) => !p.teamId || p.teamId === selectedTeamId)
         : players
     if (q.trim()) {
-      const n = q.toLowerCase()
-      items = items.filter(p => p.name.toLowerCase().includes(n))
+      const needle = q.toLowerCase()
+      items = items.filter((p) => p.name.toLowerCase().includes(needle))
     }
-    if (posFilter) items = items.filter(p => p.primary_position === posFilter || p.secondary_position === posFilter)
+    if (posFilter) items = items.filter((p) => p.primary_position === posFilter)
     return items
   }, [players, q, posFilter, requiresSelection, selectedTeamId])
+
+  const sortedPlayers = useMemo(() => {
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortKey === 'position') {
+        const byPosition = a.primary_position.localeCompare(b.primary_position, 'fr', { sensitivity: 'base' })
+        if (byPosition !== 0) return byPosition
+      }
+      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })
+    })
+    if (sortDir === 'desc') sorted.reverse()
+    return sorted
+  }, [filtered, sortDir, sortKey])
+
+  const hasActiveFilters = Boolean(q.trim() || posFilter)
+  const playersCountLabel = sortedPlayers.length === 1 ? '1 joueur' : `${sortedPlayers.length} joueurs`
+  const canSaveTactic = tacticName.trim().length > 0
+
+  useEffect(() => {
+    const storageKey = `izifoot.tactical.scheme.${selectedTeamId || 'all'}`
+    const libraryKey = `izifoot.tactical.library.${selectedTeamId || 'all'}`
+    const rawLibrary = window.localStorage.getItem(libraryKey)
+    let parsedLibrary: SavedTactic[] = []
+    if (rawLibrary) {
+      try {
+        parsedLibrary = JSON.parse(rawLibrary) as SavedTactic[]
+        if (Array.isArray(parsedLibrary)) setSavedTactics(parsedLibrary)
+      } catch {
+        setSavedTactics([])
+        parsedLibrary = []
+      }
+    } else {
+      setSavedTactics([])
+    }
+
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as {
+        name?: string
+        formation?: FormationKey
+        points?: Record<string, TacticalPoint>
+      }
+      if (typeof parsed.name === 'string' && parsed.name.trim()) {
+        setTacticName(parsed.name.trim())
+      } else {
+        setTacticName('Mon systeme')
+      }
+      if (parsed.formation && TACTICAL_FORMATIONS.some((formation) => formation.key === parsed.formation)) {
+        setTacticalFormation(parsed.formation)
+        setTacticalPresetValue(`formation:${parsed.formation}`)
+      }
+      if (parsed.points && typeof parsed.points === 'object') {
+        const nextPoints: Record<string, TacticalPoint> = {}
+        const currentFormation = TACTICAL_FORMATIONS.find((formation) => formation.key === parsed.formation)
+        for (const [index, token] of TACTICAL_TOKENS.entries()) {
+          const point = parsed.points[token.id]
+          nextPoints[token.id] = point
+            ? { x: clamp(point.x, 6, 94), y: clamp(point.y, 8, 92) }
+            : currentFormation?.points[index] || { x: 50, y: 50 }
+        }
+        setTacticalPoints(normalizePointsMap(nextPoints))
+      }
+      if (parsed.name && parsedLibrary.some((item) => item.name === parsed.name)) {
+        setTacticalPresetValue(`tactic:${parsed.name}`)
+      }
+    } catch {
+      // ignore invalid stored data
+    }
+  }, [selectedTeamId])
 
   async function createPlayer(e: React.FormEvent) {
     e.preventDefault()
@@ -67,37 +287,25 @@ export default function PlayersPage() {
       const body: {
         name: string
         primary_position: string
-        secondary_position?: string
         email?: string
         phone?: string
         teamId?: string
       } = {
         name: name.trim(),
         primary_position: primary,
-        secondary_position: secondary.trim() || undefined,
         teamId: selectedTeamId || undefined,
       }
       if (email.trim()) body.email = email.trim()
       if (phone.trim()) body.phone = phone.trim()
-      const p = await apiPost<Player>(apiRoutes.players.list, body)
-      setPlayers(prev => [...prev, p].sort((a, b) => a.name.localeCompare(b.name)))
+      const created = await apiPost<Player>(apiRoutes.players.list, body)
+      setPlayers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
       setName('')
       setPrimary('MILIEU')
-      setSecondary('')
-      setEmail(''); setPhone('')
+      setEmail('')
+      setPhone('')
       setModalOpen(false)
     } catch (err: unknown) {
-      uiAlert(`Erreur création joueur: ${toErrorMessage(err)}`)
-    }
-  }
-
-  async function updatePlayer(id: string, patch: Partial<Player>) {
-    if (!teamScopedWritable) return
-    try {
-      const p = await apiPut<Player>(apiRoutes.players.byId(id), patch)
-      setPlayers(prev => prev.map(x => x.id === id ? p : x))
-    } catch (err: unknown) {
-      uiAlert(`Erreur mise à jour: ${toErrorMessage(err)}`)
+      uiAlert(`Erreur creation joueur: ${toErrorMessage(err)}`)
     }
   }
 
@@ -106,289 +314,439 @@ export default function PlayersPage() {
     if (!uiConfirm('Supprimer ce joueur ?')) return
     try {
       await apiDelete(apiRoutes.players.byId(id))
-      setPlayers(prev => prev.filter(p => p.id !== id))
-      setDetailOpen(false)
-      setSelectedPlayer(null)
+      setPlayers((prev) => prev.filter((player) => player.id !== id))
     } catch (err: unknown) {
       uiAlert(`Erreur suppression: ${toErrorMessage(err)}`)
     }
   }
 
-  function openDetails(p: Player) {
-    setSelectedPlayer(p)
-    setDetailOpen(true)
-    setDetailEdit(false)
+  function resetFilters() {
+    setQ('')
+    setPosFilter('')
+  }
+
+  function toggleSort(nextKey: SortKey) {
+    if (sortKey === nextKey) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(nextKey)
+    setSortDir('asc')
+  }
+
+  function sortIndicator(key: SortKey) {
+    if (sortKey !== key) return '↕'
+    return sortDir === 'asc' ? '↑' : '↓'
+  }
+
+  function applyFormation(formationKey: FormationKey) {
+    setTacticalFormation(formationKey)
+    setTacticalPresetValue(`formation:${formationKey}`)
+    const formation = TACTICAL_FORMATIONS.find((item) => item.key === formationKey)
+    if (!formation) return
+    setTacticalPoints(() => normalizePointsMap((() => {
+      const next: Record<string, TacticalPoint> = {}
+      TACTICAL_TOKENS.forEach((token, index) => {
+        next[token.id] = formation.points[index] || { x: 50, y: 50 }
+      })
+      return next
+    })()))
+  }
+
+  function saveCurrentTacticalScheme() {
+    const normalizedName = tacticName.trim()
+    if (!normalizedName) return
+    const storageKey = `izifoot.tactical.scheme.${selectedTeamId || 'all'}`
+    const libraryKey = `izifoot.tactical.library.${selectedTeamId || 'all'}`
+    const payload = {
+      name: normalizedName,
+      formation: tacticalFormation,
+      points: tacticalPoints,
+      savedAt: new Date().toISOString(),
+    }
+    window.localStorage.setItem(storageKey, JSON.stringify(payload))
+    const nextLibrary = [
+      ...savedTactics.filter((item) => item.name.toLowerCase() !== normalizedName.toLowerCase()),
+      payload,
+    ]
+      .sort((a, b) => +new Date(b.savedAt) - +new Date(a.savedAt))
+      .slice(0, 30)
+    setSavedTactics(nextLibrary)
+    setTacticalPresetValue(`tactic:${normalizedName}`)
+    window.localStorage.setItem(libraryKey, JSON.stringify(nextLibrary))
+  }
+
+  function loadSavedTacticByName(name: string) {
+    const saved = savedTactics.find((item) => item.name === name)
+    if (!saved) return
+    setTacticName(saved.name)
+    setTacticalFormation(saved.formation)
+    setTacticalPoints(normalizePointsMap(saved.points))
+    setTacticalPresetValue(`tactic:${saved.name}`)
+  }
+
+  function handleTacticalPresetChange(value: string) {
+    if (value.startsWith('formation:')) {
+      applyFormation(value.replace('formation:', '') as FormationKey)
+      return
+    }
+    if (value.startsWith('tactic:')) {
+      loadSavedTacticByName(value.replace('tactic:', ''))
+    }
   }
 
   return (
     <div className="page-shell">
-      <header className="page-head">
-        <div className="page-title-row">
-          <h2 className="page-title">Effectif</h2>
-          <p className="panel-note">{filtered.length} joueur(s)</p>
-        </div>
-        <p className="page-subtitle">Recherche, consultation et édition rapide des fiches joueurs.</p>
+      <header className="players-head">
+        <h1 className="players-title">Mon équipe</h1>
       </header>
-      {writable && requiresSelection && !selectedTeamId && (
-        <div className="inline-alert">
-          Sélectionnez une équipe active pour modifier les joueurs.
-        </div>
+
+      <div className="players-tabs" role="tablist" aria-label="Sections de mon equipe">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'EFFECTIF'}
+          className={`players-tab-btn ${activeTab === 'EFFECTIF' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('EFFECTIF')}
+        >
+          Effectif
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'TACTIQUE'}
+          className={`players-tab-btn ${activeTab === 'TACTIQUE' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('TACTIQUE')}
+        >
+          Tactique
+        </button>
+      </div>
+
+      {activeTab === 'EFFECTIF' && writable && requiresSelection && !selectedTeamId && (
+        <div className="inline-alert">Selectionnez une equipe active pour modifier les joueurs.</div>
       )}
 
-      <section className="panel">
-        <SearchSelectBar
-          query={q}
-          onQueryChange={setQ}
-          queryPlaceholder="Recherche par nom"
-          selectValue={posFilter}
-          onSelectChange={setPosFilter}
-          selectPlaceholder="Tous les postes"
-          options={POSITIONS.map(p => ({ value: p, label: p }))}
-        />
-      </section>
-
-      <section className="panel">
-      <div className="panel-head" style={{ marginBottom: 8 }}>
-        <h3 className="panel-title">Liste des joueurs</h3>
-        <p className="panel-note">{filtered.length} affiché(s)</p>
-        {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
-        {error && <div className="inline-alert error">{error}</div>}
-      </div>
-
-      <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ background: '#f9fafb' }}>
-            <tr>
-              <th style={th}>Nom</th>
-              <th style={th}>Poste principal</th>
-              <th style={th}>Poste secondaire</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(p => (
-              <tr key={p.id} onClick={() => openDetails(p)} style={{ cursor: 'pointer' }}>
-                <td style={td}>{p.name}</td>
-                <td style={td}>{p.primary_position}</td>
-                <td style={td}>{p.secondary_position || '—'}</td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr><td style={{ ...td, textAlign: 'center' }} colSpan={3}>Aucun joueur</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      </section>
-
-      {detailOpen && selectedPlayer && (
+      {activeTab === 'EFFECTIF' ? (
         <>
-          <div
-            onClick={() => setDetailOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 40 }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 'min(460px, 92vw)',
-              background: '#fff',
-              borderRadius: 12,
-              padding: 16,
-              border: '1px solid #e5e7eb',
-              zIndex: 45,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong>Détails joueur</strong>
-              <button onClick={() => setDetailOpen(false)} style={{ border: 'none', background: 'transparent', fontSize: 18 }}>✕</button>
-            </div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              <label style={{ fontSize: 12, color: '#6b7280' }}>Nom</label>
-              {detailEdit ? (
-                <InlineEdit
-                  value={selectedPlayer.name}
-                  onSave={(v) => {
-                    if (v !== selectedPlayer.name) updatePlayer(selectedPlayer.id, { name: v })
-                    setSelectedPlayer(prev => prev ? { ...prev, name: v } : prev)
-                  }}
-                />
-              ) : (
-                <div>{selectedPlayer.name}</div>
-              )}
-              <label style={{ fontSize: 12, color: '#6b7280' }}>Poste principal</label>
-              {detailEdit ? (
-                <SelectInline
-                  value={selectedPlayer.primary_position}
-                  options={[...POSITIONS]}
-                  onChange={(v) => {
-                    if (v !== selectedPlayer.primary_position) updatePlayer(selectedPlayer.id, { primary_position: v })
-                    setSelectedPlayer(prev => prev ? { ...prev, primary_position: v } : prev)
-                  }}
-                />
-              ) : (
-                <div>{selectedPlayer.primary_position}</div>
-              )}
-              <label style={{ fontSize: 12, color: '#6b7280' }}>Poste secondaire</label>
-              {detailEdit ? (
-                <SelectInline
-                  value={selectedPlayer.secondary_position || ''}
-                  options={['', ...POSITIONS]}
-                  onChange={(v) => {
-                    const next = v || null
-                    if (next !== (selectedPlayer.secondary_position || null)) updatePlayer(selectedPlayer.id, { secondary_position: next })
-                    setSelectedPlayer(prev => prev ? { ...prev, secondary_position: next } : prev)
-                  }}
-                />
-              ) : (
-                <div>{selectedPlayer.secondary_position || '—'}</div>
-              )}
-              <label style={{ fontSize: 12, color: '#6b7280' }}>Email</label>
-              {detailEdit ? (
-                <InlineEdit
-                  value={selectedPlayer.email || ''}
-                  onSave={(v) => {
-                    const next = v || null
-                    if (next !== (selectedPlayer.email || null)) updatePlayer(selectedPlayer.id, { email: next })
-                    setSelectedPlayer(prev => prev ? { ...prev, email: next } : prev)
-                  }}
-                />
-              ) : (
-                <div>{selectedPlayer.email || '—'}</div>
-              )}
-              <label style={{ fontSize: 12, color: '#6b7280' }}>Téléphone</label>
-              {detailEdit ? (
-                <InlineEdit
-                  value={selectedPlayer.phone || ''}
-                  onSave={(v) => {
-                    const next = v || null
-                    if (next !== (selectedPlayer.phone || null)) updatePlayer(selectedPlayer.id, { phone: next })
-                    setSelectedPlayer(prev => prev ? { ...prev, phone: next } : prev)
-                  }}
-                />
-              ) : (
-                <div>{selectedPlayer.phone || '—'}</div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+          <div className="players-search-row">
+            <SearchInput
+              placeholder="Recherche par nom"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+            />
+          </div>
+
+          <div className="players-position-filters" role="tablist" aria-label="Filtrer par poste">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={posFilter === ''}
+              className={`players-filter-btn ${posFilter === '' ? 'is-active' : ''}`}
+              onClick={() => setPosFilter('')}
+            >
+              Tous
+            </button>
+            {POSITIONS.map((position) => (
               <button
-                  onClick={() => setDetailEdit(!detailEdit)}
-                  disabled={!teamScopedWritable}
-                  style={{ border: '1px solid #d1d5db', color: '#374151', background: '#fff', borderRadius: 6, padding: '4px 8px' }}
-                >
-                  {detailEdit ? 'Terminer' : 'Modifier'}
-                </button>
-                <button disabled={!teamScopedWritable} onClick={() => removePlayer(selectedPlayer.id)} style={{ border: '1px solid #ef4444', color: '#ef4444', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>
-                  Supprimer
-                </button>
+                key={position}
+                type="button"
+                role="tab"
+                aria-selected={posFilter === position}
+                className={`players-filter-btn ${posFilter === position ? 'is-active' : ''}`}
+                onClick={() => setPosFilter(position)}
+              >
+                {position}
+              </button>
+            ))}
+          </div>
+
+          <section className="panel players-panel">
+            <div className="players-meta-row">
+              <p className="panel-note">{playersCountLabel}</p>
+              <div className="players-meta-actions">
+                {hasActiveFilters && (
+                  <button type="button" className="players-secondary-btn" onClick={resetFilters}>
+                    Reinitialiser les filtres
+                  </button>
+                )}
+                {loading && <div className="players-loading">Chargement...</div>}
               </div>
             </div>
-          </div>
+
+            {error && <div className="inline-alert error">{error}</div>}
+
+            {sortedPlayers.length > 0 ? (
+              <div className="players-table-wrap">
+                <table className="players-table">
+                  <thead>
+                    <tr>
+                      <th>
+                        <button type="button" className="players-sort-btn" onClick={() => toggleSort('name')}>
+                          Nom <span>{sortIndicator('name')}</span>
+                        </button>
+                      </th>
+                      <th>
+                        <button type="button" className="players-sort-btn" onClick={() => toggleSort('position')}>
+                          Poste principal <span>{sortIndicator('position')}</span>
+                        </button>
+                      </th>
+                      <th className="players-row-actions-head">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedPlayers.map((player) => (
+                      <tr key={player.id}>
+                        <td>
+                          <div className="players-name-cell">
+                            <PlayerAvatar player={player} />
+                            <span>{player.name}</span>
+                          </div>
+                        </td>
+                        <td>{player.primary_position}</td>
+                        <td className="players-row-actions">
+                          <button
+                            type="button"
+                            className="players-icon-btn danger"
+                            disabled={!teamScopedWritable}
+                            onClick={() => { void removePlayer(player.id) }}
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="players-empty-state">
+                <p className="players-empty-title">
+                  {hasActiveFilters ? 'Aucun joueur ne correspond aux filtres.' : 'Aucun joueur pour le moment.'}
+                </p>
+                <div className="players-empty-actions">
+                  {hasActiveFilters && (
+                    <button type="button" className="players-secondary-btn" onClick={resetFilters}>
+                      Effacer les filtres
+                    </button>
+                  )}
+                  {teamScopedWritable && (
+                    <button type="button" className="players-primary-btn" onClick={() => setModalOpen(true)}>
+                      Ajouter un joueur
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
         </>
+      ) : (
+        <section className="panel players-panel">
+          <div className="tactical-controls">
+            <label className="players-field-label" htmlFor="tactical-name-input">Nom de la tactique</label>
+            <input
+              id="tactical-name-input"
+              className="players-input tactical-name-input"
+              value={tacticName}
+              onChange={(event) => setTacticName(event.target.value)}
+              placeholder="Ex: Pressing haut 2-1-1"
+              maxLength={50}
+            />
+            <label className="players-field-label" htmlFor="tactical-formation-select">Formation</label>
+            <select
+              id="tactical-formation-select"
+              className="players-input tactical-formation-select"
+              value={tacticalPresetValue}
+              onChange={(event) => handleTacticalPresetChange(event.target.value)}
+            >
+              <optgroup label="Formations">
+                {TACTICAL_FORMATIONS.map((formation) => (
+                  <option key={formation.key} value={`formation:${formation.key}`}>
+                    {formation.label}
+                  </option>
+                ))}
+              </optgroup>
+              {savedTactics.length > 0 && (
+                <optgroup label="Tactiques sauvegardees">
+                  {savedTactics.map((saved) => (
+                    <option key={saved.name} value={`tactic:${saved.name}`}>
+                      {saved.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            <button type="button" className="players-primary-btn" onClick={saveCurrentTacticalScheme} disabled={!canSaveTactic}>
+              Sauvegarder
+            </button>
+          </div>
+          <TacticalBoard
+            tacticalPoints={tacticalPoints}
+            onMoveToken={(tokenId, point) => {
+              setTacticalPoints((prev) => ({ ...prev, [tokenId]: point }))
+            }}
+          />
+        </section>
       )}
 
-      {modalOpen && (
+      {activeTab === 'EFFECTIF' && modalOpen && (
         <>
-          <div
-            onClick={() => setModalOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 40 }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 'min(420px, 90vw)',
-              background: '#fff',
-              borderRadius: 12,
-              padding: 16,
-              border: '1px solid #e5e7eb',
-              zIndex: 45,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div className="players-modal-backdrop" onClick={() => setModalOpen(false)} />
+          <div className="players-modal players-modal--create" role="dialog" aria-modal="true">
+            <div className="players-modal-head">
               <strong>Ajouter un joueur</strong>
-              <button onClick={() => setModalOpen(false)} style={{ border: 'none', background: 'transparent', fontSize: 18 }}>✕</button>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="players-modal-close"
+                aria-label="Fermer"
+              >
+                x
+              </button>
             </div>
-            <form onSubmit={createPlayer} style={{ display: 'grid', gap: 8 }}>
+
+            <form onSubmit={createPlayer} className="players-create-form">
               <input
+                className="players-input"
                 placeholder="Nom"
                 value={name}
-                onChange={e => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 required
-                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
               />
-              <label style={{ fontSize: 12, color: '#6b7280' }}>Poste principal</label>
-              <select value={primary} onChange={e => setPrimary(e.target.value as typeof POSITIONS[number])} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}>
-                {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              <label className="players-field-label">Poste principal</label>
+              <select
+                className="players-input"
+                value={primary}
+                onChange={(e) => setPrimary(e.target.value as typeof POSITIONS[number])}
+              >
+                {POSITIONS.map((position) => (
+                  <option key={position} value={position}>
+                    {position}
+                  </option>
+                ))}
               </select>
               <input
-                placeholder="Poste secondaire (optionnel)"
-                list="positions"
-                value={secondary}
-                onChange={e => setSecondary(e.target.value)}
-                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
-              />
-              <datalist id="positions">
-                {POSITIONS.map(p => <option key={p} value={p} />)}
-              </datalist>
-              <input
+                className="players-input"
                 placeholder="Email (optionnel)"
                 type="email"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                onChange={(e) => setEmail(e.target.value)}
               />
               <input
-                placeholder="Téléphone (optionnel)"
+                className="players-input"
+                placeholder="Telephone (optionnel)"
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
-                style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6 }}
+                onChange={(e) => setPhone(e.target.value)}
               />
-              <button type="submit" style={{ padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, background: '#f3f4f6' }}>Ajouter</button>
+              <button type="submit" className="players-primary-btn">Ajouter</button>
             </form>
           </div>
         </>
       )}
 
-      {teamScopedWritable && <FloatingPlusButton ariaLabel="Ajouter un joueur" onClick={() => setModalOpen(true)} />}
-    </div>
-  )
-}
-
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontWeight: 600, fontSize: 13, color: '#374151' }
-const td: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: 14, color: '#111827' }
-
-// ---- Small reusable inline editors ----
-function InlineEdit({ value, onSave }: { value: string; onSave: (val: string) => void }) {
-  const [v, setV] = useState(value)
-  const [editing, setEditing] = useState(false)
-  useEffect(() => setV(value), [value])
-  return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      {editing ? (
-        <>
-          <input value={v} onChange={e => setV(e.target.value)} style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }} />
-          <button onClick={() => { setEditing(false); if (v.trim() && v !== value) onSave(v.trim()) }} style={{ border: '1px solid #d1d5db', background: '#f3f4f6', borderRadius: 6, padding: '4px 8px' }}>OK</button>
-          <button onClick={() => { setEditing(false); setV(value) }} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, padding: '4px 8px' }}>Annuler</button>
-        </>
-      ) : (
-        <>
-          <span>{value}</span>
-          <button onClick={() => setEditing(true)} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, padding: '2px 6px', fontSize: 12 }}>Éditer</button>
-        </>
+      {activeTab === 'EFFECTIF' && teamScopedWritable && (
+        <FloatingPlusButton ariaLabel="Ajouter un joueur" onClick={() => setModalOpen(true)} />
       )}
     </div>
   )
 }
 
-function SelectInline({ value, options, onChange }: { value: string; options: string[]; onChange: (val: string) => void }) {
-  const [v, setV] = useState(value)
-  useEffect(() => setV(value), [value])
+function PlayerAvatar({ player }: { player: Player }) {
+  const avatarUrl = getAvatarUrl(player)
+  const initials = getInitials(player.name)
   return (
-    <select value={v} onChange={e => { setV(e.target.value); onChange(e.target.value) }} style={{ padding: 6, border: '1px solid #e5e7eb', borderRadius: 6 }}>
-      {options.map(o => <option key={o} value={o}>{o || '—'}</option>)}
-    </select>
+    <div className="players-avatar" aria-hidden="true">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={player.name} />
+      ) : (
+        <span style={{ background: colorFromName(player.name) }}>{initials}</span>
+      )}
+    </div>
+  )
+}
+
+function TacticalBoard({
+  tacticalPoints,
+  onMoveToken,
+}: {
+  tacticalPoints: Record<string, TacticalPoint>
+  onMoveToken: (tokenId: string, point: TacticalPoint) => void
+}) {
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+
+  return (
+    <div className="tactical-layout">
+      <div className={`tactical-pitch ${draggingId ? 'is-dragging' : ''}`}>
+        <div className="tactical-center-line" />
+        <div className="tactical-center-circle" />
+        <div className="tactical-box tactical-box-top" />
+        <div className="tactical-box tactical-box-bottom" />
+        <div className="tactical-goal tactical-goal-top" />
+        <div className="tactical-goal tactical-goal-bottom" />
+        {TACTICAL_SNAP_POINTS.map((point, index) => (
+          <span
+            key={`${point.x}-${point.y}-${index}`}
+            className="tactical-snap-point"
+            style={{ left: `calc(${point.x}% - 6px)`, top: `calc(${point.y}% - 6px)` }}
+            aria-hidden="true"
+          />
+        ))}
+
+        {TACTICAL_TOKENS.map((token) => {
+          const point = tacticalPoints[token.id] || { x: 50, y: 50 }
+          const role = inferRole(point)
+          const dragging = draggingId === token.id
+          return (
+            <button
+              key={token.id}
+              type="button"
+              className={`tactical-token ${dragging ? 'is-dragging' : ''}`}
+              style={{
+                left: `calc(${point.x}% - ${TACTICAL_TOKEN_SIZE / 2}px)`,
+                top: `calc(${point.y}% - ${TACTICAL_TOKEN_SIZE / 2}px)`,
+              }}
+              onPointerDown={(event) => {
+                const target = event.currentTarget
+                const parent = target.parentElement
+                if (!parent) return
+                setDraggingId(token.id)
+                target.setPointerCapture(event.pointerId)
+
+                const parentRect = parent.getBoundingClientRect()
+
+                const move = (clientX: number, clientY: number) => {
+                  const xPx = clientX - parentRect.left
+                  const yPx = clientY - parentRect.top
+                  const xPercent = clamp((xPx / parentRect.width) * 100, 6, 94)
+                  const yPercent = clamp((yPx / parentRect.height) * 100, 8, 92)
+                  const blocked = new Set<string>()
+                  for (const currentToken of TACTICAL_TOKENS) {
+                    if (currentToken.id === token.id) continue
+                    const occupied = tacticalPoints[currentToken.id]
+                    if (occupied) blocked.add(pointKey(occupied))
+                  }
+                  onMoveToken(token.id, nearestAllowedPoint({ x: xPercent, y: yPercent }, blocked))
+                }
+
+                move(event.clientX, event.clientY)
+
+                const handlePointerMove = (moveEvent: PointerEvent) => {
+                  move(moveEvent.clientX, moveEvent.clientY)
+                }
+                const handlePointerUp = () => {
+                  setDraggingId((current) => (current === token.id ? null : current))
+                  window.removeEventListener('pointermove', handlePointerMove)
+                  window.removeEventListener('pointerup', handlePointerUp)
+                }
+
+                window.addEventListener('pointermove', handlePointerMove)
+                window.addEventListener('pointerup', handlePointerUp)
+              }}
+            >
+              <span className="tactical-token-role">{role[0]}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
