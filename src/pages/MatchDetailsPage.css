@@ -621,6 +621,39 @@
   font-weight: 700;
 }
 
+.match-drag-ghost {
+  position: fixed;
+  z-index: 1400;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.32);
+  overflow: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.match-drag-ghost img,
+.match-drag-ghost span {
+  width: 100%;
+  height: 100%;
+}
+
+.match-drag-ghost img {
+  object-fit: cover;
+  display: block;
+}
+
+.match-drag-ghost span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 @media (max-width: 760px) {
   .match-hero {
     padding: 14px;

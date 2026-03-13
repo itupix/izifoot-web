@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -190,7 +190,12 @@ export default function MatchDetailsPage() {
     () => getFormationPointsMap(TACTICAL_DEFAULT_FORMATION),
   )
   const [slotAssignments, setSlotAssignments] = useState<Record<string, string>>({})
-  const [draggingPlayerId, setDraggingPlayerId] = useState('')
+  const [dragState, setDragState] = useState<{
+    playerId: string
+    pointerId: number
+    x: number
+    y: number
+  } | null>(null)
 
   const loadMatch = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -441,19 +446,51 @@ export default function MatchDetailsPage() {
     })
   }
 
-  function getDraggedPlayerId(event: DragEvent<HTMLElement>) {
-    const fromTransfer = event.dataTransfer.getData('text/plain')
-    return fromTransfer || draggingPlayerId
+  function applyDrop(playerId: string, clientX: number, clientY: number) {
+    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+    const slotTarget = target?.closest<HTMLElement>('[data-slot-id]')
+    if (slotTarget) {
+      const slotId = slotTarget.dataset.slotId
+      if (slotId) {
+        assignPlayerToSlot(slotId, playerId)
+        return
+      }
+    }
+    const benchTarget = target?.closest<HTMLElement>('[data-bench-drop="true"]')
+    if (benchTarget) {
+      unassignPlayer(playerId)
+    }
   }
 
-  function handlePlayerDragStart(event: DragEvent<HTMLElement>, playerId: string) {
-    setDraggingPlayerId(playerId)
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', playerId)
+  function handleTokenPointerDown(event: ReactPointerEvent<HTMLElement>, playerId: string) {
+    event.preventDefault()
+    event.stopPropagation()
+    const target = event.currentTarget
+    target.setPointerCapture(event.pointerId)
+    setDragState({
+      playerId,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    })
   }
 
-  function handlePlayerDragEnd() {
-    setDraggingPlayerId('')
+  function handleTokenPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    setDragState((prev) => {
+      if (!prev || prev.pointerId !== event.pointerId) return prev
+      return { ...prev, x: event.clientX, y: event.clientY }
+    })
+  }
+
+  function handleTokenPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    setDragState((prev) => {
+      if (!prev || prev.pointerId !== event.pointerId) return prev
+      applyDrop(prev.playerId, event.clientX, event.clientY)
+      return null
+    })
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   function addScorer(playerId: string) {
@@ -746,15 +783,8 @@ export default function MatchDetailsPage() {
                 <div className="match-tactical-roster">
                   <p>Joueurs (glisser vers un poste)</p>
                   <div
-                    className={`match-bench-grid ${draggingPlayerId ? 'is-drop-active' : ''}`}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault()
-                      const playerId = getDraggedPlayerId(event)
-                      if (!playerId) return
-                      unassignPlayer(playerId)
-                      setDraggingPlayerId('')
-                    }}
+                    data-bench-drop="true"
+                    className={`match-bench-grid ${dragState ? 'is-drop-active' : ''}`}
                   >
                     {benchPlayers.map((player) => {
                       const avatar = getAvatarUrl(player)
@@ -763,10 +793,11 @@ export default function MatchDetailsPage() {
                           key={`bench-${player.id}`}
                           type="button"
                           className="match-player-avatar-token"
-                          draggable
                           title={player.name}
-                          onDragStart={(event) => handlePlayerDragStart(event, player.id)}
-                          onDragEnd={handlePlayerDragEnd}
+                          onPointerDown={(event) => handleTokenPointerDown(event, player.id)}
+                          onPointerMove={handleTokenPointerMove}
+                          onPointerUp={handleTokenPointerUp}
+                          onPointerCancel={handleTokenPointerUp}
                         >
                           {avatar ? (
                             <img src={avatar} alt={player.name} />
@@ -791,18 +822,11 @@ export default function MatchDetailsPage() {
                     return (
                       <div
                         key={slot.id}
+                        data-slot-id={slot.id}
                         className={`match-tactical-slot ${assignedPlayerId ? 'is-filled' : ''}`}
                         style={{
                           left: `calc(${slot.point.x}% - 40px)`,
                           top: `calc(${slot.point.y}% - 40px)`,
-                        }}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={(event) => {
-                          event.preventDefault()
-                          const playerId = getDraggedPlayerId(event)
-                          if (!playerId) return
-                          assignPlayerToSlot(slot.id, playerId)
-                          setDraggingPlayerId('')
                         }}
                       >
                         <span>{slot.label}</span>
@@ -811,10 +835,11 @@ export default function MatchDetailsPage() {
                             <button
                               type="button"
                               className="match-player-avatar-token"
-                              draggable
                               title={assignedName}
-                              onDragStart={(event) => handlePlayerDragStart(event, assignedPlayerId)}
-                              onDragEnd={handlePlayerDragEnd}
+                              onPointerDown={(event) => handleTokenPointerDown(event, assignedPlayerId)}
+                              onPointerMove={handleTokenPointerMove}
+                              onPointerUp={handleTokenPointerUp}
+                              onPointerCancel={handleTokenPointerUp}
                               onDoubleClick={() => unassignPlayer(assignedPlayerId)}
                             >
                               {assignedAvatar ? (
@@ -832,6 +857,27 @@ export default function MatchDetailsPage() {
                   })}
                 </div>
               </div>
+              {dragState && (
+                <div
+                  className="match-drag-ghost"
+                  style={{
+                    left: dragState.x,
+                    top: dragState.y,
+                  }}
+                  aria-hidden="true"
+                >
+                  {(() => {
+                    const player = playerById.get(dragState.playerId)
+                    const avatar = getAvatarUrl(player)
+                    const name = player?.name || dragState.playerId
+                    return avatar ? (
+                      <img src={avatar} alt={name} />
+                    ) : (
+                      <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
+                    )
+                  })()}
+                </div>
+              )}
 
               <div className="lineup-stack">
                 <p>Titulaires</p>
