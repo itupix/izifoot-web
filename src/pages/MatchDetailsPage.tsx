@@ -254,6 +254,15 @@ export default function MatchDetailsPage() {
     }
   }, [selectedTeamId])
 
+  useEffect(() => {
+    if (!isEditModalOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isEditModalOpen])
+
   const home = useMemo(() => (match ? getTeam(match, 'home') : undefined), [match])
   const away = useMemo(() => (match ? getTeam(match, 'away') : undefined), [match])
   const homeScore = home?.score ?? 0

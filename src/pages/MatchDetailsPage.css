@@ -505,6 +505,7 @@
   flex-wrap: wrap;
   gap: 8px;
   align-content: flex-start;
+  touch-action: none;
 }
 
 .match-bench-grid.is-drop-active {
@@ -521,6 +522,7 @@
     radial-gradient(ellipse at center, rgba(187, 247, 208, 0.35) 0%, rgba(187, 247, 208, 0) 60%),
     linear-gradient(180deg, #1f8a48 0%, #166534 100%);
   overflow: hidden;
+  touch-action: none;
 }
 
 .match-tactical-center-line {
@@ -585,6 +587,8 @@
   padding: 0;
   cursor: grab;
   background: #fff;
+  touch-action: none;
+  user-select: none;
 }
 
 .match-player-avatar-token:active {
