@@ -631,7 +631,7 @@
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.32);
   overflow: hidden;
   pointer-events: none;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -25%);
 }
 
 .match-drag-ghost img,
