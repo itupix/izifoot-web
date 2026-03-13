@@ -477,6 +477,7 @@
 }
 
 .match-tactical-layout {
+  position: relative;
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 10px;
@@ -622,7 +623,7 @@
 }
 
 .match-drag-ghost {
-  position: fixed;
+  position: absolute;
   z-index: 1400;
   width: 64px;
   height: 64px;

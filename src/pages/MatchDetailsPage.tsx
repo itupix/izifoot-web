@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -198,6 +198,7 @@ export default function MatchDetailsPage() {
     offsetX: number
     offsetY: number
   } | null>(null)
+  const tacticalDragRootRef = useRef<HTMLDivElement | null>(null)
 
   const loadMatch = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -470,11 +471,16 @@ export default function MatchDetailsPage() {
     const target = event.currentTarget
     target.setPointerCapture(event.pointerId)
     const rect = target.getBoundingClientRect()
+    const rootRect = tacticalDragRootRef.current?.getBoundingClientRect()
+    const rootScrollLeft = tacticalDragRootRef.current?.scrollLeft || 0
+    const rootScrollTop = tacticalDragRootRef.current?.scrollTop || 0
+    const relativeX = rootRect ? event.clientX - rootRect.left + rootScrollLeft : event.clientX
+    const relativeY = rootRect ? event.clientY - rootRect.top + rootScrollTop : event.clientY
     setDragState({
       playerId,
       pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
+      x: relativeX,
+      y: relativeY,
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
     })
@@ -483,7 +489,12 @@ export default function MatchDetailsPage() {
   function handleTokenPointerMove(event: ReactPointerEvent<HTMLElement>) {
     setDragState((prev) => {
       if (!prev || prev.pointerId !== event.pointerId) return prev
-      return { ...prev, x: event.clientX, y: event.clientY }
+      const rootRect = tacticalDragRootRef.current?.getBoundingClientRect()
+      const rootScrollLeft = tacticalDragRootRef.current?.scrollLeft || 0
+      const rootScrollTop = tacticalDragRootRef.current?.scrollTop || 0
+      const relativeX = rootRect ? event.clientX - rootRect.left + rootScrollLeft : event.clientX
+      const relativeY = rootRect ? event.clientY - rootRect.top + rootScrollTop : event.clientY
+      return { ...prev, x: relativeX, y: relativeY }
     })
   }
 
@@ -784,7 +795,7 @@ export default function MatchDetailsPage() {
                 </select>
               </div>
 
-              <div className="match-tactical-layout">
+              <div ref={tacticalDragRootRef} className="match-tactical-layout">
                 <div className="match-tactical-roster">
                   <p>Joueurs (glisser vers un poste)</p>
                   <div
@@ -861,28 +872,28 @@ export default function MatchDetailsPage() {
                     )
                   })}
                 </div>
+                {dragState && (
+                  <div
+                    className="match-drag-ghost"
+                    style={{
+                      left: dragState.x - dragState.offsetX,
+                      top: dragState.y - dragState.offsetY,
+                    }}
+                    aria-hidden="true"
+                  >
+                    {(() => {
+                      const player = playerById.get(dragState.playerId)
+                      const avatar = getAvatarUrl(player)
+                      const name = player?.name || dragState.playerId
+                      return avatar ? (
+                        <img src={avatar} alt={name} />
+                      ) : (
+                        <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
+                      )
+                    })()}
+                  </div>
+                )}
               </div>
-              {dragState && (
-                <div
-                  className="match-drag-ghost"
-                  style={{
-                    left: dragState.x - dragState.offsetX,
-                    top: dragState.y - dragState.offsetY,
-                  }}
-                  aria-hidden="true"
-                >
-                  {(() => {
-                    const player = playerById.get(dragState.playerId)
-                    const avatar = getAvatarUrl(player)
-                    const name = player?.name || dragState.playerId
-                    return avatar ? (
-                      <img src={avatar} alt={name} />
-                    ) : (
-                      <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
-                    )
-                  })()}
-                </div>
-              )}
 
               <div className="lineup-stack">
                 <p>Titulaires</p>
