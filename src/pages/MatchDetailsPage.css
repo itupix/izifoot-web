@@ -150,6 +150,10 @@
   text-align: center;
 }
 
+.live-start-btn {
+  margin-top: 6px;
+}
+
 .match-content-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -654,6 +658,167 @@
   font-weight: 800;
 }
 
+.live-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, 0.9);
+  padding: 14px;
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+}
+
+.live-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.live-overlay-head h2 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.live-overlay-head button {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 12px;
+  font: inherit;
+}
+
+.live-setup-card,
+.live-tactical-card,
+.live-running-card,
+.live-end-card {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 12px;
+}
+
+.live-setup-card h3 {
+  margin: 0 0 8px;
+  color: #0f172a;
+}
+
+.live-duration-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.live-duration-picker > span {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 700;
+}
+
+.live-duration-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.live-duration-controls button {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.live-duration-controls strong {
+  min-width: 110px;
+  text-align: center;
+  font-size: 26px;
+}
+
+.live-action-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.live-cta {
+  min-height: 50px;
+  min-width: 220px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.live-running-card {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.live-score-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 36px;
+  color: #0f172a;
+}
+
+.live-clock {
+  font-size: clamp(38px, 8vw, 64px);
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.live-goal-btn {
+  min-height: 46px;
+  min-width: 170px;
+}
+
+.live-end-card {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.live-end-result {
+  margin: 0;
+  font-size: clamp(30px, 8vw, 52px);
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.live-end-score {
+  margin: 0;
+  font-size: clamp(24px, 5vw, 34px);
+  font-weight: 800;
+  color: #334155;
+}
+
+.live-goal-modal {
+  position: fixed;
+  z-index: 1250;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(480px, calc(100vw - 24px));
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.live-goal-modal select {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  background: #fff;
+}
+
 @media (max-width: 760px) {
   .match-hero {
     padding: 14px;
@@ -738,5 +903,18 @@
 
   .match-tactical-pitch {
     order: 1;
+  }
+
+  .live-overlay {
+    padding: 10px;
+  }
+
+  .live-action-row {
+    flex-direction: column;
+  }
+
+  .live-cta,
+  .live-goal-btn {
+    width: 100%;
   }
 }
