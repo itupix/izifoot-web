@@ -14,6 +14,7 @@ export const apiRoutes = {
   },
   teams: {
     list: '/teams',
+    byId: (id: string) => `/teams/${enc(id)}`,
   },
   accounts: {
     list: '/accounts',

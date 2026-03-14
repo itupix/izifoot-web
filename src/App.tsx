@@ -34,7 +34,7 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/club', label: 'Club', roles: ['DIRECTION'], icon: Building2 },
+  { to: '/club', label: 'Mon club', roles: ['DIRECTION'], icon: Building2 },
   { to: '/planning', label: 'Planning', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: CalendarRange },
   { to: '/exercices', label: 'Exercices', roles: ['DIRECTION', 'COACH'], icon: Dumbbell },
   { to: '/effectif', label: 'Mon équipe', roles: ['DIRECTION', 'COACH'], icon: Users },

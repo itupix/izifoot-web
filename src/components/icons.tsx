@@ -11,6 +11,7 @@ import {
   Menu,
   MoreHorizontal,
   Pause,
+  Plus,
   Play,
   RotateCw,
   Sparkles,
@@ -56,6 +57,10 @@ export function MenuIcon(props: IconProps) {
 
 export function DotsHorizontalIcon(props: IconProps) {
   return renderIcon(MoreHorizontal, props)
+}
+
+export function PlusIcon(props: IconProps) {
+  return renderIcon(Plus, props)
 }
 
 export function GripVerticalIcon(props: IconProps) {

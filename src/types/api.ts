@@ -35,6 +35,7 @@ export interface Team {
   id: string
   name: string
   category?: string | null
+  format?: string | null
   clubId?: string | null
   createdAt?: string
 }
