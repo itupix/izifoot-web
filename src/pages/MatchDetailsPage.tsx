@@ -5,6 +5,8 @@ import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
+import { buildPointsMap, buildTacticalFormations, buildTacticalTokens, type TacticalPoint } from '../features/tactical'
+import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchNotPlayed } from '../matchStatus'
 import type { ClubMe, MatchLite, MatchTeamLite, Plateau, Player } from '../types/api'
@@ -29,13 +31,12 @@ type PlateauSummaryResponse = {
   playersById?: Record<string, Player>
 }
 
-type TacticalPoint = { x: number; y: number }
-type FormationKey = '2-1-1' | '1-2-1' | '1-1-2'
 type SavedTactic = {
   name: string
-  formation: FormationKey
+  formation: string
   points: Record<string, TacticalPoint>
   savedAt: string
+  playersOnField?: number
 }
 
 type SideDraft = {
@@ -49,43 +50,6 @@ type MatchDraft = {
   scorers: Array<{ playerId: string; side: 'home' | 'away'; assistId?: string }>
 }
 
-const TACTICAL_TOKENS = ['gk', 'p1', 'p2', 'p3', 'p4'] as const
-const TACTICAL_DEFAULT_FORMATION: FormationKey = '2-1-1'
-const TACTICAL_FORMATIONS: Array<{ key: FormationKey; label: string; points: TacticalPoint[] }> = [
-  {
-    key: '2-1-1',
-    label: '2-1-1',
-    points: [
-      { x: 50, y: 90 },
-      { x: 33, y: 72 },
-      { x: 67, y: 72 },
-      { x: 50, y: 53 },
-      { x: 50, y: 32 },
-    ],
-  },
-  {
-    key: '1-2-1',
-    label: '1-2-1',
-    points: [
-      { x: 50, y: 90 },
-      { x: 50, y: 72 },
-      { x: 36, y: 52 },
-      { x: 64, y: 52 },
-      { x: 50, y: 32 },
-    ],
-  },
-  {
-    key: '1-1-2',
-    label: '1-1-2',
-    points: [
-      { x: 50, y: 90 },
-      { x: 50, y: 72 },
-      { x: 50, y: 53 },
-      { x: 36, y: 32 },
-      { x: 64, y: 32 },
-    ],
-  },
-]
 
 function getInitials(fullName: string) {
   const parts = fullName.trim().split(/\s+/).filter(Boolean)
@@ -151,16 +115,9 @@ function buildDraft(match: MatchDetailsData): MatchDraft {
   }
 }
 
-function buildPointsMap(points: TacticalPoint[]): Record<string, TacticalPoint> {
-  return TACTICAL_TOKENS.reduce<Record<string, TacticalPoint>>((acc, token, index) => {
-    acc[token] = points[index] || { x: 50, y: 50 }
-    return acc
-  }, {})
-}
-
-function getFormationPointsMap(key: FormationKey) {
-  const formation = TACTICAL_FORMATIONS.find((item) => item.key === key)
-  return buildPointsMap(formation?.points || [])
+function getFormationPointsMap(tokens: string[], key: string, formations: Array<{ key: string; points: TacticalPoint[] }>) {
+  const formation = formations.find((item) => item.key === key)
+  return buildPointsMap(tokens, formation?.points || [])
 }
 
 function getRole(point: TacticalPoint) {
@@ -213,7 +170,11 @@ type WakeLockSentinelLike = {
 export default function MatchDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { selectedTeamId } = useTeamScope()
+  const { selectedTeamId, selectedTeamFormat } = useTeamScope()
+  const playersOnField = useMemo(() => playersOnFieldFromGameFormat(selectedTeamFormat, 5), [selectedTeamFormat])
+  const tacticalTokens = useMemo(() => buildTacticalTokens(playersOnField), [playersOnField])
+  const tacticalFormations = useMemo(() => buildTacticalFormations(playersOnField), [playersOnField])
+  const defaultFormation = tacticalFormations[0]
 
   const [match, setMatch] = useState<MatchDetailsData | null>(null)
   const [plateauDateISO, setPlateauDateISO] = useState<string>('')
@@ -231,9 +192,9 @@ export default function MatchDetailsPage() {
   const [editIsPlayed, setEditIsPlayed] = useState(false)
   const [selectedHomeScorer, setSelectedHomeScorer] = useState('')
   const [savedTactics, setSavedTactics] = useState<SavedTactic[]>([])
-  const [tacticalPresetValue, setTacticalPresetValue] = useState(`formation:${TACTICAL_DEFAULT_FORMATION}`)
+  const [tacticalPresetValue, setTacticalPresetValue] = useState(defaultFormation ? `formation:${defaultFormation.key}` : '')
   const [tacticalPoints, setTacticalPoints] = useState<Record<string, TacticalPoint>>(
-    () => getFormationPointsMap(TACTICAL_DEFAULT_FORMATION),
+    () => getFormationPointsMap(tacticalTokens, defaultFormation?.key || '', tacticalFormations),
   )
   const [slotAssignments, setSlotAssignments] = useState<Record<string, string>>({})
   const [dragState, setDragState] = useState<{
@@ -287,12 +248,13 @@ export default function MatchDetailsPage() {
     setMatch(payload)
     setDraft(buildDraft(payload))
     const backendTactic = readBackendTactic(payload)
+    const fallbackFormationKey = defaultFormation?.key || ''
     const nextPreset = typeof backendTactic?.preset === 'string' && backendTactic.preset.trim()
       ? backendTactic.preset
-      : `formation:${TACTICAL_DEFAULT_FORMATION}`
+      : `formation:${fallbackFormationKey}`
     const nextPoints = backendTactic?.points && typeof backendTactic.points === 'object'
-      ? buildPointsMap(TACTICAL_TOKENS.map((tokenId) => backendTactic.points?.[tokenId] || { x: 50, y: 50 }))
-      : getFormationPointsMap(TACTICAL_DEFAULT_FORMATION)
+      ? buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => backendTactic.points?.[tokenId] || { x: 50, y: 50 }))
+      : getFormationPointsMap(tacticalTokens, fallbackFormationKey, tacticalFormations)
     setTacticalPresetValue(nextPreset)
     setTacticalPoints(nextPoints)
     const playersMap = new Map<string, Player>()
@@ -312,7 +274,7 @@ export default function MatchDetailsPage() {
     setPlateauDateISO(nextPlateauDateISO)
     setPlateauPlayerIds(nextPlateauPlayerIds)
     if (club?.name?.trim()) setClubName(club.name.trim())
-  }, [id])
+  }, [defaultFormation?.key, id, tacticalFormations, tacticalTokens])
 
   const { loading, error } = useAsyncLoader(loadMatch)
 
@@ -326,14 +288,14 @@ export default function MatchDetailsPage() {
     try {
       const parsed = JSON.parse(rawLibrary) as SavedTactic[]
       if (Array.isArray(parsed)) {
-        setSavedTactics(parsed)
+        setSavedTactics(parsed.filter((item) => !item.playersOnField || item.playersOnField === playersOnField))
       } else {
         setSavedTactics([])
       }
     } catch {
       setSavedTactics([])
     }
-  }, [selectedTeamId])
+  }, [playersOnField, selectedTeamId])
 
   useEffect(() => {
     if (!isEditModalOpen) return
@@ -461,8 +423,12 @@ export default function MatchDetailsPage() {
     return Array.from(unique)
   }, [usePlateauEligibility, plateauPlayerIds, sortedPlayers, viewDraft.home.starters, viewDraft.home.subs])
   const displayedHomeStarters = useMemo(
-    () => (usePlateauEligibility ? viewDraft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId)) : viewDraft.home.starters),
-    [usePlateauEligibility, viewDraft.home.starters, eligiblePlayerIdSet],
+    () => (
+      usePlateauEligibility
+        ? viewDraft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId)).slice(0, tacticalTokens.length)
+        : viewDraft.home.starters.slice(0, tacticalTokens.length)
+    ),
+    [eligiblePlayerIdSet, tacticalTokens.length, usePlateauEligibility, viewDraft.home.starters],
   )
   const displayedHomeSubs = useMemo(() => {
     if (!usePlateauEligibility) return viewDraft.home.subs
@@ -484,7 +450,7 @@ export default function MatchDetailsPage() {
 
   const tacticalSlots = useMemo(() => {
     const counters: Record<string, number> = {}
-    return TACTICAL_TOKENS.map((tokenId) => {
+    return tacticalTokens.map((tokenId) => {
       const point = tacticalPoints[tokenId] || { x: 50, y: 50 }
       const role = getRole(point)
       counters[role] = (counters[role] || 0) + 1
@@ -495,7 +461,7 @@ export default function MatchDetailsPage() {
         label: role === 'GARDIEN' ? roleLabel(role) : `${roleLabel(role)} ${roleIndex}`,
       }
     })
-  }, [tacticalPoints])
+  }, [tacticalPoints, tacticalTokens])
   const assignedPlayerIds = useMemo(
     () => Array.from(new Set(Object.values(slotAssignments).filter((playerId): playerId is string => Boolean(playerId)))),
     [slotAssignments],
@@ -521,10 +487,10 @@ export default function MatchDetailsPage() {
       if (!prev) return prev
       const availableSet = new Set(availablePlayerIds)
       const starters = Array.from(new Set(
-        TACTICAL_TOKENS
+        tacticalTokens
           .map((tokenId) => assignments[tokenId])
           .filter((playerId): playerId is string => Boolean(playerId) && availableSet.has(playerId)),
-      ))
+      )).slice(0, tacticalTokens.length)
       const starterSet = new Set(starters)
       const subs = availablePlayerIds.filter((playerId) => !starterSet.has(playerId))
       return {
@@ -535,13 +501,15 @@ export default function MatchDetailsPage() {
         },
       }
     })
-  }, [])
+  }, [tacticalTokens])
 
   function openEditModal() {
     setMenuOpen(false)
     if (match) {
       const nextDraft = buildDraft(match)
-      const sanitizedStarters = nextDraft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId))
+      const sanitizedStarters = nextDraft.home.starters
+        .filter((playerId) => eligiblePlayerIdSet.has(playerId))
+        .slice(0, tacticalTokens.length)
       const startersSet = new Set(sanitizedStarters)
       const sanitizedSubs = nextDraft.home.subs
         .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !startersSet.has(playerId))
@@ -553,7 +521,7 @@ export default function MatchDetailsPage() {
         },
       })
       const initialAssignments: Record<string, string> = {}
-      TACTICAL_TOKENS.forEach((tokenId, index) => {
+      tacticalTokens.forEach((tokenId, index) => {
         initialAssignments[tokenId] = sanitizedStarters[index] || ''
       })
       setSlotAssignments(initialAssignments)
@@ -618,7 +586,9 @@ export default function MatchDetailsPage() {
   function openPlayOverlay() {
     if (!match) return
     const nextDraft = buildDraft(match)
-    const sanitizedStarters = nextDraft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId))
+    const sanitizedStarters = nextDraft.home.starters
+      .filter((playerId) => eligiblePlayerIdSet.has(playerId))
+      .slice(0, tacticalTokens.length)
     const startersSet = new Set(sanitizedStarters)
     const sanitizedSubs = nextDraft.home.subs
       .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !startersSet.has(playerId))
@@ -630,7 +600,7 @@ export default function MatchDetailsPage() {
       },
     })
     const initialAssignments: Record<string, string> = {}
-    TACTICAL_TOKENS.forEach((tokenId, index) => {
+    tacticalTokens.forEach((tokenId, index) => {
       initialAssignments[tokenId] = sanitizedStarters[index] || ''
     })
     setSlotAssignments(initialAssignments)
@@ -693,7 +663,9 @@ export default function MatchDetailsPage() {
     }
     setLiveSaving(true)
     try {
-      const sanitizedHomeStarters = draft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId))
+      const sanitizedHomeStarters = draft.home.starters
+        .filter((playerId) => eligiblePlayerIdSet.has(playerId))
+        .slice(0, tacticalTokens.length)
       const sanitizedStarterSet = new Set(sanitizedHomeStarters)
       const sanitizedHomeSubs = draft.home.subs
         .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !sanitizedStarterSet.has(playerId))
@@ -735,15 +707,15 @@ export default function MatchDetailsPage() {
   function handleTacticPresetChange(value: string) {
     setTacticalPresetValue(value)
     if (value.startsWith('formation:')) {
-      const formationKey = value.replace('formation:', '') as FormationKey
-      setTacticalPoints(getFormationPointsMap(formationKey))
+      const formationKey = value.replace('formation:', '')
+      setTacticalPoints(getFormationPointsMap(tacticalTokens, formationKey, tacticalFormations))
       return
     }
     if (value.startsWith('tactic:')) {
       const tacticName = value.replace('tactic:', '')
       const saved = savedTactics.find((item) => item.name === tacticName)
       if (!saved) return
-      setTacticalPoints(buildPointsMap(TACTICAL_TOKENS.map((tokenId) => saved.points[tokenId] || { x: 50, y: 50 })))
+      setTacticalPoints(buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => saved.points[tokenId] || { x: 50, y: 50 })))
     }
   }
 
@@ -751,7 +723,7 @@ export default function MatchDetailsPage() {
     setSlotAssignments((prev) => {
       const next = { ...prev, [slotId]: playerId }
       if (playerId) {
-        for (const tokenId of TACTICAL_TOKENS) {
+        for (const tokenId of tacticalTokens) {
           if (tokenId !== slotId && next[tokenId] === playerId) {
             next[tokenId] = ''
           }
@@ -778,7 +750,7 @@ export default function MatchDetailsPage() {
     setSlotAssignments((prev) => {
       const next = { ...prev }
       let changed = false
-      for (const tokenId of TACTICAL_TOKENS) {
+      for (const tokenId of tacticalTokens) {
         if (next[tokenId] === playerId) {
           if (isPlayOverlayOpen && playPhase === 'running') {
             pushLiveEvent({
@@ -885,7 +857,9 @@ export default function MatchDetailsPage() {
     if (!match || !id || !draft) return
     setSaving(true)
     try {
-      const sanitizedHomeStarters = draft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId))
+      const sanitizedHomeStarters = draft.home.starters
+        .filter((playerId) => eligiblePlayerIdSet.has(playerId))
+        .slice(0, tacticalTokens.length)
       const sanitizedStarterSet = new Set(sanitizedHomeStarters)
       const sanitizedHomeSubs = draft.home.subs
         .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !sanitizedStarterSet.has(playerId))
@@ -921,12 +895,13 @@ export default function MatchDetailsPage() {
       setMatch(updated)
       setDraft(buildDraft(updated))
       const updatedTactic = readBackendTactic(updated)
+      const fallbackFormationKey = defaultFormation?.key || ''
       const updatedPreset = typeof updatedTactic?.preset === 'string' && updatedTactic.preset.trim()
         ? updatedTactic.preset
-        : `formation:${TACTICAL_DEFAULT_FORMATION}`
+        : `formation:${fallbackFormationKey}`
       const updatedPoints = updatedTactic?.points && typeof updatedTactic.points === 'object'
-        ? buildPointsMap(TACTICAL_TOKENS.map((tokenId) => updatedTactic.points?.[tokenId] || { x: 50, y: 50 }))
-        : getFormationPointsMap(TACTICAL_DEFAULT_FORMATION)
+        ? buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => updatedTactic.points?.[tokenId] || { x: 50, y: 50 }))
+        : getFormationPointsMap(tacticalTokens, fallbackFormationKey, tacticalFormations)
       setTacticalPresetValue(updatedPreset)
       setTacticalPoints(updatedPoints)
       setIsEditModalOpen(false)
@@ -1349,7 +1324,7 @@ export default function MatchDetailsPage() {
                   onChange={(event) => handleTacticPresetChange(event.target.value)}
                 >
                   <optgroup label="Formations">
-                    {TACTICAL_FORMATIONS.map((formation) => (
+                    {tacticalFormations.map((formation) => (
                       <option key={formation.key} value={`formation:${formation.key}`}>
                         {formation.label}
                       </option>

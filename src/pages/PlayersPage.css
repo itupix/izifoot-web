@@ -93,14 +93,6 @@
   font-size: 14px;
 }
 
-.players-table-wrap {
-  overflow: auto;
-  max-height: min(62vh, 640px);
-  border: 1px solid #dbe5f1;
-  border-radius: 10px;
-  background: #fff;
-}
-
 .players-table {
   width: 100%;
   border-collapse: collapse;
@@ -117,10 +109,7 @@
   font-size: 13px;
   font-weight: 600;
   color: #334155;
-  position: sticky;
-  top: 0;
-  background: #f8fafc;
-  z-index: 1;
+  background: #fff;
 }
 
 .players-table td {

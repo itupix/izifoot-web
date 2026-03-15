@@ -1,18 +1,21 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { apiGet } from './apiClient'
 import { apiRoutes } from './apiRoutes'
+import { normalizeGameFormat, type GameFormat } from './features/teamFormat'
 import { useAuth } from './useAuth'
 import type { Team } from './types/api'
 
 type TeamOption = {
   id: string
   name: string
+  format: GameFormat | null
 }
 
 type TeamScopeState = {
   selectedTeamId: string | null
   setSelectedTeamId: (teamId: string | null) => void
   teamOptions: TeamOption[]
+  selectedTeamFormat: GameFormat | null
   loading: boolean
   requiresSelection: boolean
   canSelectTeam: boolean
@@ -40,7 +43,11 @@ function toTeamOption(team: Team): TeamOption | null {
   const id = readString(raw, 'id', 'teamId', 'team_id')
   if (!id) return null
   const name = readString(raw, 'name', 'teamName', 'team_name', 'label')
-  return { id, name: name || id }
+  return {
+    id,
+    name: name || id,
+    format: normalizeGameFormat(raw.format ?? raw.gameFormat ?? raw.game_format),
+  }
 }
 
 export function TeamScopeProvider({ children }: { children: React.ReactNode }) {
@@ -58,7 +65,8 @@ export function TeamScopeProvider({ children }: { children: React.ReactNode }) {
 
     if (me.role === 'PLAYER' || me.role === 'PARENT') {
       const singleTeam = me.teamId ? [{ id: me.teamId, name: me.teamId }] : []
-      setTeamOptions(singleTeam)
+      const singleTeamWithFormat = singleTeam.map((team) => ({ ...team, format: null as GameFormat | null }))
+      setTeamOptions(singleTeamWithFormat)
       setSelectedTeamIdState(me.teamId)
       return
     }
@@ -74,7 +82,7 @@ export function TeamScopeProvider({ children }: { children: React.ReactNode }) {
       const scopedTeams = coachManagedSet ? normalized.filter((team) => coachManagedSet.has(team.id)) : normalized
       const fallbackFromManaged =
         coachManagedSet && scopedTeams.length === 0
-          ? me.managedTeamIds.map((id) => ({ id, name: id }))
+          ? me.managedTeamIds.map((id) => ({ id, name: id, format: null as GameFormat | null }))
           : []
       const finalOptions = scopedTeams.length > 0 ? scopedTeams : fallbackFromManaged
 
@@ -114,18 +122,22 @@ export function TeamScopeProvider({ children }: { children: React.ReactNode }) {
 
   const canSelectTeam = (me?.role === 'DIRECTION' || me?.role === 'COACH') && teamOptions.length > 0
   const requiresSelection = (me?.role === 'DIRECTION' || me?.role === 'COACH') && teamOptions.length > 0
+  const selectedTeamFormat = selectedTeamId
+    ? teamOptions.find((team) => team.id === selectedTeamId)?.format ?? null
+    : null
 
   const value = useMemo<TeamScopeState>(
     () => ({
       selectedTeamId,
       setSelectedTeamId: setSelectedTeamIdState,
       teamOptions,
+      selectedTeamFormat,
       loading,
       requiresSelection,
       canSelectTeam,
       refreshTeamScope,
     }),
-    [selectedTeamId, teamOptions, loading, requiresSelection, canSelectTeam, refreshTeamScope],
+    [selectedTeamId, teamOptions, selectedTeamFormat, loading, requiresSelection, canSelectTeam, refreshTeamScope],
   )
 
   return <TeamScopeCtx.Provider value={value}>{children}</TeamScopeCtx.Provider>
