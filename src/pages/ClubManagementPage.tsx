@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useNavigate } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
-import { type AccountRole } from '../authz'
 import { DotsHorizontalIcon, PlusIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
@@ -12,20 +11,17 @@ import { useTeamScope } from '../useTeamScope'
 import type { AccountInvitation, ClubMe, Team } from '../types/api'
 import './ClubManagementPage.css'
 
-interface InviteAccountPayload {
+type ClubCoach = {
+  id: string
+  firstName: string
+  lastName: string
   email: string
-  role: AccountRole
-  teamId?: string
-  team_id?: string
-  managedTeamIds?: string[]
-  managed_team_ids?: string[]
-  linkedPlayerUserId?: string
-  linked_player_user_id?: string
-  expiresInDays?: number
-  expires_in_days?: number
+  phone: string
+  teamId: string | null
+  teamName: string
+  invited: boolean
 }
 
-const ACCOUNT_CREATION_ROLES: AccountRole[] = ['DIRECTION', 'COACH', 'PLAYER', 'PARENT']
 const AGE_CATEGORY_OPTIONS = [
   { value: 'U6', label: 'U6' },
   { value: 'U7', label: 'U7' },
@@ -163,17 +159,6 @@ function extractStatusCode(err: unknown): number | undefined {
   return undefined
 }
 
-function formatDate(value?: string | null): string {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString('fr-FR')
-}
-
-function getSentAt(invitation: AccountInvitation): string | undefined {
-  return invitation.sentAt || invitation.createdAt
-}
-
 function normalizeTeam(team: unknown): Team | null {
   const raw = (team && typeof team === 'object' ? team : {}) as Record<string, unknown>
   const id = typeof raw.id === 'string' ? raw.id : (typeof raw.teamId === 'string' ? raw.teamId : (typeof raw.team_id === 'string' ? raw.team_id : ''))
@@ -187,6 +172,104 @@ function normalizeTeam(team: unknown): Team | null {
   return { id, name, category, format, clubId }
 }
 
+function normalizeAccountList(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload
+  if (payload && typeof payload === 'object') {
+    const raw = payload as Record<string, unknown>
+    if (Array.isArray(raw.items)) return raw.items
+    if (Array.isArray(raw.data)) return raw.data
+  }
+  return []
+}
+
+function splitFullName(value: string): { firstName: string; lastName: string } {
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return { firstName: '', lastName: '' }
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+}
+
+function normalizeCoachAccount(account: unknown): {
+  id: string
+  role: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  teamId: string | null
+  status: string
+} | null {
+  const raw = (account && typeof account === 'object' ? account : {}) as Record<string, unknown>
+  const role = typeof raw.role === 'string' ? raw.role.toUpperCase() : ''
+  if (!role) return null
+  const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id : ''
+  if (!id) return null
+  const email = typeof raw.email === 'string' ? raw.email.trim() : ''
+  const phone = typeof raw.phone === 'string' ? raw.phone.trim() : (typeof raw.telephone === 'string' ? raw.telephone.trim() : '')
+  const firstNameRaw = typeof raw.firstName === 'string' ? raw.firstName.trim() : (typeof raw.prenom === 'string' ? raw.prenom.trim() : '')
+  const lastNameRaw = typeof raw.lastName === 'string' ? raw.lastName.trim() : (typeof raw.nom === 'string' ? raw.nom.trim() : '')
+  const fullName = typeof raw.name === 'string' ? raw.name.trim() : ''
+  const split = (!firstNameRaw && !lastNameRaw && fullName) ? splitFullName(fullName) : { firstName: '', lastName: '' }
+  const teamId = typeof raw.teamId === 'string'
+    ? raw.teamId
+    : (typeof raw.team_id === 'string'
+      ? raw.team_id
+      : (Array.isArray(raw.managedTeamIds) && typeof raw.managedTeamIds[0] === 'string' ? raw.managedTeamIds[0] : null))
+  const status = typeof raw.status === 'string'
+    ? raw.status.toUpperCase()
+    : (typeof raw.invitationStatus === 'string' ? raw.invitationStatus.toUpperCase() : '')
+  return {
+    id,
+    role,
+    firstName: firstNameRaw || split.firstName,
+    lastName: lastNameRaw || split.lastName,
+    email,
+    phone,
+    teamId: teamId || null,
+    status,
+  }
+}
+
+function extractInvitationTeamId(invitation: AccountInvitation): string | null {
+  const raw = invitation as AccountInvitation & {
+    teamId?: string | null
+    team_id?: string | null
+  }
+  return raw.teamId || raw.team_id || null
+}
+
+function extractInvitationNames(invitation: AccountInvitation): { firstName: string; lastName: string } {
+  const raw = invitation as AccountInvitation & {
+    firstName?: string | null
+    first_name?: string | null
+    prenom?: string | null
+    lastName?: string | null
+    last_name?: string | null
+    nom?: string | null
+    name?: string | null
+  }
+
+  const firstName =
+    (typeof raw.firstName === 'string' ? raw.firstName : '') ||
+    (typeof raw.first_name === 'string' ? raw.first_name : '') ||
+    (typeof raw.prenom === 'string' ? raw.prenom : '')
+  const lastName =
+    (typeof raw.lastName === 'string' ? raw.lastName : '') ||
+    (typeof raw.last_name === 'string' ? raw.last_name : '') ||
+    (typeof raw.nom === 'string' ? raw.nom : '')
+
+  if (firstName.trim() || lastName.trim()) {
+    return { firstName: firstName.trim(), lastName: lastName.trim() }
+  }
+
+  const fallbackName = typeof raw.name === 'string' ? raw.name.trim() : ''
+  if (fallbackName) {
+    return splitFullName(fallbackName)
+  }
+
+  return { firstName: '', lastName: '' }
+}
+
 export default function ClubManagementPage() {
   const { me } = useAuth()
   const { setSelectedTeamId, refreshTeamScope, selectedTeamId } = useTeamScope()
@@ -195,6 +278,8 @@ export default function ClubManagementPage() {
   const [club, setClub] = useState<ClubMe | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [invitations, setInvitations] = useState<AccountInvitation[]>([])
+  const [accounts, setAccounts] = useState<unknown[]>([])
+  const [refreshTick, setRefreshTick] = useState(0)
 
   const [clubName, setClubName] = useState('')
   const [renamingClub, setRenamingClub] = useState(false)
@@ -213,14 +298,13 @@ export default function ClubManagementPage() {
   const [teamPendingDelete, setTeamPendingDelete] = useState<Team | null>(null)
   const [infoModal, setInfoModal] = useState<{ title: string; message: string } | null>(null)
 
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState<AccountRole>('COACH')
-  const [teamId, setTeamId] = useState('')
-  const [managedTeamIds, setManagedTeamIds] = useState<string[]>([])
-  const [linkedPlayerUserId, setLinkedPlayerUserId] = useState('')
-  const [expiresInDays, setExpiresInDays] = useState(7)
-  const [creatingInvitation, setCreatingInvitation] = useState(false)
-  const [lastInviteUrl, setLastInviteUrl] = useState('')
+  const [coachFirstName, setCoachFirstName] = useState('')
+  const [coachLastName, setCoachLastName] = useState('')
+  const [coachEmail, setCoachEmail] = useState('')
+  const [coachPhone, setCoachPhone] = useState('')
+  const [coachTeamId, setCoachTeamId] = useState('')
+  const [isCoachModalOpen, setIsCoachModalOpen] = useState(false)
+  const [savingCoach, setSavingCoach] = useState(false)
 
   const isDirection = me?.role === 'DIRECTION'
 
@@ -229,10 +313,11 @@ export default function ClubManagementPage() {
   }
 
   const loadClubData = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
-    const [clubData, teamData, invitationData] = await Promise.all([
+    const [clubData, teamData, invitationData, accountData] = await Promise.all([
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
       apiGet<Team[]>(apiRoutes.teams.list).catch(() => []),
       apiGet<AccountInvitation[]>(apiRoutes.accounts.invitations).catch(() => []),
+      apiGet<unknown>(apiRoutes.accounts.list).catch(() => []),
     ])
 
     if (isCancelled()) return
@@ -244,7 +329,8 @@ export default function ClubManagementPage() {
       .filter((team): team is Team => Boolean(team))
     setTeams(normalizedTeams)
     setInvitations(Array.isArray(invitationData) ? invitationData : [])
-  }, [])
+    setAccounts(normalizeAccountList(accountData))
+  }, [refreshTick])
 
   const { loading, error } = useAsyncLoader(loadClubData)
 
@@ -253,10 +339,56 @@ export default function ClubManagementPage() {
     [teams],
   )
 
-  const sortedInvitations = useMemo(
-    () => [...invitations].sort((a, b) => +new Date(getSentAt(b) || 0) - +new Date(getSentAt(a) || 0)),
-    [invitations],
-  )
+  const coachItems = useMemo<ClubCoach[]>(() => {
+    const teamNameById = new Map(sortedTeams.map((team) => [team.id, team.name || team.id]))
+    const pendingCoachInvitations = invitations
+      .filter((invitation) => invitation.role === 'COACH' && invitation.status === 'PENDING')
+    const pendingByEmail = new Map(
+      pendingCoachInvitations
+        .map((invitation) => [invitation.email?.trim().toLowerCase() || '', invitation] as const)
+        .filter(([email]) => Boolean(email)),
+    )
+
+    const fromAccounts = normalizeAccountList(accounts)
+      .map(normalizeCoachAccount)
+      .filter((account): account is NonNullable<ReturnType<typeof normalizeCoachAccount>> => Boolean(account))
+      .filter((account) => account.role === 'COACH')
+      .map((account) => {
+        const emailKey = account.email.trim().toLowerCase()
+        const linkedInvitation = emailKey ? pendingByEmail.get(emailKey) : undefined
+        return {
+          id: account.id,
+          firstName: account.firstName,
+          lastName: account.lastName,
+          email: account.email,
+          phone: account.phone,
+          teamId: account.teamId,
+          teamName: account.teamId ? (teamNameById.get(account.teamId) || account.teamId) : 'Non affecté',
+          invited: account.status === 'PENDING' || Boolean(linkedInvitation),
+        } satisfies ClubCoach
+      })
+
+    const existingEmails = new Set(fromAccounts.map((coach) => coach.email.trim().toLowerCase()).filter(Boolean))
+    const fromPendingOnly = pendingCoachInvitations
+      .filter((invitation) => !existingEmails.has((invitation.email || '').trim().toLowerCase()))
+      .map((invitation) => {
+        const teamId = extractInvitationTeamId(invitation)
+        const names = extractInvitationNames(invitation)
+        return {
+          id: `invite:${invitation.id}`,
+          firstName: names.firstName,
+          lastName: names.lastName,
+          email: invitation.email || '',
+          phone: '',
+          teamId,
+          teamName: teamId ? (teamNameById.get(teamId) || teamId) : 'Non affecté',
+          invited: true,
+        } satisfies ClubCoach
+      })
+
+    return [...fromAccounts, ...fromPendingOnly]
+      .sort((a, b) => `${a.lastName} ${a.firstName} ${a.email}`.localeCompare(`${b.lastName} ${b.firstName} ${b.email}`, 'fr-FR'))
+  }, [accounts, invitations, sortedTeams])
   const activeTeam = useMemo(
     () => sortedTeams.find((team) => team.id === activeTeamTabId) ?? sortedTeams[0] ?? null,
     [activeTeamTabId, sortedTeams],
@@ -470,67 +602,60 @@ export default function ClubManagementPage() {
     ))
   }
 
-  async function createInvitation(e: React.FormEvent) {
+  function openCoachModal() {
+    setCoachFirstName('')
+    setCoachLastName('')
+    setCoachEmail('')
+    setCoachPhone('')
+    setCoachTeamId(sortedTeams[0]?.id || '')
+    setIsCoachModalOpen(true)
+  }
+
+  function openCoachDetails(coach: ClubCoach) {
+    navigate(`/club/coach/${encodeURIComponent(coach.id)}`, { state: { coach } })
+  }
+
+  async function submitCoach(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim()) return
-
-    const payload: InviteAccountPayload = {
-      email: email.trim(),
-      role,
-      expiresInDays,
-      expires_in_days: expiresInDays,
+    const firstName = coachFirstName.trim()
+    const lastName = coachLastName.trim()
+    const emailValue = coachEmail.trim()
+    if (!firstName || !lastName || !emailValue || !coachTeamId) {
+      openInfoModal('Merci de renseigner prénom, nom, email et équipe.', 'Validation')
+      return
     }
 
-    if ((role === 'COACH' || role === 'PLAYER') && teamId) {
-      payload.teamId = teamId
-      payload.team_id = teamId
-    }
-    if (role === 'COACH' && managedTeamIds.length > 0) {
-      payload.managedTeamIds = managedTeamIds
-      payload.managed_team_ids = managedTeamIds
-    }
-    if (role === 'PARENT' && linkedPlayerUserId.trim()) {
-      const linkedId = linkedPlayerUserId.trim()
-      payload.linkedPlayerUserId = linkedId
-      payload.linked_player_user_id = linkedId
-    }
-
-    setCreatingInvitation(true)
+    setSavingCoach(true)
     try {
-      const created = await apiPost<AccountInvitation>(apiRoutes.accounts.list, payload)
-      setInvitations((prev) => [created, ...prev])
-      setLastInviteUrl(created.inviteUrl || '')
-      setEmail('')
-      setRole('COACH')
-      setTeamId('')
-      setManagedTeamIds([])
-      setLinkedPlayerUserId('')
-      setExpiresInDays(7)
-      openInfoModal('Invitation envoyée', 'Succès')
+      await apiPost<AccountInvitation>(apiRoutes.accounts.list, {
+        role: 'COACH',
+        email: emailValue,
+        firstName,
+        first_name: firstName,
+        prenom: firstName,
+        lastName,
+        last_name: lastName,
+        nom: lastName,
+        phone: coachPhone.trim() || undefined,
+        telephone: coachPhone.trim() || undefined,
+        teamId: coachTeamId,
+        team_id: coachTeamId,
+        managedTeamIds: [coachTeamId],
+        managed_team_ids: [coachTeamId],
+      })
+      setIsCoachModalOpen(false)
+      setRefreshTick((tick) => tick + 1)
+      openInfoModal('Coach ajouté.', 'Succès')
     } catch (err: unknown) {
       if (handleProtectedRouteErrors(err)) return
       const status = extractStatusCode(err)
       if (status === 400) {
-        openInfoModal(toErrorMessage(err, 'Données invitation invalides'), 'Erreur')
+        openInfoModal(toErrorMessage(err, 'Données coach invalides'), 'Erreur')
         return
       }
-      openInfoModal(toErrorMessage(err, 'Erreur envoi invitation'), 'Erreur')
+      openInfoModal(toErrorMessage(err, 'Erreur ajout coach'), 'Erreur')
     } finally {
-      setCreatingInvitation(false)
-    }
-  }
-
-  function toggleManagedTeam(teamValue: string) {
-    setManagedTeamIds((prev) => (prev.includes(teamValue) ? prev.filter((id) => id !== teamValue) : [...prev, teamValue]))
-  }
-
-  async function copyInviteUrl() {
-    if (!lastInviteUrl) return
-    try {
-      await navigator.clipboard.writeText(lastInviteUrl)
-      openInfoModal('Lien d’invitation copié', 'Succès')
-    } catch {
-      openInfoModal('Impossible de copier le lien', 'Erreur')
+      setSavingCoach(false)
     }
   }
 
@@ -663,120 +788,34 @@ export default function ClubManagementPage() {
 
       <section className="panel" style={cardStyle}>
         <div className="panel-head">
-          <h3 className="panel-title">Créer un compte</h3>
-          <p className="panel-note">Invitation par email avec rôle et périmètre.</p>
+          <h3 className="panel-title">Coachs</h3>
+          {coachItems.length > 0 && (
+            <RoundIconButton ariaLabel="Ajouter un coach" className="menu-dots-button" onClick={openCoachModal}>
+              <PlusIcon size={18} />
+            </RoundIconButton>
+          )}
         </div>
-        <form onSubmit={createInvitation} style={formStyle}>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="Email *" required style={inputStyle} />
-          <select
-            value={role}
-            onChange={(e) => {
-              const nextRole = e.target.value as AccountRole
-              setRole(nextRole)
-              if (nextRole !== 'COACH') setManagedTeamIds([])
-              if (nextRole !== 'PARENT') setLinkedPlayerUserId('')
-              if (nextRole !== 'PLAYER' && nextRole !== 'COACH') setTeamId('')
-            }}
-            style={inputStyle}
-          >
-            {ACCOUNT_CREATION_ROLES.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-
-          {(role === 'COACH' || role === 'PLAYER') && (
-            <select value={teamId} onChange={(e) => setTeamId(e.target.value)} style={inputStyle}>
-              <option value="">Aucune équipe</option>
-              {sortedTeams.map((team) => (
-                <option key={team.id} value={team.id}>{team.name || team.id}</option>
-              ))}
-            </select>
-          )}
-
-          {role === 'COACH' && (
-            <div className="club-managed-teams-box">
-              <span style={{ fontSize: 12, color: '#6b7280' }}>Équipes gérées</span>
-              {sortedTeams.length === 0 ? (
-                <span style={{ fontSize: 12, color: '#6b7280' }}>Aucune équipe disponible</span>
-              ) : (
-                sortedTeams.map((team) => (
-                  <label key={`managed-${team.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={managedTeamIds.includes(team.id)}
-                      onChange={() => toggleManagedTeam(team.id)}
-                    />
-                    <span>{team.name || team.id}</span>
-                  </label>
-                ))
-              )}
-            </div>
-          )}
-
-          {role === 'PARENT' && (
-            <input
-              value={linkedPlayerUserId}
-              onChange={(e) => setLinkedPlayerUserId(e.target.value)}
-              placeholder="linkedPlayerUserId"
-              style={inputStyle}
-            />
-          )}
-
-          <label style={{ display: 'grid', gap: 4 }}>
-            <span style={{ fontSize: 12, color: '#6b7280' }}>Expiration invitation (jours)</span>
-            <input
-              type="number"
-              min={1}
-              max={30}
-              value={expiresInDays}
-              onChange={(e) => setExpiresInDays(Math.max(1, Math.min(30, Number(e.target.value) || 7)))}
-              style={inputStyle}
-            />
-          </label>
-
-          <button type="submit" disabled={creatingInvitation} style={buttonStyle}>
-            {creatingInvitation ? 'Envoi…' : 'Envoyer invitation'}
-          </button>
-
-          {lastInviteUrl && (
-            <div className="club-invite-link-box">
-              <label style={{ fontSize: 12, color: '#6b7280' }}>Lien d’invitation</label>
-              <input value={lastInviteUrl} readOnly style={inputStyle} className="club-invite-url-input" />
-              <button type="button" onClick={copyInviteUrl} style={secondaryButtonStyle}>Copier le lien</button>
-            </div>
-          )}
-        </form>
-      </section>
-
-      <section className="panel" style={cardStyle}>
-        <div className="panel-head">
-          <h3 className="panel-title">Invitations</h3>
-          <p className="panel-note">{sortedInvitations.length} invitation(s)</p>
-        </div>
-        {sortedInvitations.length === 0 ? (
-          <div style={{ color: '#6b7280' }}>Aucune invitation.</div>
+        {coachItems.length === 0 ? (
+          <div className="club-empty-teams-state">
+            <p className="club-empty-teams-text">Aucun coach.</p>
+            <button type="button" style={buttonStyle} onClick={openCoachModal}>
+              Ajouter un coach
+            </button>
+          </div>
         ) : (
-          <div className="club-invitations-table-wrap">
-            <table className="club-invitations-table">
+          <div className="club-coaches-table-wrap">
+            <table className="club-coaches-table">
               <thead style={{ background: '#f8fafc' }}>
                 <tr>
-                  <th className="club-table-cell club-table-head">Email</th>
-                  <th className="club-table-cell club-table-head">Rôle</th>
-                  <th className="club-table-cell club-table-head">Statut</th>
-                  <th className="club-table-cell club-table-head">Date d’envoi</th>
-                  <th className="club-table-cell club-table-head">Expiration</th>
-                  <th className="club-table-cell club-table-head">Accepté le</th>
+                  <th className="club-table-cell club-table-head">Coach</th>
+                  <th className="club-table-cell club-table-head">Équipe</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedInvitations.map((invitation) => (
-                  <tr key={invitation.id}>
-                    <td className="club-table-cell">{invitation.email}</td>
-                    <td className="club-table-cell">{invitation.role}</td>
-                    <td className="club-table-cell"><StatusBadge status={invitation.status} /></td>
-                    <td className="club-table-cell">{formatDate(getSentAt(invitation))}</td>
-                    <td className="club-table-cell">{formatDate(invitation.expiresAt)}</td>
-                    <td className="club-table-cell">{formatDate(invitation.acceptedAt)}</td>
+                {coachItems.map((coach) => (
+                  <tr key={coach.id} className="club-coach-row" onClick={() => openCoachDetails(coach)}>
+                    <td className="club-table-cell">{`${coach.firstName || ''} ${coach.lastName || ''}`.trim() || '—'}</td>
+                    <td className="club-table-cell">{coach.teamName || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -928,6 +967,97 @@ export default function ClubManagementPage() {
         </>
       )}
 
+      {isCoachModalOpen && (
+        <>
+          <div className="club-modal-overlay" onClick={() => !savingCoach && setIsCoachModalOpen(false)} />
+          <div className="club-modal" role="dialog" aria-modal="true" aria-label="Ajouter un coach">
+            <div className="club-modal-head">
+              <h3>Ajouter un coach</h3>
+              <button
+                type="button"
+                aria-label="Fermer"
+                className="club-modal-close"
+                onClick={() => !savingCoach && setIsCoachModalOpen(false)}
+                disabled={savingCoach}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={submitCoach} style={formStyle}>
+              <label className="club-field-grid">
+                <span className="club-age-selector-label">Prénom</span>
+                <input
+                  value={coachFirstName}
+                  onChange={(e) => setCoachFirstName(e.target.value)}
+                  placeholder="Prénom"
+                  style={inputStyle}
+                  required
+                />
+              </label>
+              <label className="club-field-grid">
+                <span className="club-age-selector-label">Nom</span>
+                <input
+                  value={coachLastName}
+                  onChange={(e) => setCoachLastName(e.target.value)}
+                  placeholder="Nom"
+                  style={inputStyle}
+                  required
+                />
+              </label>
+              <label className="club-field-grid">
+                <span className="club-age-selector-label">Email</span>
+                <input
+                  value={coachEmail}
+                  onChange={(e) => setCoachEmail(e.target.value)}
+                  placeholder="Email"
+                  type="email"
+                  style={inputStyle}
+                  required
+                />
+              </label>
+              <label className="club-field-grid">
+                <span className="club-age-selector-label">Téléphone</span>
+                <input
+                  value={coachPhone}
+                  onChange={(e) => setCoachPhone(e.target.value)}
+                  placeholder="Téléphone"
+                  style={inputStyle}
+                />
+              </label>
+              <label className="club-field-grid">
+                <span className="club-age-selector-label">Équipe</span>
+                <select value={coachTeamId} onChange={(e) => setCoachTeamId(e.target.value)} style={inputStyle} required>
+                  <option value="">Sélectionner une équipe</option>
+                  {sortedTeams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name || team.id}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="club-team-modal-actions">
+                <button
+                  type="button"
+                  style={secondaryButtonStyle}
+                  onClick={() => setIsCoachModalOpen(false)}
+                  disabled={savingCoach}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    ...buttonStyle,
+                    ...(savingCoach ? disabledButtonStyle : {}),
+                  }}
+                  disabled={savingCoach}
+                >
+                  {savingCoach ? 'Enregistrement…' : 'Ajouter'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
       {teamPendingDelete && (
         <>
           <div
@@ -1000,32 +1130,6 @@ export default function ClubManagementPage() {
         </>
       )}
     </div>
-  )
-}
-
-function StatusBadge({ status }: { status: AccountInvitation['status'] }) {
-  const map: Record<AccountInvitation['status'], { background: string; color: string }> = {
-    PENDING: { background: '#dbeafe', color: '#1d4ed8' },
-    ACCEPTED: { background: '#dcfce7', color: '#166534' },
-    CANCELLED: { background: '#fee2e2', color: '#b91c1c' },
-    EXPIRED: { background: '#f1f5f9', color: '#334155' },
-  }
-
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '2px 8px',
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        background: map[status].background,
-        color: map[status].color,
-      }}
-    >
-      {status}
-    </span>
   )
 }
 

@@ -12,6 +12,7 @@ import { useAuth } from './useAuth'
 import { useTeamScope } from './useTeamScope'
 import AccountPage from './pages/AccountPage'
 import ClubManagementPage from './pages/ClubManagementPage'
+import ClubCoachDetailsPage from './pages/ClubCoachDetailsPage'
 import DiagramEditor from './pages/DiagramEditor'
 import DrillDetailsPage from './pages/DrillDetailsPage'
 import DrillsPage from './pages/Drills'
@@ -225,6 +226,14 @@ export default function App() {
               element={
                 <RequireRole roles={['DIRECTION']}>
                   <ClubManagementPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/club/coach/:id"
+              element={
+                <RequireRole roles={['DIRECTION']}>
+                  <ClubCoachDetailsPage />
                 </RequireRole>
               }
             />

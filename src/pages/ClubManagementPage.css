@@ -294,6 +294,19 @@
   border-radius: 8px;
 }
 
+.club-coaches-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.club-coaches-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  table-layout: auto;
+}
+
 .club-invitations-table {
   width: 100%;
   border-collapse: collapse;
@@ -316,6 +329,14 @@
   color: #475569;
 }
 
+.club-coach-row {
+  cursor: pointer;
+}
+
+.club-coach-row:hover {
+  background: #f8fafc;
+}
+
 @media (max-width: 700px) {
   .club-page-title {
     font-size: 30px;
@@ -323,6 +344,11 @@
 
   .club-invitations-table {
     min-width: 620px;
+    table-layout: auto;
+  }
+
+  .club-coaches-table {
+    min-width: 0;
     table-layout: auto;
   }
 }
