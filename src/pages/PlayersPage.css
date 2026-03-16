@@ -210,6 +210,11 @@
   pointer-events: auto;
 }
 
+.players-row-clickable:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
 .tactical-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -438,13 +443,18 @@
 .players-modal-grid,
 .players-create-form {
   display: grid;
-  gap: 10px;
+  gap: 16px;
+}
+
+.players-form-field {
+  display: grid;
+  gap: 6px;
 }
 
 .players-field-label {
   font-size: 12px;
   color: #64748b;
-  margin-right: 2px;
+  margin: 0;
 }
 
 .players-input {
@@ -454,6 +464,14 @@
   padding: 9px 11px;
   font-size: 14px;
   color: #0f172a;
+}
+
+.players-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #334155;
 }
 
 .players-primary-btn,

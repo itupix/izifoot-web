@@ -1,10 +1,26 @@
 export interface Player {
   id: string
   name: string
+  firstName?: string | null
+  first_name?: string | null
+  prenom?: string | null
+  lastName?: string | null
+  last_name?: string | null
+  nom?: string | null
   primary_position: string
   secondary_position?: string | null
   email?: string | null
   phone?: string | null
+  licence?: string | null
+  license?: string | null
+  isChild?: boolean | null
+  enfant?: boolean | null
+  parentFirstName?: string | null
+  parent_first_name?: string | null
+  parentPrenom?: string | null
+  parentLastName?: string | null
+  parent_last_name?: string | null
+  parentNom?: string | null
   teamId?: string | null
 }
 

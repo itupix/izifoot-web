@@ -20,6 +20,7 @@ import Home from './pages/Home'
 import MatchDay from './pages/MatchDay'
 import MatchDetailsPage from './pages/MatchDetailsPage'
 import PlateauDetailsPage from './pages/PlateauDetailsPage'
+import PlayerDetailsPage from './pages/PlayerDetailsPage'
 import PlayersPage from './pages/PlayersPage'
 import PublicPlateauPage from './pages/PublicPlateauPage'
 import StatsPage from './pages/Stats'
@@ -292,6 +293,14 @@ export default function App() {
               element={
                 <RequireRole roles={['DIRECTION', 'COACH']}>
                   <PlayersPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/effectif/:id"
+              element={
+                <RequireRole roles={['DIRECTION', 'COACH']}>
+                  <PlayerDetailsPage />
                 </RequireRole>
               }
             />

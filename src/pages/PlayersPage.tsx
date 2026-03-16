@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import FloatingPlusButton from '../components/FloatingPlusButton'
 import SearchInput from '../components/SearchInput'
 import { apiDelete, apiGet, apiPost } from '../apiClient'
@@ -15,6 +16,8 @@ import type { Player } from '../types/api'
 import './PlayersPage.css'
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
+const POSITION_UNDEFINED = 'NON DEFINI'
+const POSITION_FILTERS = [POSITION_UNDEFINED, ...POSITIONS] as const
 
 type SortKey = 'name' | 'position'
 type TeamTab = 'EFFECTIF' | 'TACTIQUE'
@@ -113,9 +116,54 @@ function getAvatarUrl(player: Player) {
   return withAvatar.avatarUrl || withAvatar.avatar || withAvatar.photoUrl || withAvatar.imageUrl || null
 }
 
+function splitFullName(value: string): { firstName: string; lastName: string } {
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return { firstName: '', lastName: '' }
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+}
+
+function getPlayerNames(player: Player): { firstName: string; lastName: string } {
+  const firstName =
+    (typeof player.firstName === 'string' ? player.firstName : '') ||
+    (typeof player.first_name === 'string' ? player.first_name : '') ||
+    (typeof player.prenom === 'string' ? player.prenom : '')
+  const lastName =
+    (typeof player.lastName === 'string' ? player.lastName : '') ||
+    (typeof player.last_name === 'string' ? player.last_name : '') ||
+    (typeof player.nom === 'string' ? player.nom : '')
+
+  if (firstName.trim() || lastName.trim()) {
+    return { firstName: firstName.trim(), lastName: lastName.trim() }
+  }
+
+  const fallback = splitFullName(player.name || '')
+  return {
+    firstName: fallback.firstName.trim(),
+    lastName: fallback.lastName.trim(),
+  }
+}
+
+function getPlayerDisplayName(player: Player): string {
+  const { firstName, lastName } = getPlayerNames(player)
+  const fullName = `${firstName} ${lastName}`.trim()
+  return fullName || player.name || '—'
+}
+
+function formatPositionLabel(position: string): string {
+  const normalized = position.trim().toUpperCase()
+  if (normalized === 'GARDIEN') return 'Gardien'
+  if (normalized === 'DEFENSEUR') return 'Défenseur'
+  if (normalized === 'MILIEU') return 'Milieu'
+  if (normalized === 'ATTAQUANT') return 'Attaquant'
+  if (normalized === POSITION_UNDEFINED) return 'Non défini'
+  return position || 'Non défini'
+}
+
 export default function PlayersPage() {
   const { me } = useAuth()
   const { selectedTeamId, selectedTeamFormat, requiresSelection } = useTeamScope()
+  const navigate = useNavigate()
 
   const playersOnField = useMemo(() => playersOnFieldFromGameFormat(selectedTeamFormat, 5), [selectedTeamFormat])
   const tacticalTokens = useMemo(() => buildTacticalTokens(playersOnField), [playersOnField])
@@ -136,10 +184,15 @@ export default function PlayersPage() {
     buildPointsMap(tacticalTokens, defaultFormation?.points || []),
   ))
 
-  const [name, setName] = useState('')
-  const [primary, setPrimary] = useState<typeof POSITIONS[number]>('MILIEU')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [primary, setPrimary] = useState<string>(POSITION_UNDEFINED)
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [isChild, setIsChild] = useState(false)
+  const [parentFirstName, setParentFirstName] = useState('')
+  const [parentLastName, setParentLastName] = useState('')
+  const [licence, setLicence] = useState('')
 
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
@@ -164,19 +217,30 @@ export default function PlayersPage() {
         : players
     if (q.trim()) {
       const needle = q.toLowerCase()
-      items = items.filter((p) => p.name.toLowerCase().includes(needle))
+      items = items.filter((p) => getPlayerDisplayName(p).toLowerCase().includes(needle))
     }
-    if (posFilter) items = items.filter((p) => p.primary_position === posFilter)
+    if (posFilter) {
+      if (posFilter === POSITION_UNDEFINED) {
+        items = items.filter((p) => {
+          const normalizedPosition = (p.primary_position || '').trim()
+          return !normalizedPosition || normalizedPosition === POSITION_UNDEFINED
+        })
+      } else {
+        items = items.filter((p) => p.primary_position === posFilter)
+      }
+    }
     return items
   }, [players, q, posFilter, requiresSelection, selectedTeamId])
 
   const sortedPlayers = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => {
       if (sortKey === 'position') {
-        const byPosition = a.primary_position.localeCompare(b.primary_position, 'fr', { sensitivity: 'base' })
+        const leftPosition = (a.primary_position || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED
+        const rightPosition = (b.primary_position || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED
+        const byPosition = leftPosition.localeCompare(rightPosition, 'fr', { sensitivity: 'base' })
         if (byPosition !== 0) return byPosition
       }
-      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })
+      return getPlayerDisplayName(a).localeCompare(getPlayerDisplayName(b), 'fr', { sensitivity: 'base' })
     })
     if (sortDir === 'desc') sorted.reverse()
     return sorted
@@ -258,26 +322,84 @@ export default function PlayersPage() {
   async function createPlayer(e: React.FormEvent) {
     e.preventDefault()
     if (!teamScopedWritable) return
+    const normalizedFirstName = firstName.trim()
+    const normalizedLastName = lastName.trim()
+    const normalizedEmail = email.trim()
+    const normalizedPhone = phone.trim()
+    const normalizedParentFirstName = parentFirstName.trim()
+    const normalizedParentLastName = parentLastName.trim()
+    const normalizedLicence = licence.trim()
+
+    if (!normalizedFirstName || !normalizedLastName || !normalizedEmail || !normalizedPhone) {
+      uiAlert('Merci de renseigner prénom, nom, e-mail et téléphone.')
+      return
+    }
+    if (isChild && (!normalizedParentFirstName || !normalizedParentLastName)) {
+      uiAlert('Merci de renseigner le prénom et le nom du parent.')
+      return
+    }
+
     try {
       const body: {
         name: string
+        firstName: string
+        first_name: string
+        prenom: string
+        lastName: string
+        last_name: string
+        nom: string
         primary_position: string
-        email?: string
-        phone?: string
+        email: string
+        phone: string
+        licence?: string
+        license?: string
+        isChild: boolean
+        enfant: boolean
+        parentFirstName?: string
+        parent_first_name?: string
+        parentPrenom?: string
+        parentLastName?: string
+        parent_last_name?: string
+        parentNom?: string
         teamId?: string
       } = {
-        name: name.trim(),
-        primary_position: primary,
+        name: `${normalizedFirstName} ${normalizedLastName}`.trim(),
+        firstName: normalizedFirstName,
+        first_name: normalizedFirstName,
+        prenom: normalizedFirstName,
+        lastName: normalizedLastName,
+        last_name: normalizedLastName,
+        nom: normalizedLastName,
+        primary_position: (primary || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        isChild,
+        enfant: isChild,
         teamId: selectedTeamId || undefined,
       }
-      if (email.trim()) body.email = email.trim()
-      if (phone.trim()) body.phone = phone.trim()
+      if (normalizedLicence) {
+        body.licence = normalizedLicence
+        body.license = normalizedLicence
+      }
+      if (isChild) {
+        body.parentFirstName = normalizedParentFirstName
+        body.parent_first_name = normalizedParentFirstName
+        body.parentPrenom = normalizedParentFirstName
+        body.parentLastName = normalizedParentLastName
+        body.parent_last_name = normalizedParentLastName
+        body.parentNom = normalizedParentLastName
+      }
       const created = await apiPost<Player>(apiRoutes.players.list, body)
-      setPlayers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
-      setName('')
-      setPrimary('MILIEU')
+      setPlayers((prev) => [...prev, created].sort((a, b) => getPlayerDisplayName(a).localeCompare(getPlayerDisplayName(b), 'fr', { sensitivity: 'base' })))
+      setFirstName('')
+      setLastName('')
+      setPrimary(POSITION_UNDEFINED)
       setEmail('')
       setPhone('')
+      setIsChild(false)
+      setParentFirstName('')
+      setParentLastName('')
+      setLicence('')
       setModalOpen(false)
     } catch (err: unknown) {
       uiAlert(`Erreur creation joueur: ${toErrorMessage(err)}`)
@@ -419,7 +541,7 @@ export default function PlayersPage() {
             >
               Tous
             </button>
-            {POSITIONS.map((position) => (
+            {POSITION_FILTERS.map((position) => (
               <button
                 key={position}
                 type="button"
@@ -428,7 +550,7 @@ export default function PlayersPage() {
                 className={`players-filter-btn ${posFilter === position ? 'is-active' : ''}`}
                 onClick={() => setPosFilter(position)}
               >
-                {position}
+                {formatPositionLabel(position)}
               </button>
             ))}
           </div>
@@ -467,20 +589,38 @@ export default function PlayersPage() {
                 </thead>
                 <tbody>
                   {sortedPlayers.map((player) => (
-                    <tr key={player.id}>
+                    <tr
+                      key={player.id}
+                      className="players-row-clickable"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Voir la fiche de ${getPlayerDisplayName(player)}`}
+                      onClick={() => navigate(`/effectif/${encodeURIComponent(player.id)}`)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return
+                        event.preventDefault()
+                        navigate(`/effectif/${encodeURIComponent(player.id)}`)
+                      }}
+                    >
                       <td>
                         <div className="players-name-cell">
                           <PlayerAvatar player={player} />
-                          <span>{player.name}</span>
+                          <span>{getPlayerDisplayName(player)}</span>
                         </div>
                       </td>
-                      <td>{player.primary_position}</td>
+                      <td>{formatPositionLabel(player.primary_position || POSITION_UNDEFINED)}</td>
                       <td className="players-row-actions">
                         <button
                           type="button"
                           className="players-icon-btn danger"
                           disabled={!teamScopedWritable}
-                          onClick={() => { void removePlayer(player.id) }}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void removePlayer(player.id)
+                          }}
+                          onKeyDown={(event) => {
+                            event.stopPropagation()
+                          }}
                         >
                           Supprimer
                         </button>
@@ -577,38 +717,107 @@ export default function PlayersPage() {
             </div>
 
             <form onSubmit={createPlayer} className="players-create-form">
-              <input
-                className="players-input"
-                placeholder="Nom"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-              <label className="players-field-label">Poste principal</label>
-              <select
-                className="players-input"
-                value={primary}
-                onChange={(e) => setPrimary(e.target.value as typeof POSITIONS[number])}
-              >
-                {POSITIONS.map((position) => (
-                  <option key={position} value={position}>
-                    {position}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="players-input"
-                placeholder="Email (optionnel)"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <input
-                className="players-input"
-                placeholder="Telephone (optionnel)"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-last-name-input">Nom</label>
+                <input
+                  id="player-last-name-input"
+                  className="players-input"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-first-name-input">Prénom</label>
+                <input
+                  id="player-first-name-input"
+                  className="players-input"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="players-form-field">
+                <label className="players-checkbox" htmlFor="player-is-child-input">
+                  <input
+                    id="player-is-child-input"
+                    type="checkbox"
+                    checked={isChild}
+                    onChange={(e) => setIsChild(e.target.checked)}
+                  />
+                  <span>Enfant</span>
+                </label>
+              </div>
+              {isChild && (
+                <>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-parent-last-name-input">Nom du parent</label>
+                    <input
+                      id="player-parent-last-name-input"
+                      className="players-input"
+                      value={parentLastName}
+                      onChange={(e) => setParentLastName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-parent-first-name-input">Prénom du parent</label>
+                    <input
+                      id="player-parent-first-name-input"
+                      className="players-input"
+                      value={parentFirstName}
+                      onChange={(e) => setParentFirstName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-phone-input">Numéro de téléphone</label>
+                <input
+                  id="player-phone-input"
+                  className="players-input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-email-input">Adresse e-mail</label>
+                <input
+                  id="player-email-input"
+                  className="players-input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-licence-input">Licence</label>
+                <input
+                  id="player-licence-input"
+                  className="players-input"
+                  value={licence}
+                  onChange={(e) => setLicence(e.target.value)}
+                />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-position-select">Poste</label>
+                <select
+                  id="player-position-select"
+                  className="players-input"
+                  value={primary}
+                  onChange={(e) => setPrimary(e.target.value)}
+                >
+                  <option value={POSITION_UNDEFINED}>{formatPositionLabel(POSITION_UNDEFINED)}</option>
+                  {POSITIONS.map((position) => (
+                    <option key={position} value={position}>
+                      {formatPositionLabel(position)}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button type="submit" className="players-primary-btn">Ajouter</button>
             </form>
           </div>
@@ -624,13 +833,14 @@ export default function PlayersPage() {
 
 function PlayerAvatar({ player }: { player: Player }) {
   const avatarUrl = getAvatarUrl(player)
-  const initials = getInitials(player.name)
+  const displayName = getPlayerDisplayName(player)
+  const initials = getInitials(displayName)
   return (
     <div className="players-avatar" aria-hidden="true">
       {avatarUrl ? (
-        <img src={avatarUrl} alt={player.name} />
+        <img src={avatarUrl} alt={displayName} />
       ) : (
-        <span style={{ background: colorFromName(player.name) }}>{initials}</span>
+        <span style={{ background: colorFromName(displayName) }}>{initials}</span>
       )}
     </div>
   )

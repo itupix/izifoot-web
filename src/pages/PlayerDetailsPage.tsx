@@ -1,0 +1,419 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { apiDelete, apiGet, apiPut } from '../apiClient'
+import { apiRoutes } from '../apiRoutes'
+import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
+import RoundIconButton from '../components/RoundIconButton'
+import { toErrorMessage } from '../errors'
+import { uiAlert } from '../ui'
+import type { Player } from '../types/api'
+import './PlayerDetailsPage.css'
+
+const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
+const POSITION_UNDEFINED = 'NON DEFINI'
+
+function splitFullName(value: string): { firstName: string; lastName: string } {
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return { firstName: '', lastName: '' }
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+}
+
+function getPlayerNames(player: Player): { firstName: string; lastName: string } {
+  const firstName =
+    (typeof player.firstName === 'string' ? player.firstName : '') ||
+    (typeof player.first_name === 'string' ? player.first_name : '') ||
+    (typeof player.prenom === 'string' ? player.prenom : '')
+  const lastName =
+    (typeof player.lastName === 'string' ? player.lastName : '') ||
+    (typeof player.last_name === 'string' ? player.last_name : '') ||
+    (typeof player.nom === 'string' ? player.nom : '')
+
+  if (firstName.trim() || lastName.trim()) {
+    return { firstName: firstName.trim(), lastName: lastName.trim() }
+  }
+
+  return splitFullName(player.name || '')
+}
+
+function getPlayerDisplayName(player: Player): string {
+  const { firstName, lastName } = getPlayerNames(player)
+  const fullName = `${firstName} ${lastName}`.trim()
+  return fullName || player.name || 'Joueur'
+}
+
+function formatPositionLabel(position: string): string {
+  const normalized = position.trim().toUpperCase()
+  if (normalized === 'GARDIEN') return 'Gardien'
+  if (normalized === 'DEFENSEUR') return 'Défenseur'
+  if (normalized === 'MILIEU') return 'Milieu'
+  if (normalized === 'ATTAQUANT') return 'Attaquant'
+  if (normalized === POSITION_UNDEFINED) return 'Non défini'
+  return position || 'Non défini'
+}
+
+function isChildPlayer(player: Player): boolean {
+  if (typeof player.isChild === 'boolean') return player.isChild
+  if (typeof player.enfant === 'boolean') return player.enfant
+  return false
+}
+
+function getParentNames(player: Player): { parentFirstName: string; parentLastName: string } {
+  const parentFirstName =
+    (typeof player.parentFirstName === 'string' ? player.parentFirstName : '') ||
+    (typeof player.parent_first_name === 'string' ? player.parent_first_name : '') ||
+    (typeof player.parentPrenom === 'string' ? player.parentPrenom : '')
+  const parentLastName =
+    (typeof player.parentLastName === 'string' ? player.parentLastName : '') ||
+    (typeof player.parent_last_name === 'string' ? player.parent_last_name : '') ||
+    (typeof player.parentNom === 'string' ? player.parentNom : '')
+  return { parentFirstName: parentFirstName.trim(), parentLastName: parentLastName.trim() }
+}
+
+function getLicence(player: Player): string {
+  const raw = (typeof player.licence === 'string' ? player.licence : '') || (typeof player.license === 'string' ? player.license : '')
+  return raw.trim()
+}
+
+export default function PlayerDetailsPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+
+  const [player, setPlayer] = useState<Player | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [isChild, setIsChild] = useState(false)
+  const [parentFirstName, setParentFirstName] = useState('')
+  const [parentLastName, setParentLastName] = useState('')
+  const [licence, setLicence] = useState('')
+  const [primaryPosition, setPrimaryPosition] = useState(POSITION_UNDEFINED)
+
+  useEffect(() => {
+    let cancelled = false
+    async function run() {
+      if (!id) {
+        setError('Joueur introuvable.')
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      setError(null)
+      try {
+        const data = await apiGet<Player>(apiRoutes.players.byId(id))
+        if (!cancelled) setPlayer(data)
+      } catch (err: unknown) {
+        if (!cancelled) setError(toErrorMessage(err))
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  const playerName = useMemo(() => (player ? getPlayerDisplayName(player) : 'Joueur'), [player])
+  const playerPosition = useMemo(() => formatPositionLabel(player?.primary_position || POSITION_UNDEFINED), [player])
+  const parentDisplayName = useMemo(() => {
+    if (!player) return '—'
+    const names = getParentNames(player)
+    const fullName = `${names.parentFirstName} ${names.parentLastName}`.trim()
+    return fullName || '—'
+  }, [player])
+
+  function openEditModal() {
+    if (!player) return
+    const names = getPlayerNames(player)
+    const parentNames = getParentNames(player)
+    setFirstName(names.firstName)
+    setLastName(names.lastName)
+    setEmail((player.email || '').trim())
+    setPhone((player.phone || '').trim())
+    setIsChild(isChildPlayer(player))
+    setParentFirstName(parentNames.parentFirstName)
+    setParentLastName(parentNames.parentLastName)
+    setLicence(getLicence(player))
+    setPrimaryPosition((player.primary_position || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED)
+    setEditModalOpen(true)
+  }
+
+  async function submitEdit(event: React.FormEvent) {
+    event.preventDefault()
+    if (!player?.id) return
+
+    const normalizedFirstName = firstName.trim()
+    const normalizedLastName = lastName.trim()
+    const normalizedEmail = email.trim()
+    const normalizedPhone = phone.trim()
+    const normalizedParentFirstName = parentFirstName.trim()
+    const normalizedParentLastName = parentLastName.trim()
+    const normalizedLicence = licence.trim()
+
+    if (!normalizedFirstName || !normalizedLastName || !normalizedEmail || !normalizedPhone) {
+      uiAlert('Merci de renseigner prénom, nom, e-mail et téléphone.')
+      return
+    }
+    if (isChild && (!normalizedParentFirstName || !normalizedParentLastName)) {
+      uiAlert('Merci de renseigner le prénom et le nom du parent.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const body: Record<string, unknown> = {
+        name: `${normalizedFirstName} ${normalizedLastName}`.trim(),
+        firstName: normalizedFirstName,
+        first_name: normalizedFirstName,
+        prenom: normalizedFirstName,
+        lastName: normalizedLastName,
+        last_name: normalizedLastName,
+        nom: normalizedLastName,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        primary_position: (primaryPosition || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED,
+        isChild,
+        enfant: isChild,
+      }
+      if (normalizedLicence) {
+        body.licence = normalizedLicence
+        body.license = normalizedLicence
+      }
+      if (isChild) {
+        body.parentFirstName = normalizedParentFirstName
+        body.parent_first_name = normalizedParentFirstName
+        body.parentPrenom = normalizedParentFirstName
+        body.parentLastName = normalizedParentLastName
+        body.parent_last_name = normalizedParentLastName
+        body.parentNom = normalizedParentLastName
+      } else {
+        body.parentFirstName = null
+        body.parent_first_name = null
+        body.parentPrenom = null
+        body.parentLastName = null
+        body.parent_last_name = null
+        body.parentNom = null
+      }
+
+      const updated = await apiPut<Player>(apiRoutes.players.byId(player.id), body)
+      setPlayer(updated)
+      setEditModalOpen(false)
+    } catch (err: unknown) {
+      uiAlert(`Erreur modification joueur: ${toErrorMessage(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deletePlayer() {
+    if (!player?.id) return
+    setDeleting(true)
+    try {
+      await apiDelete(apiRoutes.players.byId(player.id))
+      navigate('/effectif')
+    } catch (err: unknown) {
+      uiAlert(`Erreur suppression joueur: ${toErrorMessage(err)}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  if (!id) return <div className="page-shell">Joueur introuvable.</div>
+
+  return (
+    <div className="page-shell player-details-page">
+      <header className="player-details-head">
+        <button type="button" className="back-link-button" onClick={() => navigate('/effectif')}>
+          <ChevronLeftIcon size={18} />
+          <span>Retour à l&apos;effectif</span>
+        </button>
+        <div className="player-details-mainrow">
+          <div className="player-details-title-wrap">
+            <h1 className="player-details-title">{playerName}</h1>
+            <p className="player-details-subtitle">{playerPosition}</p>
+          </div>
+          <div className="player-details-menu-wrap">
+            <RoundIconButton
+              ariaLabel="Ouvrir le menu d'actions"
+              className="player-details-menu-btn"
+              onClick={() => setActionsMenuOpen((prev) => !prev)}
+            >
+              <DotsHorizontalIcon size={18} />
+            </RoundIconButton>
+            {actionsMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  className="player-details-menu-backdrop"
+                  aria-label="Fermer le menu"
+                  onClick={() => setActionsMenuOpen(false)}
+                />
+                <div className="player-details-menu">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionsMenuOpen(false)
+                      openEditModal()
+                    }}
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => {
+                      setActionsMenuOpen(false)
+                      setDeleteModalOpen(true)
+                    }}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {loading && <p>Chargement...</p>}
+      {error && <p className="inline-alert error">{error}</p>}
+
+      {!loading && !error && player && (
+        <section className="panel player-details-card">
+          <div className="player-details-grid">
+            <div>
+              <strong>Nom</strong>
+              <p>{getPlayerNames(player).lastName || '—'}</p>
+            </div>
+            <div>
+              <strong>Prénom</strong>
+              <p>{getPlayerNames(player).firstName || '—'}</p>
+            </div>
+            <div>
+              <strong>Enfant</strong>
+              <p>{isChildPlayer(player) ? 'Oui' : 'Non'}</p>
+            </div>
+            <div>
+              <strong>Parent</strong>
+              <p>{isChildPlayer(player) ? parentDisplayName : '—'}</p>
+            </div>
+            <div>
+              <strong>Numéro de téléphone</strong>
+              <p>{player.phone || '—'}</p>
+            </div>
+            <div>
+              <strong>Adresse e-mail</strong>
+              <p>{player.email || '—'}</p>
+            </div>
+            <div>
+              <strong>Licence</strong>
+              <p>{getLicence(player) || '—'}</p>
+            </div>
+            <div>
+              <strong>Poste</strong>
+              <p>{playerPosition}</p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {editModalOpen && (
+        <>
+          <div className="player-modal-overlay" onClick={() => !saving && setEditModalOpen(false)} />
+          <div className="player-modal" role="dialog" aria-modal="true" aria-label="Modifier le joueur">
+            <div className="player-modal-head">
+              <h3>Modifier le joueur</h3>
+              <button type="button" onClick={() => setEditModalOpen(false)} disabled={saving}>x</button>
+            </div>
+
+            <form onSubmit={submitEdit} className="player-form-grid">
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-last-name">Nom</label>
+                <input id="player-edit-last-name" className="players-input" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-first-name">Prénom</label>
+                <input id="player-edit-first-name" className="players-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+              </div>
+              <div className="players-form-field">
+                <label className="players-checkbox" htmlFor="player-edit-is-child">
+                  <input id="player-edit-is-child" type="checkbox" checked={isChild} onChange={(e) => setIsChild(e.target.checked)} />
+                  <span>Enfant</span>
+                </label>
+              </div>
+              {isChild && (
+                <>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-edit-parent-last-name">Nom du parent</label>
+                    <input id="player-edit-parent-last-name" className="players-input" value={parentLastName} onChange={(e) => setParentLastName(e.target.value)} required />
+                  </div>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-edit-parent-first-name">Prénom du parent</label>
+                    <input id="player-edit-parent-first-name" className="players-input" value={parentFirstName} onChange={(e) => setParentFirstName(e.target.value)} required />
+                  </div>
+                </>
+              )}
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-phone">Numéro de téléphone</label>
+                <input id="player-edit-phone" className="players-input" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-email">Adresse e-mail</label>
+                <input id="player-edit-email" className="players-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-licence">Licence</label>
+                <input id="player-edit-licence" className="players-input" value={licence} onChange={(e) => setLicence(e.target.value)} />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-position">Poste</label>
+                <select id="player-edit-position" className="players-input" value={primaryPosition} onChange={(e) => setPrimaryPosition(e.target.value)}>
+                  <option value={POSITION_UNDEFINED}>{formatPositionLabel(POSITION_UNDEFINED)}</option>
+                  {POSITIONS.map((position) => (
+                    <option key={position} value={position}>
+                      {formatPositionLabel(position)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="player-modal-actions">
+                <button type="button" className="players-secondary-btn" onClick={() => setEditModalOpen(false)} disabled={saving}>Annuler</button>
+                <button type="submit" className="players-primary-btn" disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {deleteModalOpen && (
+        <>
+          <div className="player-modal-overlay" onClick={() => !deleting && setDeleteModalOpen(false)} />
+          <div className="player-modal" role="dialog" aria-modal="true" aria-label="Supprimer le joueur">
+            <div className="player-modal-head">
+              <h3>Supprimer le joueur</h3>
+              <button type="button" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>x</button>
+            </div>
+            <p>Confirmer la suppression de {playerName} ?</p>
+            <div className="player-modal-actions">
+              <button type="button" className="players-secondary-btn" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>Annuler</button>
+              <button type="button" className="players-danger-btn" onClick={() => { void deletePlayer() }} disabled={deleting}>
+                {deleting ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
