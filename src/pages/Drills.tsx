@@ -5,13 +5,14 @@ import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import DiagramComposer from '../components/DiagramComposer'
 import FloatingPlusButton from '../components/FloatingPlusButton'
-import SearchSelectBar from '../components/SearchSelectBar'
+import SearchInput from '../components/SearchInput'
 import { createEmptyDiagramData, hasDiagramContent, type DiagramData } from '../components/diagramShared'
 import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import type { Drill, DrillsResponse } from '../types/api'
+import './Drills.css'
 
 export default function DrillsPage() {
   const { me } = useAuth()
@@ -19,7 +20,7 @@ export default function DrillsPage() {
   const navigate = useNavigate()
   const [data, setData] = useState<DrillsResponse>({ items: [], categories: [], tags: [] })
   const [q, setQ] = useState('')
-  const [category, setCategory] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [showCreateModal, setShowCreateModal] = useState(false)
 
   // creation form state
@@ -53,11 +54,21 @@ export default function DrillsPage() {
         d.description.toLowerCase().includes(needle)
       )
     }
-    if (category) items = items.filter(d => d.category === category)
+    if (selectedCategories.length > 0) {
+      const allowed = new Set(selectedCategories)
+      items = items.filter((d) => allowed.has(d.category))
+    }
     return items
-  }, [data.items, q, category, requiresSelection, selectedTeamId])
+  }, [data.items, q, requiresSelection, selectedCategories, selectedTeamId])
 
   const categories = useMemo(() => data.categories, [data.categories])
+
+  function toggleCategory(category: string) {
+    setSelectedCategories((prev) => {
+      if (prev.includes(category)) return prev.filter((value) => value !== category)
+      return [...prev, category]
+    })
+  }
 
   async function createDrill(e: React.FormEvent) {
     e.preventDefault()
@@ -102,12 +113,11 @@ export default function DrillsPage() {
 
   return (
     <div className="page-shell" style={{ position: 'relative' }}>
-      <header className="page-head">
-        <div className="page-title-row">
-          <h2 className="page-title">Exercices</h2>
+      <header className="drills-head">
+        <div className="drills-mainrow">
+          <h1 className="drills-title">Exercices</h1>
           <p className="panel-note">{filtered.length} résultat(s)</p>
         </div>
-        <p className="page-subtitle">Bibliothèque d’exercices, filtrage rapide et création guidée.</p>
       </header>
       {writable && requiresSelection && !selectedTeamId && (
         <div className="inline-alert">
@@ -115,15 +125,31 @@ export default function DrillsPage() {
         </div>
       )}
       <section className="panel" style={{ marginBottom: 0 }}>
-        <SearchSelectBar
-          query={q}
-          onQueryChange={setQ}
-          queryPlaceholder="Recherche (titre, description)"
-          selectValue={category}
-          onSelectChange={setCategory}
-          selectPlaceholder="Toutes les catégories"
-          options={categories.map(c => ({ value: c, label: c }))}
-        />
+        <div className="drills-search-block">
+          <SearchInput
+            placeholder="Recherche (titre, description)"
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+          />
+        </div>
+        {categories.length > 0 && (
+          <div className="drills-category-tags" aria-label="Filtres catégories">
+            {categories.map((cat) => {
+              const active = selectedCategories.includes(cat)
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`drills-category-tag ${active ? 'is-active' : ''}`}
+                  aria-pressed={active}
+                  onClick={() => toggleCategory(cat)}
+                >
+                  {cat}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </section>
       <section className="panel" style={{ display: 'grid', gap: 12 }}>
         <div className="panel-head" style={{ marginBottom: 0 }}>
