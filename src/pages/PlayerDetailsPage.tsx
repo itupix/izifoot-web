@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CalendarCheck2, IdCard, Mail, Phone, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -316,9 +317,9 @@ export default function PlayerDetailsPage() {
                 <h2>{playerName}</h2>
                 <p>{playerPosition}</p>
                 <div className="player-profile-badges">
-                  <span>{isChildPlayer(player) ? 'Enfant' : 'Adulte'}</span>
-                  <span>{hasLicence ? 'Licence OK' : 'Licence manquante'}</span>
-                  <span>{trainingAttendanceRate}% assiduité</span>
+                  <span><UserRoundCheck size={13} />{isChildPlayer(player) ? 'Enfant' : 'Adulte'}</span>
+                  <span><ShieldCheck size={13} />{hasLicence ? 'Licence OK' : 'Licence manquante'}</span>
+                  <span><CalendarCheck2 size={13} />{trainingAttendanceRate}% assiduité</span>
                 </div>
               </div>
               <div className="player-details-menu-wrap player-details-menu-wrap--hero">
@@ -384,29 +385,27 @@ export default function PlayerDetailsPage() {
           </div>
 
           <div className="player-details-grid">
+            {isChildPlayer(player) && (
+              <div className="player-details-parent-card">
+                <span className="player-info-icon"><Users size={15} /></span>
+                <strong>Parents</strong>
+                <p>{parentDisplayName}</p>
+              </div>
+            )}
             <div>
-              <strong>Enfant</strong>
-              <p>{isChildPlayer(player) ? 'Oui' : 'Non'}</p>
-            </div>
-            <div>
-              <strong>Parent</strong>
-              <p>{isChildPlayer(player) ? parentDisplayName : '—'}</p>
-            </div>
-            <div>
+              <span className="player-info-icon"><Phone size={15} /></span>
               <strong>Numéro de téléphone</strong>
               <p>{player.phone || '—'}</p>
             </div>
             <div>
+              <span className="player-info-icon"><Mail size={15} /></span>
               <strong>Adresse e-mail</strong>
               <p>{player.email || '—'}</p>
             </div>
             <div>
+              <span className="player-info-icon"><IdCard size={15} /></span>
               <strong>Licence</strong>
               <p>{getLicence(player) || '—'}</p>
-            </div>
-            <div>
-              <strong>Poste</strong>
-              <p>{playerPosition}</p>
             </div>
           </div>
         </section>
