@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarCheck2, IdCard, Mail, Phone, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { apiDelete, apiGet, apiPut } from '../apiClient'
+import { HttpError } from '../api'
+import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
@@ -100,6 +101,20 @@ function getLicence(player: Player): string {
   return raw.trim()
 }
 
+type InvitationStatusValue = 'NONE' | 'PENDING' | 'ACCEPTED'
+type PlayerInvitationStatusResponse = {
+  playerId: string
+  status: InvitationStatusValue
+  lastInvitationAt?: string | null
+  invitationId?: string | null
+}
+
+function normalizeInvitationStatus(value: unknown): InvitationStatusValue {
+  const normalized = typeof value === 'string' ? value.trim().toUpperCase() : ''
+  if (normalized === 'PENDING' || normalized === 'ACCEPTED') return normalized
+  return 'NONE'
+}
+
 export default function PlayerDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -115,6 +130,9 @@ export default function PlayerDetailsPage() {
   const [matches, setMatches] = useState<MatchLite[]>([])
   const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([])
   const [trainings, setTrainings] = useState<Training[]>([])
+  const [inviteSending, setInviteSending] = useState(false)
+  const [invitationStatus, setInvitationStatus] = useState<InvitationStatusValue | null>(null)
+  const [invitationLoading, setInvitationLoading] = useState(false)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -125,6 +143,18 @@ export default function PlayerDetailsPage() {
   const [parentLastName, setParentLastName] = useState('')
   const [licence, setLicence] = useState('')
   const [primaryPosition, setPrimaryPosition] = useState(POSITION_UNDEFINED)
+
+  async function refreshInvitationStatus(playerId: string) {
+    setInvitationLoading(true)
+    try {
+      const response = await apiGet<PlayerInvitationStatusResponse>(apiRoutes.players.invitationStatus(playerId))
+      setInvitationStatus(normalizeInvitationStatus(response?.status))
+    } catch {
+      setInvitationStatus(null)
+    } finally {
+      setInvitationLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -148,6 +178,7 @@ export default function PlayerDetailsPage() {
           setMatches(matchData)
           setAttendanceRows(attendanceData)
           setTrainings(trainingData)
+          void refreshInvitationStatus(playerData.id)
         }
       } catch (err: unknown) {
         if (!cancelled) setError(toErrorMessage(err))
@@ -272,6 +303,7 @@ export default function PlayerDetailsPage() {
 
       const updated = await apiPut<Player>(apiRoutes.players.byId(player.id), body)
       setPlayer(updated)
+      await refreshInvitationStatus(updated.id)
       setEditModalOpen(false)
     } catch (err: unknown) {
       uiAlert(`Erreur modification joueur: ${toErrorMessage(err)}`)
@@ -290,6 +322,30 @@ export default function PlayerDetailsPage() {
       uiAlert(`Erreur suppression joueur: ${toErrorMessage(err)}`)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function sendPlayerInvitation() {
+    if (!player?.id) return
+    setInviteSending(true)
+    try {
+      const isResend = invitationStatus === 'PENDING'
+      await apiPost(apiRoutes.players.invite(player.id), {})
+      await refreshInvitationStatus(player.id)
+      uiAlert(isResend ? 'Invitation renvoyée.' : 'Invitation envoyée.')
+    } catch (err: unknown) {
+      if (err instanceof HttpError && err.status === 409) {
+        uiAlert('Compte déjà activé.')
+        await refreshInvitationStatus(player.id)
+        return
+      }
+      if (err instanceof HttpError && err.status === 400) {
+        uiAlert(toErrorMessage(err, 'Adresse e-mail requise pour inviter ce joueur.'))
+        return
+      }
+      uiAlert(`Erreur invitation joueur: ${toErrorMessage(err)}`)
+    } finally {
+      setInviteSending(false)
     }
   }
 
@@ -321,6 +377,19 @@ export default function PlayerDetailsPage() {
                   <span><ShieldCheck size={13} />{hasLicence ? 'Licence OK' : 'Licence manquante'}</span>
                   <span><CalendarCheck2 size={13} />{trainingAttendanceRate}% assiduité</span>
                 </div>
+                {!invitationLoading && invitationStatus && invitationStatus !== 'ACCEPTED' && (
+                  <div className="player-invite-row">
+                    {invitationStatus === 'PENDING' ? <span className="player-invite-label">Invité</span> : null}
+                    <button
+                      type="button"
+                      className="player-invite-btn"
+                      onClick={() => { void sendPlayerInvitation() }}
+                      disabled={inviteSending}
+                    >
+                      {inviteSending ? 'Envoi...' : invitationStatus === 'PENDING' ? 'Renvoyer l’invitation' : 'Inviter'}
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="player-details-menu-wrap player-details-menu-wrap--hero">
                 <RoundIconButton

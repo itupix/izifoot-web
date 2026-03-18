@@ -29,6 +29,7 @@ export const apiRoutes = {
     list: '/players',
     byId: (id: string) => `/players/${enc(id)}`,
     invite: (id: string) => `/players/${enc(id)}/invite`,
+    invitationStatus: (id: string) => `/players/${enc(id)}/invitation-status`,
   },
   trainings: {
     list: '/trainings',
