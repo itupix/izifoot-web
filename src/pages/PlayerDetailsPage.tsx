@@ -6,7 +6,7 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { uiAlert } from '../ui'
-import type { Player } from '../types/api'
+import type { AttendanceRow, MatchLite, Player, Training } from '../types/api'
 import './PlayerDetailsPage.css'
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
@@ -40,6 +40,30 @@ function getPlayerDisplayName(player: Player): string {
   const { firstName, lastName } = getPlayerNames(player)
   const fullName = `${firstName} ${lastName}`.trim()
   return fullName || player.name || 'Joueur'
+}
+
+function getInitials(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase()
+}
+
+function colorFromName(name: string) {
+  const palette = ['#1d4ed8', '#0f766e', '#b45309', '#7c3aed', '#0e7490', '#b91c1c']
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return palette[hash % palette.length]
+}
+
+function getAvatarUrl(player: Player) {
+  const withAvatar = player as Player & {
+    avatarUrl?: string | null
+    avatar?: string | null
+    photoUrl?: string | null
+    imageUrl?: string | null
+  }
+  return withAvatar.avatarUrl || withAvatar.avatar || withAvatar.photoUrl || withAvatar.imageUrl || null
 }
 
 function formatPositionLabel(position: string): string {
@@ -87,6 +111,9 @@ export default function PlayerDetailsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [matches, setMatches] = useState<MatchLite[]>([])
+  const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([])
+  const [trainings, setTrainings] = useState<Training[]>([])
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -109,8 +136,18 @@ export default function PlayerDetailsPage() {
       setLoading(true)
       setError(null)
       try {
-        const data = await apiGet<Player>(apiRoutes.players.byId(id))
-        if (!cancelled) setPlayer(data)
+        const [playerData, matchData, attendanceData, trainingData] = await Promise.all([
+          apiGet<Player>(apiRoutes.players.byId(id)),
+          apiGet<MatchLite[]>(apiRoutes.matches.list).catch(() => []),
+          apiGet<AttendanceRow[]>(apiRoutes.attendance.list).catch(() => []),
+          apiGet<Training[]>(apiRoutes.trainings.list).catch(() => []),
+        ])
+        if (!cancelled) {
+          setPlayer(playerData)
+          setMatches(matchData)
+          setAttendanceRows(attendanceData)
+          setTrainings(trainingData)
+        }
       } catch (err: unknown) {
         if (!cancelled) setError(toErrorMessage(err))
       } finally {
@@ -131,6 +168,33 @@ export default function PlayerDetailsPage() {
     const fullName = `${names.parentFirstName} ${names.parentLastName}`.trim()
     return fullName || '—'
   }, [player])
+  const hasLicence = useMemo(() => Boolean(player && getLicence(player)), [player])
+  const playerGoals = useMemo(() => (
+    matches.reduce((sum, match) => {
+      const list = Array.isArray(match.scorers) ? match.scorers : []
+      const goals = list.filter((scorer) => scorer.playerId === id && scorer.side === 'home').length
+      return sum + goals
+    }, 0)
+  ), [id, matches])
+  const matchesPlayed = useMemo(() => (
+    matches.reduce((sum, match) => {
+      const isPresent = (match.teams || []).some((team) => (
+        (team.players || []).some((teamPlayer) => teamPlayer.playerId === id || teamPlayer.player?.id === id)
+      ))
+      return sum + (isPresent ? 1 : 0)
+    }, 0)
+  ), [id, matches])
+  const totalActiveTrainings = useMemo(
+    () => trainings.filter((training) => training.status !== 'CANCELLED').length,
+    [trainings],
+  )
+  const attendedTrainings = useMemo(() => (
+    attendanceRows.filter((row) => row.playerId === id && row.session_type === 'TRAINING' && row.present === true).length
+  ), [attendanceRows, id])
+  const trainingAttendanceRate = useMemo(() => {
+    if (totalActiveTrainings <= 0) return 0
+    return Math.round((attendedTrainings / totalActiveTrainings) * 100)
+  }, [attendedTrainings, totalActiveTrainings])
 
   function openEditModal() {
     if (!player) return
@@ -237,68 +301,89 @@ export default function PlayerDetailsPage() {
           <ChevronLeftIcon size={18} />
           <span>Retour à l&apos;effectif</span>
         </button>
-        <div className="player-details-mainrow">
-          <div className="player-details-title-wrap">
-            <h1 className="player-details-title">{playerName}</h1>
-            <p className="player-details-subtitle">{playerPosition}</p>
-          </div>
-          <div className="player-details-menu-wrap">
-            <RoundIconButton
-              ariaLabel="Ouvrir le menu d'actions"
-              className="player-details-menu-btn"
-              onClick={() => setActionsMenuOpen((prev) => !prev)}
-            >
-              <DotsHorizontalIcon size={18} />
-            </RoundIconButton>
-            {actionsMenuOpen && (
-              <>
-                <button
-                  type="button"
-                  className="player-details-menu-backdrop"
-                  aria-label="Fermer le menu"
-                  onClick={() => setActionsMenuOpen(false)}
-                />
-                <div className="player-details-menu">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActionsMenuOpen(false)
-                      openEditModal()
-                    }}
-                  >
-                    Modifier
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => {
-                      setActionsMenuOpen(false)
-                      setDeleteModalOpen(true)
-                    }}
-                  >
-                    Supprimer
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
       </header>
 
       {loading && <p>Chargement...</p>}
       {error && <p className="inline-alert error">{error}</p>}
 
       {!loading && !error && player && (
-        <section className="panel player-details-card">
+        <section className="panel player-details-profile">
+          <div className="player-profile-hero">
+            <div className="player-profile-background" aria-hidden="true" />
+            <div className="player-profile-main">
+              <PlayerHeroAvatar player={player} />
+              <div className="player-profile-texts">
+                <h2>{playerName}</h2>
+                <p>{playerPosition}</p>
+                <div className="player-profile-badges">
+                  <span>{isChildPlayer(player) ? 'Enfant' : 'Adulte'}</span>
+                  <span>{hasLicence ? 'Licence OK' : 'Licence manquante'}</span>
+                  <span>{trainingAttendanceRate}% assiduité</span>
+                </div>
+              </div>
+              <div className="player-details-menu-wrap player-details-menu-wrap--hero">
+                <RoundIconButton
+                  ariaLabel="Ouvrir le menu d'actions"
+                  className="player-details-menu-btn"
+                  onClick={() => setActionsMenuOpen((prev) => !prev)}
+                >
+                  <DotsHorizontalIcon size={18} />
+                </RoundIconButton>
+                {actionsMenuOpen && (
+                  <>
+                    <button
+                      type="button"
+                      className="player-details-menu-backdrop"
+                      aria-label="Fermer le menu"
+                      onClick={() => setActionsMenuOpen(false)}
+                    />
+                    <div className="player-details-menu">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionsMenuOpen(false)
+                          openEditModal()
+                        }}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => {
+                          setActionsMenuOpen(false)
+                          setDeleteModalOpen(true)
+                        }}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="player-profile-stats-grid">
+            <article className="player-stat-card">
+              <strong>Matchs joués</strong>
+              <p>{matchesPlayed}</p>
+            </article>
+            <article className="player-stat-card">
+              <strong>Buts marqués</strong>
+              <p>{playerGoals}</p>
+            </article>
+            <article className="player-stat-card">
+              <strong>Assiduité entraînement</strong>
+              <p>{trainingAttendanceRate}%</p>
+            </article>
+            <article className="player-stat-card">
+              <strong>Présences entraînement</strong>
+              <p>{attendedTrainings}/{totalActiveTrainings}</p>
+            </article>
+          </div>
+
           <div className="player-details-grid">
-            <div>
-              <strong>Nom</strong>
-              <p>{getPlayerNames(player).lastName || '—'}</p>
-            </div>
-            <div>
-              <strong>Prénom</strong>
-              <p>{getPlayerNames(player).firstName || '—'}</p>
-            </div>
             <div>
               <strong>Enfant</strong>
               <p>{isChildPlayer(player) ? 'Oui' : 'Non'}</p>
@@ -413,6 +498,21 @@ export default function PlayerDetailsPage() {
             </div>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+function PlayerHeroAvatar({ player }: { player: Player }) {
+  const avatarUrl = getAvatarUrl(player)
+  const displayName = getPlayerDisplayName(player)
+  const initials = getInitials(displayName)
+  return (
+    <div className="player-hero-avatar" aria-hidden="true">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={displayName} />
+      ) : (
+        <span style={{ background: colorFromName(displayName) }}>{initials}</span>
       )}
     </div>
   )
