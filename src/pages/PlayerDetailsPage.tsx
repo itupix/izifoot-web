@@ -133,6 +133,7 @@ export default function PlayerDetailsPage() {
   const [inviteSending, setInviteSending] = useState(false)
   const [invitationStatus, setInvitationStatus] = useState<InvitationStatusValue | null>(null)
   const [invitationLoading, setInvitationLoading] = useState(false)
+  const [invitationStatusError, setInvitationStatusError] = useState<string | null>(null)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -146,11 +147,13 @@ export default function PlayerDetailsPage() {
 
   async function refreshInvitationStatus(playerId: string) {
     setInvitationLoading(true)
+    setInvitationStatusError(null)
     try {
       const response = await apiGet<PlayerInvitationStatusResponse>(apiRoutes.players.invitationStatus(playerId))
       setInvitationStatus(normalizeInvitationStatus(response?.status))
-    } catch {
+    } catch (err: unknown) {
       setInvitationStatus(null)
+      setInvitationStatusError(toErrorMessage(err, 'Statut invitation indisponible.'))
     } finally {
       setInvitationLoading(false)
     }
@@ -166,6 +169,8 @@ export default function PlayerDetailsPage() {
       }
       setLoading(true)
       setError(null)
+      setInvitationStatus(null)
+      setInvitationStatusError(null)
       try {
         const [playerData, matchData, attendanceData, trainingData] = await Promise.all([
           apiGet<Player>(apiRoutes.players.byId(id)),
@@ -377,7 +382,25 @@ export default function PlayerDetailsPage() {
                   <span><ShieldCheck size={13} />{hasLicence ? 'Licence OK' : 'Licence manquante'}</span>
                   <span><CalendarCheck2 size={13} />{trainingAttendanceRate}% assiduité</span>
                 </div>
-                {!invitationLoading && invitationStatus && invitationStatus !== 'ACCEPTED' && (
+                {invitationLoading && (
+                  <div className="player-invite-row">
+                    <span className="player-invite-pending-text">Chargement du statut d&apos;invitation...</span>
+                  </div>
+                )}
+                {!invitationLoading && invitationStatusError && (
+                  <div className="player-invite-row">
+                    <span className="player-invite-error-text">{invitationStatusError}</span>
+                    <button
+                      type="button"
+                      className="player-invite-btn secondary"
+                      onClick={() => { if (player?.id) void refreshInvitationStatus(player.id) }}
+                      disabled={inviteSending}
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                )}
+                {!invitationLoading && !invitationStatusError && invitationStatus && invitationStatus !== 'ACCEPTED' && (
                   <div className="player-invite-row">
                     {invitationStatus === 'PENDING' ? <span className="player-invite-label">Invité</span> : null}
                     <button

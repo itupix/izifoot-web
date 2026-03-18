@@ -208,9 +208,25 @@
   cursor: pointer;
 }
 
+.player-invite-btn.secondary {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
 .player-invite-btn:disabled {
   cursor: not-allowed;
   opacity: 0.65;
+}
+
+.player-invite-pending-text {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.player-invite-error-text {
+  font-size: 13px;
+  color: #b91c1c;
 }
 
 .player-profile-stats-grid {
