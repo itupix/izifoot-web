@@ -195,7 +195,9 @@ function buildBalancedComposition(
   eligiblePlayers: Player[],
   otherMatches: MatchLite[],
   startersTargetCount: number,
+  preferredGoalkeeperId?: string,
 ) {
+  const isGoalkeeper = (player: Player | undefined) => (player?.primary_position || '').trim().toUpperCase() === 'GARDIEN'
   const eligibleSet = new Set(eligiblePlayers.map((player) => player.id))
   const loadByPlayerId = computePlayerDayLoad(otherMatches, eligibleSet)
   const ordered = eligiblePlayers
@@ -207,13 +209,29 @@ function buildBalancedComposition(
       return a.name.localeCompare(b.name)
     })
 
-  const starters = ordered.slice(0, startersTargetCount).map((player) => player.id)
+  const goalkeeperCandidates = ordered.filter((player) => isGoalkeeper(player))
+  const preferredGoalkeeper = preferredGoalkeeperId
+    ? eligiblePlayers.find((player) => player.id === preferredGoalkeeperId)
+    : undefined
+  const selectedGoalkeeper = (
+    (preferredGoalkeeper && isGoalkeeper(preferredGoalkeeper) ? preferredGoalkeeper : undefined)
+    ?? goalkeeperCandidates[0]
+    ?? preferredGoalkeeper
+  )
+
+  const startersPool = selectedGoalkeeper
+    ? ordered.filter((player) => player.id !== selectedGoalkeeper.id)
+    : ordered
+  const starters = [
+    ...(selectedGoalkeeper ? [selectedGoalkeeper.id] : []),
+    ...startersPool.slice(0, Math.max(0, startersTargetCount - (selectedGoalkeeper ? 1 : 0))).map((player) => player.id),
+  ].slice(0, startersTargetCount)
   const starterSet = new Set(starters)
   const subs = ordered
     .filter((player) => !starterSet.has(player.id))
     .map((player) => player.id)
 
-  return { starters, subs }
+  return { starters, subs, goalkeeperId: selectedGoalkeeper?.id }
 }
 
 function readBackendTactic(match: MatchDetailsData): BackendMatchTactic | null {
@@ -285,6 +303,8 @@ export default function MatchDetailsPage() {
   const [liveSaving, setLiveSaving] = useState(false)
   const [autoComposing, setAutoComposing] = useState(false)
   const [autoComposeError, setAutoComposeError] = useState<string | null>(null)
+  const [compositionSaving, setCompositionSaving] = useState(false)
+  const lastCompositionSignatureRef = useRef<string | null>(null)
 
   const loadMatch = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -504,12 +524,6 @@ export default function MatchDetailsPage() {
     ),
     [eligiblePlayerIdSet, tacticalTokens.length, usePlateauEligibility, viewDraft.home.starters],
   )
-  const displayedHomeSubs = useMemo(() => {
-    if (!usePlateauEligibility) return viewDraft.home.subs
-    const startersSet = new Set(displayedHomeStarters)
-    return viewDraft.home.subs.filter((playerId) => eligiblePlayerIdSet.has(playerId) && !startersSet.has(playerId))
-  }, [usePlateauEligibility, viewDraft.home.subs, displayedHomeStarters, eligiblePlayerIdSet])
-
   const heroHomeScorers = useMemo(
     () => viewDraft.scorers
       .filter((s) => s.side === 'home')
@@ -531,6 +545,7 @@ export default function MatchDetailsPage() {
       const roleIndex = counters[role]
       return {
         id: tokenId,
+        role,
         point,
         label: role === 'GARDIEN' ? roleLabel(role) : `${roleLabel(role)} ${roleIndex}`,
       }
@@ -552,6 +567,98 @@ export default function MatchDetailsPage() {
     () => compositionPlayers.filter((player) => assignedPlayerIds.includes(player.id)),
     [compositionPlayers, assignedPlayerIds],
   )
+  const compositionSaveSnapshot = useMemo(() => {
+    if (!draft) return null
+    const sanitizedHomeStarters = draft.home.starters
+      .filter((playerId) => eligiblePlayerIdSet.has(playerId))
+      .slice(0, tacticalTokens.length)
+    const sanitizedStarterSet = new Set(sanitizedHomeStarters)
+    const sanitizedHomeSubs = draft.home.subs
+      .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !sanitizedStarterSet.has(playerId))
+    const signature = JSON.stringify({
+      home: {
+        starters: sanitizedHomeStarters,
+        subs: sanitizedHomeSubs,
+      },
+      tactic: {
+        preset: tacticalPresetValue,
+        points: tacticalPoints,
+      },
+    })
+    return {
+      signature,
+      homeStarters: sanitizedHomeStarters,
+      homeSubs: sanitizedHomeSubs,
+      awayStarters: draft.away.starters,
+      awaySubs: draft.away.subs,
+      scorers: draft.scorers,
+    }
+  }, [draft, eligiblePlayerIdSet, tacticalTokens.length, tacticalPresetValue, tacticalPoints])
+
+  useEffect(() => {
+    setSlotAssignments((prev) => {
+      const next: Record<string, string> = {}
+      tacticalTokens.forEach((tokenId, index) => {
+        next[tokenId] = displayedHomeStarters[index] || ''
+      })
+      const changed = tacticalTokens.some((tokenId) => (prev[tokenId] || '') !== (next[tokenId] || ''))
+      if (!changed && Object.keys(prev).length === tacticalTokens.length) return prev
+      return next
+    })
+  }, [displayedHomeStarters, tacticalTokens])
+
+  useEffect(() => {
+    if (!match || !id || !compositionSaveSnapshot) return
+    if (lastCompositionSignatureRef.current === null) {
+      lastCompositionSignatureRef.current = compositionSaveSnapshot.signature
+      return
+    }
+    if (compositionSaveSnapshot.signature === lastCompositionSignatureRef.current) return
+
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        setCompositionSaving(true)
+        try {
+          const updated = await apiPut<MatchDetailsData>(apiRoutes.matches.byId(id), {
+            type: match.type,
+            plateauId: match.plateauId ?? undefined,
+            sides: {
+              home: {
+                starters: compositionSaveSnapshot.homeStarters,
+                subs: compositionSaveSnapshot.homeSubs,
+              },
+              away: {
+                starters: compositionSaveSnapshot.awayStarters,
+                subs: compositionSaveSnapshot.awaySubs,
+              },
+            },
+            score: {
+              home: homeScore,
+              away: awayScore,
+            },
+            buteurs: compositionSaveSnapshot.scorers
+              .filter((s) => s.side === 'home')
+              .map((s) => ({ side: s.side, playerId: s.playerId, assistId: s.assistId })),
+            opponentName: match.opponentName ?? '',
+            played: typeof match.played === 'boolean' ? match.played : !pending,
+            tactic: {
+              preset: tacticalPresetValue,
+              points: tacticalPoints,
+            },
+          })
+          setMatch(updated)
+          setDraft(buildDraft(updated))
+          lastCompositionSignatureRef.current = compositionSaveSnapshot.signature
+        } catch (err: unknown) {
+          uiAlert(`Erreur enregistrement composition: ${toErrorMessage(err)}`)
+        } finally {
+          setCompositionSaving(false)
+        }
+      })()
+    }, 700)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [compositionSaveSnapshot, homeScore, awayScore, id, match, pending, tacticalPoints, tacticalPresetValue])
 
   const rebuildHomeCompositionFromAssignments = useCallback((
     assignments: Record<string, string>,
@@ -581,25 +688,13 @@ export default function MatchDetailsPage() {
     setMenuOpen(false)
     if (match) {
       const nextDraft = buildDraft(match)
-      const sanitizedStarters = nextDraft.home.starters
-        .filter((playerId) => eligiblePlayerIdSet.has(playerId))
-        .slice(0, tacticalTokens.length)
-      const startersSet = new Set(sanitizedStarters)
-      const sanitizedSubs = nextDraft.home.subs
-        .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !startersSet.has(playerId))
       setDraft({
         ...nextDraft,
         home: {
-          starters: sanitizedStarters,
-          subs: sanitizedSubs,
+          starters: nextDraft.home.starters,
+          subs: nextDraft.home.subs,
         },
       })
-      const initialAssignments: Record<string, string> = {}
-      tacticalTokens.forEach((tokenId, index) => {
-        initialAssignments[tokenId] = sanitizedStarters[index] || ''
-      })
-      setSlotAssignments(initialAssignments)
-      rebuildHomeCompositionFromAssignments(initialAssignments, compositionPlayerIds)
     }
     setEditHomeScore(homeScore)
     setEditAwayScore(awayScore)
@@ -796,6 +891,14 @@ export default function MatchDetailsPage() {
   function assignPlayerToSlot(slotId: string, playerId: string) {
     setSlotAssignments((prev) => {
       const next = { ...prev, [slotId]: playerId }
+      const sourceSlotId = tacticalTokens.find((tokenId) => prev[tokenId] === playerId)
+      const targetPreviousPlayerId = prev[slotId] || ''
+
+      // Drag d'un joueur deja place vers un slot occupe: on fait un swap.
+      if (sourceSlotId && sourceSlotId !== slotId && targetPreviousPlayerId && targetPreviousPlayerId !== playerId) {
+        next[sourceSlotId] = targetPreviousPlayerId
+      }
+
       if (playerId) {
         for (const tokenId of tacticalTokens) {
           if (tokenId !== slotId && next[tokenId] === playerId) {
@@ -987,7 +1090,7 @@ export default function MatchDetailsPage() {
   }
 
   async function autoCompose() {
-    if (!match || !id || compositionPlayers.length === 0) return
+    if (!match || compositionPlayers.length === 0) return
     setAutoComposeError(null)
     setAutoComposing(true)
     try {
@@ -1003,41 +1106,26 @@ export default function MatchDetailsPage() {
         otherMatches = allMatches.filter((matchItem) => matchItem.id !== match.id && toDayKey(matchItem.createdAt) === dayKey)
       }
 
-      const nextHome = buildBalancedComposition(compositionPlayers, otherMatches, tacticalTokens.length)
+      const currentDraft = draft ?? buildDraft(match)
+      const isGoalkeeperId = (playerId: string) => (playerById.get(playerId)?.primary_position || '').trim().toUpperCase() === 'GARDIEN'
+      const preferredGoalkeeperId = currentDraft.home.starters.find((playerId) => isGoalkeeperId(playerId))
+      const nextHome = buildBalancedComposition(compositionPlayers, otherMatches, tacticalTokens.length, preferredGoalkeeperId)
       const nextAssignments: Record<string, string> = {}
-      tacticalTokens.forEach((tokenId, index) => {
-        nextAssignments[tokenId] = nextHome.starters[index] || ''
+      for (const tokenId of tacticalTokens) nextAssignments[tokenId] = ''
+      const remainingStarters = nextHome.starters.slice()
+      const goalkeeperSlot = tacticalSlots.find((slot) => slot.role === 'GARDIEN')
+      if (goalkeeperSlot && nextHome.goalkeeperId) {
+        nextAssignments[goalkeeperSlot.id] = nextHome.goalkeeperId
+      }
+      const remainingAfterGoalkeeper = remainingStarters.filter((playerId) => playerId !== nextHome.goalkeeperId)
+      let remainingIndex = 0
+      tacticalTokens.forEach((tokenId) => {
+        if (nextAssignments[tokenId]) return
+        nextAssignments[tokenId] = remainingAfterGoalkeeper[remainingIndex] || ''
+        remainingIndex += 1
       })
       setSlotAssignments(nextAssignments)
       rebuildHomeCompositionFromAssignments(nextAssignments, compositionPlayerIds)
-
-      const currentDraft = draft ?? buildDraft(match)
-      const updated = await apiPut<MatchDetailsData>(apiRoutes.matches.byId(id), {
-        type: match.type,
-        plateauId: match.plateauId ?? undefined,
-        sides: {
-          home: nextHome,
-          away: {
-            starters: currentDraft.away.starters,
-            subs: currentDraft.away.subs,
-          },
-        },
-        score: {
-          home: homeScore,
-          away: awayScore,
-        },
-        buteurs: currentDraft.scorers
-          .filter((s) => s.side === 'home')
-          .map((s) => ({ side: s.side, playerId: s.playerId, assistId: s.assistId })),
-        opponentName: match.opponentName ?? '',
-        played: typeof match.played === 'boolean' ? match.played : !pending,
-        tactic: {
-          preset: tacticalPresetValue,
-          points: tacticalPoints,
-        },
-      })
-      setMatch(updated)
-      setDraft(buildDraft(updated))
       setMatchesOfDay(otherMatches)
     } catch (err: unknown) {
       setAutoComposeError(`Erreur composition auto: ${toErrorMessage(err)}`)
@@ -1140,61 +1228,143 @@ export default function MatchDetailsPage() {
 
       <section className="match-content-grid">
         <article className="match-card">
-          <h3>Composition</h3>
-          <div className="edit-action-group" style={{ marginBottom: 10 }}>
+          <div className="match-details-topbar">
+            <h3>Composition</h3>
             <button type="button" className="edit-secondary" onClick={() => { void autoCompose() }} disabled={autoComposing || compositionPlayers.length === 0}>
-              {autoComposing ? 'Composition...' : 'Composition auto'}
+              {autoComposing ? '...' : 'Auto'}
             </button>
           </div>
-          <div className="lineup-stack">
-            <div className="compo-line-list">
-              {displayedHomeStarters.length > 0 ? (
-                displayedHomeStarters.map((playerId, index) => {
-                  const player = playerById.get(playerId)
-                  const name = player?.name || playerId
-                  const maybeAvatar = getAvatarUrl(player)
-                  return (
-                    <div key={`home-starter-${playerId}-${index}`} className="compo-line-item">
-                      <div className="compo-avatar-chip" title={name}>
-                        {maybeAvatar ? (
-                          <img src={maybeAvatar} alt={name} />
-                        ) : (
-                          <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
-                        )}
-                      </div>
-                      <strong>{name}</strong>
-                    </div>
-                  )
-                })
-              ) : (
-                <p className="muted-inline">Aucun joueur</p>
-              )}
-            </div>
+          <div className="edit-action-group" style={{ marginBottom: 10, justifyContent: 'space-between' }}>
+            {compositionSaving && <span className="muted-inline">Enregistrement...</span>}
           </div>
-          {displayedHomeSubs.length > 0 && (
-            <div className="lineup-stack">
-              <p>Remplaçants</p>
-              <div className="compo-line-list">
-                {displayedHomeSubs.map((playerId, index) => {
-                  const player = playerById.get(playerId)
-                  const name = player?.name || playerId
-                  const maybeAvatar = getAvatarUrl(player)
-                  return (
-                    <div key={`home-sub-${playerId}-${index}`} className="compo-line-item">
-                      <div className="compo-avatar-chip" title={name}>
-                        {maybeAvatar ? (
-                          <img src={maybeAvatar} alt={name} />
+          <div className="lineup-stack">
+            <div className="match-tactical-head">
+              <label htmlFor="match-tactic-select-inline">Tactique</label>
+              <select
+                id="match-tactic-select-inline"
+                value={tacticalPresetValue}
+                onChange={(event) => handleTacticPresetChange(event.target.value)}
+              >
+                <optgroup label="Formations">
+                  {tacticalFormations.map((formation) => (
+                    <option key={formation.key} value={`formation:${formation.key}`}>
+                      {formation.label}
+                    </option>
+                  ))}
+                </optgroup>
+                {savedTactics.length > 0 && (
+                  <optgroup label="Tactiques sauvegardées">
+                    {savedTactics.map((saved) => (
+                      <option key={saved.name} value={`tactic:${saved.name}`}>
+                        {saved.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
+            <div ref={tacticalDragRootRef} className="match-tactical-layout">
+              <div className="match-tactical-roster">
+                <p>Remplaçants</p>
+                <div
+                  data-bench-drop="true"
+                  className={`match-bench-grid ${dragState ? 'is-drop-active' : ''}`}
+                >
+                  {benchPlayers.map((player) => {
+                    const avatar = getAvatarUrl(player)
+                    return (
+                      <button
+                        key={`page-bench-${player.id}`}
+                        type="button"
+                        className="match-player-avatar-token"
+                        title={player.name}
+                        onPointerDown={(event) => handleTokenPointerDown(event, player.id)}
+                        onPointerMove={handleTokenPointerMove}
+                        onPointerUp={handleTokenPointerUp}
+                        onPointerCancel={handleTokenPointerUp}
+                      >
+                        {avatar ? (
+                          <img src={avatar} alt={player.name} />
                         ) : (
-                          <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
+                          <span style={{ background: colorFromName(player.name) }}>{getInitials(player.name)}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                  {benchPlayers.length === 0 && <p className="muted-inline">Tous les joueurs sont placés.</p>}
+                </div>
+              </div>
+
+              <div className="match-tactical-pitch" role="group" aria-label="Composition tactique">
+                <div className="match-tactical-center-line" />
+                <div className="match-tactical-center-circle" />
+                {tacticalSlots.map((slot) => {
+                  const assignedPlayerId = slotAssignments[slot.id] || ''
+                  const assignedPlayer = assignedPlayerId ? playerById.get(assignedPlayerId) : undefined
+                  const assignedAvatar = getAvatarUrl(assignedPlayer)
+                  const assignedName = assignedPlayer?.name || assignedPlayerId
+                  return (
+                    <div
+                      key={`page-slot-${slot.id}`}
+                      data-slot-id={slot.id}
+                      className={`match-tactical-slot ${assignedPlayerId ? 'is-filled' : ''}`}
+                      style={{
+                        left: `calc(${slot.point.x}% - 40px)`,
+                        top: `calc(${slot.point.y}% - 40px)`,
+                      }}
+                    >
+                      <span>{slot.label}</span>
+                      <div className="match-tactical-slot-token">
+                        {assignedPlayerId ? (
+                          <button
+                            type="button"
+                            className="match-player-avatar-token"
+                            title={assignedName}
+                            onPointerDown={(event) => handleTokenPointerDown(event, assignedPlayerId)}
+                            onPointerMove={handleTokenPointerMove}
+                            onPointerUp={handleTokenPointerUp}
+                            onPointerCancel={handleTokenPointerUp}
+                            onDoubleClick={() => unassignPlayer(assignedPlayerId)}
+                          >
+                            {assignedAvatar ? (
+                              <img src={assignedAvatar} alt={assignedName} />
+                            ) : (
+                              <span style={{ background: colorFromName(assignedName) }}>{getInitials(assignedName)}</span>
+                            )}
+                          </button>
+                        ) : (
+                          <span className="match-slot-placeholder">Drop</span>
                         )}
                       </div>
-                      <strong>{name}</strong>
                     </div>
                   )
                 })}
               </div>
+              {dragState && (
+                <div
+                  className="match-drag-ghost"
+                  style={{
+                    left: dragState.x - dragState.offsetX,
+                    top: dragState.y - dragState.offsetY,
+                  }}
+                  aria-hidden="true"
+                >
+                  {(() => {
+                    const player = playerById.get(dragState.playerId)
+                    const avatar = getAvatarUrl(player)
+                    const name = player?.name || dragState.playerId
+                    return avatar ? (
+                      <img src={avatar} alt={name} />
+                    ) : (
+                      <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
+                    )
+                  })()}
+                </div>
+              )}
             </div>
-          )}
+
+          </div>
         </article>
       </section>
 
@@ -1234,7 +1404,7 @@ export default function MatchDetailsPage() {
           <section className="live-tactical-card">
             <div ref={tacticalDragRootRef} className="match-tactical-layout">
               <div className="match-tactical-roster">
-                <p>Joueurs (glisser vers un poste)</p>
+                <p>Remplaçants</p>
                 <div data-bench-drop="true" className={`match-bench-grid ${dragState ? 'is-drop-active' : ''}`}>
                   {benchPlayers.map((player) => {
                     const avatar = getAvatarUrl(player)
@@ -1450,159 +1620,6 @@ export default function MatchDetailsPage() {
                     <button type="button" disabled={!editIsPlayed} onClick={() => setEditAwayScore((v) => v + 1)}>+</button>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="lineup-stack">
-              <p>Composition tactique</p>
-              <div className="match-tactical-head">
-                <label htmlFor="match-tactic-select">Tactique</label>
-                <select
-                  id="match-tactic-select"
-                  value={tacticalPresetValue}
-                  onChange={(event) => handleTacticPresetChange(event.target.value)}
-                >
-                  <optgroup label="Formations">
-                    {tacticalFormations.map((formation) => (
-                      <option key={formation.key} value={`formation:${formation.key}`}>
-                        {formation.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                  {savedTactics.length > 0 && (
-                    <optgroup label="Tactiques sauvegardées">
-                      {savedTactics.map((saved) => (
-                        <option key={saved.name} value={`tactic:${saved.name}`}>
-                          {saved.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-              </div>
-
-              <div ref={tacticalDragRootRef} className="match-tactical-layout">
-                <div className="match-tactical-roster">
-                  <p>Joueurs (glisser vers un poste)</p>
-                  <div
-                    data-bench-drop="true"
-                    className={`match-bench-grid ${dragState ? 'is-drop-active' : ''}`}
-                  >
-                    {benchPlayers.map((player) => {
-                      const avatar = getAvatarUrl(player)
-                      return (
-                        <button
-                          key={`bench-${player.id}`}
-                          type="button"
-                          className="match-player-avatar-token"
-                          title={player.name}
-                          onPointerDown={(event) => handleTokenPointerDown(event, player.id)}
-                          onPointerMove={handleTokenPointerMove}
-                          onPointerUp={handleTokenPointerUp}
-                          onPointerCancel={handleTokenPointerUp}
-                        >
-                          {avatar ? (
-                            <img src={avatar} alt={player.name} />
-                          ) : (
-                            <span style={{ background: colorFromName(player.name) }}>{getInitials(player.name)}</span>
-                          )}
-                        </button>
-                      )
-                    })}
-                    {benchPlayers.length === 0 && <p className="muted-inline">Tous les joueurs sont placés.</p>}
-                  </div>
-                </div>
-
-                <div className="match-tactical-pitch" role="group" aria-label="Composition tactique">
-                  <div className="match-tactical-center-line" />
-                  <div className="match-tactical-center-circle" />
-                  {tacticalSlots.map((slot) => {
-                    const assignedPlayerId = slotAssignments[slot.id] || ''
-                    const assignedPlayer = assignedPlayerId ? playerById.get(assignedPlayerId) : undefined
-                    const assignedAvatar = getAvatarUrl(assignedPlayer)
-                    const assignedName = assignedPlayer?.name || assignedPlayerId
-                    return (
-                      <div
-                        key={slot.id}
-                        data-slot-id={slot.id}
-                        className={`match-tactical-slot ${assignedPlayerId ? 'is-filled' : ''}`}
-                        style={{
-                          left: `calc(${slot.point.x}% - 40px)`,
-                          top: `calc(${slot.point.y}% - 40px)`,
-                        }}
-                      >
-                        <span>{slot.label}</span>
-                        <div className="match-tactical-slot-token">
-                          {assignedPlayerId ? (
-                            <button
-                              type="button"
-                              className="match-player-avatar-token"
-                              title={assignedName}
-                              onPointerDown={(event) => handleTokenPointerDown(event, assignedPlayerId)}
-                              onPointerMove={handleTokenPointerMove}
-                              onPointerUp={handleTokenPointerUp}
-                              onPointerCancel={handleTokenPointerUp}
-                              onDoubleClick={() => unassignPlayer(assignedPlayerId)}
-                            >
-                              {assignedAvatar ? (
-                                <img src={assignedAvatar} alt={assignedName} />
-                              ) : (
-                                <span style={{ background: colorFromName(assignedName) }}>{getInitials(assignedName)}</span>
-                              )}
-                            </button>
-                          ) : (
-                            <span className="match-slot-placeholder">Drop</span>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-                {dragState && (
-                  <div
-                    className="match-drag-ghost"
-                    style={{
-                      left: dragState.x - dragState.offsetX,
-                      top: dragState.y - dragState.offsetY,
-                    }}
-                    aria-hidden="true"
-                  >
-                    {(() => {
-                      const player = playerById.get(dragState.playerId)
-                      const avatar = getAvatarUrl(player)
-                      const name = player?.name || dragState.playerId
-                      return avatar ? (
-                        <img src={avatar} alt={name} />
-                      ) : (
-                        <span style={{ background: colorFromName(name) }}>{getInitials(name)}</span>
-                      )
-                    })()}
-                  </div>
-                )}
-              </div>
-
-              <div className="lineup-stack">
-                <p>Titulaires</p>
-                <ul>
-                  {displayedHomeStarters.map((playerId, index) => (
-                    <li key={`modal-home-starter-${playerId}-${index}`}>
-                      <span>{playerNameById.get(playerId) || playerId}</span>
-                    </li>
-                  ))}
-                  {displayedHomeStarters.length === 0 && <li>Aucun joueur</li>}
-                </ul>
-              </div>
-
-              <div className="lineup-stack">
-                <p>Remplaçants automatiques</p>
-                <ul>
-                  {displayedHomeSubs.map((playerId, index) => (
-                    <li key={`modal-home-sub-${playerId}-${index}`}>
-                      <span>{playerNameById.get(playerId) || playerId}</span>
-                    </li>
-                  ))}
-                  {displayedHomeSubs.length === 0 && <li>Aucun remplaçant</li>}
-                </ul>
               </div>
             </div>
 

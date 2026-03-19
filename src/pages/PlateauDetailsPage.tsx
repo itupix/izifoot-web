@@ -14,6 +14,8 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { applyAttendanceValue, extractPresentPlayerIds, persistAttendanceToggle } from '../features/attendance'
+import { readDefaultTactic } from '../features/defaultTactic'
+import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchNotPlayed as isPendingMatch } from '../matchStatus'
 import { useAuth } from '../useAuth'
@@ -108,7 +110,7 @@ function findPlanningTeamLabel(labels: string[], preferredNames: string[]) {
 
 export default function PlateauDetailsPage() {
   const { me } = useAuth()
-  const { selectedTeamId, requiresSelection, teamOptions } = useTeamScope()
+  const { selectedTeamId, selectedTeamFormat, requiresSelection, teamOptions } = useTeamScope()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -258,6 +260,16 @@ export default function PlateauDetailsPage() {
       }),
     }))
   }, [clubName, plateau?.teamId, plateauMatches, plateauPlanningTeams, selectedTeamId, teamOptions, visiblePlanningSlots])
+  const defaultMatchTactic = useMemo(() => {
+    const teamId = selectedTeamId || plateau?.teamId || null
+    const playersOnField = playersOnFieldFromGameFormat(selectedTeamFormat, 5)
+    const saved = readDefaultTactic(teamId, playersOnField)
+    if (!saved) return undefined
+    return {
+      preset: saved.preset,
+      points: saved.points,
+    }
+  }, [plateau?.teamId, selectedTeamFormat, selectedTeamId])
   const rotationDisplaySlots = useMemo(() => (
     visibleRotationMatches.map((slot) => ({
       key: slot.time,
@@ -626,11 +638,12 @@ export default function PlateauDetailsPage() {
             sides: {
               home: { starters: [], subs: [] },
               away: { starters: [], subs: [] },
-          },
+            },
             score: { home: 0, away: 0 },
             buteurs: [],
             opponentName: matchItem.opponent,
             played: false,
+            tactic: defaultMatchTactic,
           })
         )
       )
@@ -712,6 +725,7 @@ export default function PlateauDetailsPage() {
         buteurs: isMatchNotPlayed ? [] : scorers.map((playerId) => ({ playerId, side: 'home' as const })),
         opponentName: opponentName.trim(),
         played: !isMatchNotPlayed,
+        ...(!editingMatchId ? { tactic: defaultMatchTactic } : {}),
       }
       if (editingMatchId) {
         const updated = await apiPut<MatchLite>(apiRoutes.matches.byId(editingMatchId), payload)

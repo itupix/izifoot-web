@@ -6,6 +6,7 @@ import { apiDelete, apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
+import { readDefaultTactic, saveDefaultTactic } from '../features/defaultTactic'
 import { buildPointsMap, buildTacticalFormations, buildTacticalTokens, type TacticalPoint } from '../features/tactical'
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
@@ -179,6 +180,7 @@ export default function PlayersPage() {
   )
   const [tacticName, setTacticName] = useState('Mon systeme')
   const [savedTactics, setSavedTactics] = useState<SavedTactic[]>([])
+  const [defaultTacticSignature, setDefaultTacticSignature] = useState('')
   const [tacticalPoints, setTacticalPoints] = useState<Record<string, TacticalPoint>>(() => normalizePointsMap(
     tacticalTokens,
     buildPointsMap(tacticalTokens, defaultFormation?.points || []),
@@ -249,6 +251,10 @@ export default function PlayersPage() {
   const hasActiveFilters = Boolean(q.trim() || posFilter)
   const playersCountLabel = sortedPlayers.length === 1 ? '1 joueur' : `${sortedPlayers.length} joueurs`
   const canSaveTactic = tacticName.trim().length > 0
+  const currentTacticSignature = useMemo(
+    () => JSON.stringify({ preset: tacticalPresetValue, points: tacticalPoints }),
+    [tacticalPoints, tacticalPresetValue],
+  )
 
   useEffect(() => {
     if (!defaultFormation) return
@@ -276,6 +282,12 @@ export default function PlayersPage() {
       setTacticalFormation(defaultFormation.key)
       setTacticalPresetValue(`formation:${defaultFormation.key}`)
       setTacticalPoints(normalizePointsMap(tacticalTokens, buildPointsMap(tacticalTokens, defaultFormation.points)))
+      const fallbackDefault = readDefaultTactic(selectedTeamId, playersOnField)
+      if (fallbackDefault) {
+        setDefaultTacticSignature(JSON.stringify({ preset: fallbackDefault.preset, points: fallbackDefault.points }))
+      } else {
+        setDefaultTacticSignature('')
+      }
       return
     }
     try {
@@ -312,10 +324,17 @@ export default function PlayersPage() {
       if (parsed.name && parsedLibrary.some((item) => item.name === parsed.name)) {
         setTacticalPresetValue(`tactic:${parsed.name}`)
       }
+      const savedDefault = readDefaultTactic(selectedTeamId, playersOnField)
+      if (savedDefault) {
+        setDefaultTacticSignature(JSON.stringify({ preset: savedDefault.preset, points: savedDefault.points }))
+      } else {
+        setDefaultTacticSignature('')
+      }
     } catch {
       setTacticalFormation(defaultFormation.key)
       setTacticalPresetValue(`formation:${defaultFormation.key}`)
       setTacticalPoints(normalizePointsMap(tacticalTokens, buildPointsMap(tacticalTokens, defaultFormation.points)))
+      setDefaultTacticSignature('')
     }
   }, [defaultFormation, playersOnField, selectedTeamId, tacticalFormations, tacticalTokens])
 
@@ -488,6 +507,24 @@ export default function PlayersPage() {
     if (value.startsWith('tactic:')) {
       loadSavedTacticByName(value.replace('tactic:', ''))
     }
+  }
+
+  function setCurrentTacticAsDefault() {
+    const normalizedName = tacticName.trim() || 'Tactique'
+    const formation = tacticalPresetValue.startsWith('formation:')
+      ? tacticalPresetValue.replace('formation:', '')
+      : tacticalFormation
+    const payload = {
+      name: normalizedName,
+      formation,
+      preset: tacticalPresetValue,
+      points: tacticalPoints,
+      savedAt: new Date().toISOString(),
+      playersOnField,
+    }
+    saveDefaultTactic(selectedTeamId, payload)
+    setDefaultTacticSignature(JSON.stringify({ preset: payload.preset, points: payload.points }))
+    uiAlert('Tactique par défaut enregistrée.')
   }
 
   return (
@@ -688,6 +725,14 @@ export default function PlayersPage() {
             </select>
             <button type="button" className="players-primary-btn" onClick={saveCurrentTacticalScheme} disabled={!canSaveTactic}>
               Sauvegarder
+            </button>
+            <button
+              type="button"
+              className="players-secondary-btn"
+              onClick={setCurrentTacticAsDefault}
+              disabled={defaultTacticSignature === currentTacticSignature}
+            >
+              Par défaut
             </button>
           </div>
           <TacticalBoard

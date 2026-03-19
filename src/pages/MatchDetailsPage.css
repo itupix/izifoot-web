@@ -480,6 +480,12 @@
   color: #0f172a;
 }
 
+.match-tactical-overview {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .match-tactical-layout {
   position: relative;
   display: grid;
@@ -598,6 +604,11 @@
 
 .match-player-avatar-token:active {
   cursor: grabbing;
+}
+
+.match-player-avatar-token.is-static {
+  cursor: default;
+  touch-action: auto;
 }
 
 .match-player-avatar-token img,
@@ -817,6 +828,10 @@
   padding: 8px 10px;
   font: inherit;
   background: #fff;
+}
+
+.match-tactical-pitch--compact {
+  height: 320px;
 }
 
 @media (max-width: 760px) {
