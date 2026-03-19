@@ -29,6 +29,7 @@ type PlateauSummaryResponse = {
   plateau: Plateau
   convocations: PlateauConvocation[]
   playersById?: Record<string, Player>
+  matches?: MatchLite[]
 }
 
 type SavedTactic = {
@@ -152,6 +153,69 @@ type LiveMatchEvent = {
   outPlayerId?: string
 }
 
+const STARTER_LOAD_WEIGHT = 1
+const SUB_LOAD_WEIGHT = 0.45
+
+function toDayKey(value: string | null | undefined): string {
+  if (!value) return ''
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  const year = parsed.getFullYear()
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  const day = String(parsed.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function computePlayerDayLoad(otherMatches: MatchLite[], eligiblePlayerIds: Set<string>) {
+  const loadByPlayerId = new Map<string, number>()
+  for (const playerId of eligiblePlayerIds) {
+    loadByPlayerId.set(playerId, 0)
+  }
+
+  for (const match of otherMatches) {
+    const matchLoad = new Map<string, number>()
+    for (const team of match.teams || []) {
+      for (const row of team.players || []) {
+        const playerId = row.playerId || row.player?.id
+        if (!playerId || !eligiblePlayerIds.has(playerId)) continue
+        const contribution = row.role === 'sub' ? SUB_LOAD_WEIGHT : STARTER_LOAD_WEIGHT
+        const previous = matchLoad.get(playerId) ?? 0
+        if (contribution > previous) matchLoad.set(playerId, contribution)
+      }
+    }
+    for (const [playerId, contribution] of matchLoad.entries()) {
+      loadByPlayerId.set(playerId, (loadByPlayerId.get(playerId) ?? 0) + contribution)
+    }
+  }
+
+  return loadByPlayerId
+}
+
+function buildBalancedComposition(
+  eligiblePlayers: Player[],
+  otherMatches: MatchLite[],
+  startersTargetCount: number,
+) {
+  const eligibleSet = new Set(eligiblePlayers.map((player) => player.id))
+  const loadByPlayerId = computePlayerDayLoad(otherMatches, eligibleSet)
+  const ordered = eligiblePlayers
+    .slice()
+    .sort((a, b) => {
+      const aLoad = loadByPlayerId.get(a.id) ?? 0
+      const bLoad = loadByPlayerId.get(b.id) ?? 0
+      if (aLoad !== bLoad) return aLoad - bLoad
+      return a.name.localeCompare(b.name)
+    })
+
+  const starters = ordered.slice(0, startersTargetCount).map((player) => player.id)
+  const starterSet = new Set(starters)
+  const subs = ordered
+    .filter((player) => !starterSet.has(player.id))
+    .map((player) => player.id)
+
+  return { starters, subs }
+}
+
 function readBackendTactic(match: MatchDetailsData): BackendMatchTactic | null {
   const source = (
     (match as MatchDetailsData & { tactic?: unknown }).tactic
@@ -178,6 +242,7 @@ export default function MatchDetailsPage() {
 
   const [match, setMatch] = useState<MatchDetailsData | null>(null)
   const [plateauDateISO, setPlateauDateISO] = useState<string>('')
+  const [matchesOfDay, setMatchesOfDay] = useState<MatchLite[]>([])
   const [clubName, setClubName] = useState<string>('Club')
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauPlayerIds, setPlateauPlayerIds] = useState<string[]>([])
@@ -218,6 +283,8 @@ export default function MatchDetailsPage() {
   const [goalScorerId, setGoalScorerId] = useState('')
   const [goalAssistId, setGoalAssistId] = useState('')
   const [liveSaving, setLiveSaving] = useState(false)
+  const [autoComposing, setAutoComposing] = useState(false)
+  const [autoComposeError, setAutoComposeError] = useState<string | null>(null)
 
   const loadMatch = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
@@ -230,6 +297,7 @@ export default function MatchDetailsPage() {
     let plateauSummary: PlateauSummaryResponse | null = null
     let nextPlateauDateISO = ''
     let nextPlateauPlayerIds: string[] = []
+    let nextMatchesOfDay: MatchLite[] = []
     if (payload.plateauId) {
       plateauSummary = await apiGet<PlateauSummaryResponse>(apiRoutes.plateaus.summary(payload.plateauId)).catch(() => null)
       if (plateauSummary?.plateau?.date) nextPlateauDateISO = plateauSummary.plateau.date
@@ -242,6 +310,11 @@ export default function MatchDetailsPage() {
           .map((convocation) => convocation.player?.id)
           .filter((playerId): playerId is string => Boolean(playerId)),
       ))
+      nextMatchesOfDay = (plateauSummary?.matches || []).filter((matchItem) => matchItem.id !== payload.id)
+    } else {
+      const allMatches = await apiGet<MatchLite[]>(apiRoutes.matches.list).catch(() => [])
+      const dayKey = toDayKey(payload.createdAt)
+      nextMatchesOfDay = allMatches.filter((matchItem) => matchItem.id !== payload.id && toDayKey(matchItem.createdAt) === dayKey)
     }
 
     if (isCancelled()) return
@@ -273,6 +346,7 @@ export default function MatchDetailsPage() {
     setPlayers(Array.from(playersMap.values()))
     setPlateauDateISO(nextPlateauDateISO)
     setPlateauPlayerIds(nextPlateauPlayerIds)
+    setMatchesOfDay(nextMatchesOfDay)
     if (club?.name?.trim()) setClubName(club.name.trim())
   }, [defaultFormation?.key, id, tacticalFormations, tacticalTokens])
 
@@ -912,6 +986,66 @@ export default function MatchDetailsPage() {
     }
   }
 
+  async function autoCompose() {
+    if (!match || !id || compositionPlayers.length === 0) return
+    setAutoComposeError(null)
+    setAutoComposing(true)
+    try {
+      let otherMatches = matchesOfDay
+      if (match.plateauId) {
+        const summary = await apiGet<PlateauSummaryResponse>(apiRoutes.plateaus.summary(match.plateauId)).catch(() => null)
+        if (summary?.matches) {
+          otherMatches = summary.matches.filter((matchItem) => matchItem.id !== match.id)
+        }
+      } else {
+        const allMatches = await apiGet<MatchLite[]>(apiRoutes.matches.list).catch(() => [])
+        const dayKey = toDayKey(match.createdAt)
+        otherMatches = allMatches.filter((matchItem) => matchItem.id !== match.id && toDayKey(matchItem.createdAt) === dayKey)
+      }
+
+      const nextHome = buildBalancedComposition(compositionPlayers, otherMatches, tacticalTokens.length)
+      const nextAssignments: Record<string, string> = {}
+      tacticalTokens.forEach((tokenId, index) => {
+        nextAssignments[tokenId] = nextHome.starters[index] || ''
+      })
+      setSlotAssignments(nextAssignments)
+      rebuildHomeCompositionFromAssignments(nextAssignments, compositionPlayerIds)
+
+      const currentDraft = draft ?? buildDraft(match)
+      const updated = await apiPut<MatchDetailsData>(apiRoutes.matches.byId(id), {
+        type: match.type,
+        plateauId: match.plateauId ?? undefined,
+        sides: {
+          home: nextHome,
+          away: {
+            starters: currentDraft.away.starters,
+            subs: currentDraft.away.subs,
+          },
+        },
+        score: {
+          home: homeScore,
+          away: awayScore,
+        },
+        buteurs: currentDraft.scorers
+          .filter((s) => s.side === 'home')
+          .map((s) => ({ side: s.side, playerId: s.playerId, assistId: s.assistId })),
+        opponentName: match.opponentName ?? '',
+        played: typeof match.played === 'boolean' ? match.played : !pending,
+        tactic: {
+          preset: tacticalPresetValue,
+          points: tacticalPoints,
+        },
+      })
+      setMatch(updated)
+      setDraft(buildDraft(updated))
+      setMatchesOfDay(otherMatches)
+    } catch (err: unknown) {
+      setAutoComposeError(`Erreur composition auto: ${toErrorMessage(err)}`)
+    } finally {
+      setAutoComposing(false)
+    }
+  }
+
   async function deleteMatch() {
     if (!id) return
     setDeleting(true)
@@ -1007,6 +1141,11 @@ export default function MatchDetailsPage() {
       <section className="match-content-grid">
         <article className="match-card">
           <h3>Composition</h3>
+          <div className="edit-action-group" style={{ marginBottom: 10 }}>
+            <button type="button" className="edit-secondary" onClick={() => { void autoCompose() }} disabled={autoComposing || compositionPlayers.length === 0}>
+              {autoComposing ? 'Composition...' : 'Composition auto'}
+            </button>
+          </div>
           <div className="lineup-stack">
             <div className="compo-line-list">
               {displayedHomeStarters.length > 0 ? (
@@ -1529,6 +1668,22 @@ export default function MatchDetailsPage() {
               <button type="button" className="edit-primary" onClick={() => void deleteMatch()} disabled={deleting}>
                 {deleting ? 'Suppression...' : 'Supprimer'}
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {autoComposeError && (
+        <>
+          <div className="modal-overlay" onClick={() => setAutoComposeError(null)} />
+          <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Erreur composition auto">
+            <div className="drill-modal-head">
+              <h3>Erreur</h3>
+              <button type="button" onClick={() => setAutoComposeError(null)}>✕</button>
+            </div>
+            <p className="muted-line">{autoComposeError}</p>
+            <div className="edit-action-group">
+              <button type="button" className="edit-primary" onClick={() => setAutoComposeError(null)}>Fermer</button>
             </div>
           </div>
         </>
