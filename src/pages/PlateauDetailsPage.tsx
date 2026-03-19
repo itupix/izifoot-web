@@ -32,6 +32,7 @@ const TEAM_COLORS = [
 ]
 
 const PLATEAU_PLANNING_MAP_KEY = 'izifoot.plateauPlanningMap'
+const PLATEAU_ROTATION_TEAM_FILTER_KEY = 'izifoot.plateauRotationTeamFilter'
 
 function readPlateauPlanningMap() {
   if (typeof window === 'undefined') return {} as Record<string, string>
@@ -67,6 +68,34 @@ function clearPlateauPlanningLink(plateauId: string) {
   const rest = { ...current }
   delete rest[plateauId]
   writePlateauPlanningMap(rest)
+}
+
+function readPlateauRotationTeamFilterMap() {
+  if (typeof window === 'undefined') return {} as Record<string, string>
+  try {
+    const raw = window.localStorage.getItem(PLATEAU_ROTATION_TEAM_FILTER_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function writePlateauRotationTeamFilterMap(next: Record<string, string>) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(PLATEAU_ROTATION_TEAM_FILTER_KEY, JSON.stringify(next))
+}
+
+function getPlateauRotationTeamFilter(plateauId: string) {
+  const current = readPlateauRotationTeamFilterMap()
+  return current[plateauId] || ''
+}
+
+function setPlateauRotationTeamFilter(plateauId: string, teamLabel: string) {
+  const current = readPlateauRotationTeamFilterMap()
+  writePlateauRotationTeamFilterMap({ ...current, [plateauId]: teamLabel })
 }
 
 function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
@@ -260,6 +289,18 @@ export default function PlateauDetailsPage() {
       }),
     }))
   }, [clubName, plateau?.teamId, plateauMatches, plateauPlanningTeams, selectedTeamId, teamOptions, visiblePlanningSlots])
+
+  useEffect(() => {
+    if (!id) return
+    const saved = getPlateauRotationTeamFilter(id)
+    if (!saved) return
+    setSelectedPlanningTeam(saved)
+  }, [id])
+
+  useEffect(() => {
+    if (!id) return
+    setPlateauRotationTeamFilter(id, selectedPlanningTeam)
+  }, [id, selectedPlanningTeam])
   const defaultMatchTactic = useMemo(() => {
     const teamId = selectedTeamId || plateau?.teamId || null
     const playersOnField = playersOnFieldFromGameFormat(selectedTeamFormat, 5)

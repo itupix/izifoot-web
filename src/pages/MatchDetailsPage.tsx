@@ -153,6 +153,8 @@ type LiveMatchEvent = {
   outPlayerId?: string
 }
 
+const LIVE_MATCH_STATE_STORAGE_KEY = 'izifoot.liveMatchStateByMatchId'
+
 const STARTER_LOAD_WEIGHT = 1
 const SUB_LOAD_WEIGHT = 0.45
 
@@ -234,6 +236,57 @@ function buildBalancedComposition(
   return { starters, subs, goalkeeperId: selectedGoalkeeper?.id }
 }
 
+type PersistedLiveMatchState = {
+  isOpen: boolean
+  phase: 'setup' | 'running' | 'ended'
+  durationMinutes: number
+  remainingSeconds: number
+  homeScore: number
+  awayScore: number
+  events: LiveMatchEvent[]
+  slotAssignments: Record<string, string>
+  homeStarters: string[]
+  homeSubs: string[]
+  scorers: Array<{ playerId: string; side: 'home' | 'away'; assistId?: string }>
+  savedAt: number
+}
+
+function readLiveMatchStateMap() {
+  if (typeof window === 'undefined') return {} as Record<string, PersistedLiveMatchState>
+  try {
+    const raw = window.localStorage.getItem(LIVE_MATCH_STATE_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed as Record<string, PersistedLiveMatchState>
+  } catch {
+    return {}
+  }
+}
+
+function writeLiveMatchStateMap(next: Record<string, PersistedLiveMatchState>) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LIVE_MATCH_STATE_STORAGE_KEY, JSON.stringify(next))
+}
+
+function getPersistedLiveMatchState(matchId: string): PersistedLiveMatchState | null {
+  const current = readLiveMatchStateMap()
+  return current[matchId] || null
+}
+
+function setPersistedLiveMatchState(matchId: string, value: PersistedLiveMatchState) {
+  const current = readLiveMatchStateMap()
+  writeLiveMatchStateMap({ ...current, [matchId]: value })
+}
+
+function clearPersistedLiveMatchState(matchId: string) {
+  const current = readLiveMatchStateMap()
+  if (!current[matchId]) return
+  const next = { ...current }
+  delete next[matchId]
+  writeLiveMatchStateMap(next)
+}
+
 function readBackendTactic(match: MatchDetailsData): BackendMatchTactic | null {
   const source = (
     (match as MatchDetailsData & { tactic?: unknown }).tactic
@@ -290,6 +343,7 @@ export default function MatchDetailsPage() {
   } | null>(null)
   const tacticalDragRootRef = useRef<HTMLDivElement | null>(null)
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null)
+  const liveRestoreAttemptedRef = useRef<string | null>(null)
   const [isPlayOverlayOpen, setIsPlayOverlayOpen] = useState(false)
   const [playPhase, setPlayPhase] = useState<'setup' | 'running' | 'ended'>('setup')
   const [playDurationMinutes, setPlayDurationMinutes] = useState(10)
@@ -301,6 +355,7 @@ export default function MatchDetailsPage() {
   const [goalScorerId, setGoalScorerId] = useState('')
   const [goalAssistId, setGoalAssistId] = useState('')
   const [liveSaving, setLiveSaving] = useState(false)
+  const [isLiveQuitConfirmOpen, setIsLiveQuitConfirmOpen] = useState(false)
   const [autoComposing, setAutoComposing] = useState(false)
   const [autoComposeError, setAutoComposeError] = useState<string | null>(null)
   const [compositionSaving, setCompositionSaving] = useState(false)
@@ -567,6 +622,7 @@ export default function MatchDetailsPage() {
     () => compositionPlayers.filter((player) => assignedPlayerIds.includes(player.id)),
     [compositionPlayers, assignedPlayerIds],
   )
+  const liveEventsChrono = useMemo(() => liveEvents.slice().sort((a, b) => a.minute - b.minute), [liveEvents])
   const compositionSaveSnapshot = useMemo(() => {
     if (!draft) return null
     const sanitizedHomeStarters = draft.home.starters
@@ -594,6 +650,81 @@ export default function MatchDetailsPage() {
       scorers: draft.scorers,
     }
   }, [draft, eligiblePlayerIdSet, tacticalTokens.length, tacticalPresetValue, tacticalPoints])
+
+  useEffect(() => {
+    if (!id || !match || !draft) return
+    if (liveRestoreAttemptedRef.current === id) return
+    liveRestoreAttemptedRef.current = id
+    const persisted = getPersistedLiveMatchState(id)
+    if (!persisted?.isOpen) return
+
+    const elapsedSeconds = persisted.phase === 'running'
+      ? Math.max(0, Math.floor((Date.now() - (persisted.savedAt || Date.now())) / 1000))
+      : 0
+    const restoredRemaining = persisted.phase === 'running'
+      ? Math.max(0, persisted.remainingSeconds - elapsedSeconds)
+      : persisted.remainingSeconds
+    const restoredPhase: 'setup' | 'running' | 'ended' =
+      persisted.phase === 'running' && restoredRemaining <= 0
+        ? 'ended'
+        : persisted.phase
+
+    const availableSet = new Set(compositionPlayerIds)
+    const starters = Array.from(new Set(
+      tacticalTokens
+        .map((tokenId) => persisted.slotAssignments?.[tokenId])
+        .filter((playerId): playerId is string => Boolean(playerId) && availableSet.has(playerId)),
+    )).slice(0, tacticalTokens.length)
+    const starterSet = new Set(starters)
+    const subs = compositionPlayerIds.filter((playerId) => !starterSet.has(playerId))
+
+    setDraft((prev) => ({
+      home: { starters, subs },
+      away: prev?.away ?? draft.away,
+      scorers: Array.isArray(persisted.scorers) ? persisted.scorers : (prev?.scorers ?? []),
+    }))
+    setSlotAssignments(persisted.slotAssignments || {})
+    setPlayDurationMinutes(Math.max(1, persisted.durationMinutes || 10))
+    setPlayRemainingSeconds(restoredRemaining)
+    setPlayHomeScore(Math.max(0, persisted.homeScore || 0))
+    setPlayAwayScore(Math.max(0, persisted.awayScore || 0))
+    setLiveEvents(Array.isArray(persisted.events) ? persisted.events : [])
+    setPlayPhase(restoredPhase)
+    setGoalScorerId('')
+    setGoalAssistId('')
+    setGoalModalOpen(false)
+    setIsLiveQuitConfirmOpen(false)
+    setIsPlayOverlayOpen(true)
+  }, [compositionPlayerIds, draft, id, match, tacticalTokens])
+
+  useEffect(() => {
+    if (!id || !draft || !isPlayOverlayOpen) return
+    setPersistedLiveMatchState(id, {
+      isOpen: true,
+      phase: playPhase,
+      durationMinutes: playDurationMinutes,
+      remainingSeconds: playRemainingSeconds,
+      homeScore: playHomeScore,
+      awayScore: playAwayScore,
+      events: liveEvents,
+      slotAssignments,
+      homeStarters: draft.home.starters,
+      homeSubs: draft.home.subs,
+      scorers: draft.scorers,
+      savedAt: Date.now(),
+    })
+  }, [
+    draft,
+    id,
+    isPlayOverlayOpen,
+    liveEvents,
+    playAwayScore,
+    playDurationMinutes,
+    playHomeScore,
+    playPhase,
+    playRemainingSeconds,
+    slotAssignments,
+  ])
 
   useEffect(() => {
     setSlotAssignments((prev) => {
@@ -783,6 +914,7 @@ export default function MatchDetailsPage() {
     setGoalScorerId('')
     setGoalAssistId('')
     setGoalModalOpen(false)
+    setIsLiveQuitConfirmOpen(false)
     setIsPlayOverlayOpen(true)
   }
 
@@ -821,13 +953,17 @@ export default function MatchDetailsPage() {
     setGoalAssistId('')
   }
 
-  async function closePlayOverlay() {
+  async function closePlayOverlay(options?: { markAsPlayed?: boolean }) {
+    const markAsPlayed = options?.markAsPlayed === true
     if (!match || !id || !draft) {
+      setIsLiveQuitConfirmOpen(false)
       setIsPlayOverlayOpen(false)
       return
     }
-    if (playPhase !== 'ended') {
+    if (!markAsPlayed) {
+      setIsLiveQuitConfirmOpen(false)
       setIsPlayOverlayOpen(false)
+      clearPersistedLiveMatchState(id)
       return
     }
     setLiveSaving(true)
@@ -870,7 +1006,22 @@ export default function MatchDetailsPage() {
     } finally {
       setLiveSaving(false)
     }
+    setIsLiveQuitConfirmOpen(false)
     setIsPlayOverlayOpen(false)
+    clearPersistedLiveMatchState(id)
+  }
+
+  function handleLiveCloseAction() {
+    if (liveSaving) return
+    if (playPhase === 'ended') {
+      void closePlayOverlay({ markAsPlayed: true })
+      return
+    }
+    if (playPhase === 'setup') {
+      void closePlayOverlay()
+      return
+    }
+    setIsLiveQuitConfirmOpen(true)
   }
 
   function handleTacticPresetChange(value: string) {
@@ -1372,7 +1523,7 @@ export default function MatchDetailsPage() {
         <div className="live-overlay" role="dialog" aria-modal="true" aria-label="Jouer le match">
           <div className="live-overlay-head">
             <h2>Match en direct</h2>
-            <button type="button" onClick={() => { void closePlayOverlay() }} disabled={liveSaving}>
+            <button type="button" onClick={handleLiveCloseAction} disabled={liveSaving}>
               {playPhase === 'ended' ? 'Fermer' : 'Quitter'}
             </button>
           </div>
@@ -1398,6 +1549,92 @@ export default function MatchDetailsPage() {
                   </button>
                 </div>
               </div>
+            </section>
+          )}
+
+          {playPhase === 'setup' && (
+            <div className="live-action-row">
+              <button type="button" className="edit-primary live-cta" onClick={startKickoff}>
+                Coup d'envoi
+              </button>
+            </div>
+          )}
+
+          {playPhase === 'running' && (
+            <>
+              <section className="live-running-card">
+                <div className="live-score-line">
+                  <strong>{playHomeScore}</strong>
+                  <span>-</span>
+                  <strong>{playAwayScore}</strong>
+                </div>
+                <div className="live-clock">{formatClock(playRemainingSeconds)}</div>
+              </section>
+              <div className="live-action-row">
+                <button type="button" className="edit-primary live-goal-btn" onClick={openGoalForModal}>
+                  But marqué
+                </button>
+                <button type="button" className="edit-secondary live-goal-btn" onClick={recordGoalAgainst}>
+                  But encaissé
+                </button>
+              </div>
+            </>
+          )}
+
+          {(playPhase === 'running' || playPhase === 'ended') && (
+            <section className="live-events-card">
+              <h3>Événements</h3>
+              {liveEventsChrono.length === 0 ? (
+                <p className="muted-inline">Aucun événement pour le moment.</p>
+              ) : (
+                <ul className="live-events-list">
+                  {liveEventsChrono.map((event) => {
+                    if (event.type === 'SUBSTITUTION') {
+                      const outName = event.outPlayerId ? (playerNameById.get(event.outPlayerId) || event.outPlayerId) : ''
+                      const inName = event.inPlayerId ? (playerNameById.get(event.inPlayerId) || event.inPlayerId) : ''
+                      return (
+                        <li key={event.id} className="live-event-item">
+                          <span className="live-event-minute">{event.minute}'</span>
+                          <div className="live-event-content">
+                            <strong>Changement</strong>
+                            <div className="live-sub-row">
+                              <span className="live-event-arrow is-out" aria-hidden="true">▼</span>
+                              <span>{outName || 'Aucun sortant'}</span>
+                            </div>
+                            <div className="live-sub-row">
+                              <span className="live-event-arrow is-in" aria-hidden="true">▲</span>
+                              <span>{inName || 'Aucun entrant'}</span>
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    }
+
+                    if (event.type === 'GOAL_FOR') {
+                      const scorerName = event.scorerId ? (playerNameById.get(event.scorerId) || event.scorerId) : 'Nous'
+                      const assistName = event.assistId ? (playerNameById.get(event.assistId) || event.assistId) : ''
+                      return (
+                        <li key={event.id} className="live-event-item">
+                          <span className="live-event-minute">{event.minute}'</span>
+                          <div className="live-event-content">
+                            <strong>⚽ But marqué</strong>
+                            <span>{assistName ? `${scorerName} (${assistName})` : scorerName}</span>
+                          </div>
+                        </li>
+                      )
+                    }
+
+                    return (
+                      <li key={event.id} className="live-event-item">
+                        <span className="live-event-minute">{event.minute}'</span>
+                        <div className="live-event-content">
+                          <strong>But encaissé</strong>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </section>
           )}
 
@@ -1500,44 +1737,13 @@ export default function MatchDetailsPage() {
             </div>
           </section>
 
-          {playPhase === 'setup' && (
-            <div className="live-action-row">
-              <button type="button" className="edit-primary live-cta" onClick={startKickoff}>
-                Coup d'envoi
-              </button>
-            </div>
-          )}
-
-          {playPhase === 'running' && (
-            <>
-              <section className="live-running-card">
-                <div className="live-score-line">
-                  <strong>{playHomeScore}</strong>
-                  <span>-</span>
-                  <strong>{playAwayScore}</strong>
-                </div>
-                <div className="live-clock">{formatClock(playRemainingSeconds)}</div>
-                <p className="muted-inline">{liveEvents.length} événement(s)</p>
-              </section>
-              <div className="live-action-row">
-                <button type="button" className="edit-primary live-goal-btn" onClick={openGoalForModal}>
-                  But marqué
-                </button>
-                <button type="button" className="edit-secondary live-goal-btn" onClick={recordGoalAgainst}>
-                  But encaissé
-                </button>
-              </div>
-            </>
-          )}
-
           {playPhase === 'ended' && (
             <section className="live-end-card">
               <p className="live-end-result">
                 {playHomeScore > playAwayScore ? 'Victoire' : playHomeScore < playAwayScore ? 'Défaite' : 'Match nul'}
               </p>
               <p className="live-end-score">{playHomeScore} - {playAwayScore}</p>
-              <p className="muted-inline">{liveEvents.length} événement(s) enregistrés</p>
-              <button type="button" className="edit-primary live-cta" onClick={() => { void closePlayOverlay() }} disabled={liveSaving}>
+              <button type="button" className="edit-primary live-cta" onClick={() => { void closePlayOverlay({ markAsPlayed: true }) }} disabled={liveSaving}>
                 {liveSaving ? 'Enregistrement...' : 'Retour au match'}
               </button>
             </section>
@@ -1574,6 +1780,25 @@ export default function MatchDetailsPage() {
                 <div className="edit-action-group">
                   <button type="button" className="edit-secondary" onClick={() => setGoalModalOpen(false)}>Annuler</button>
                   <button type="button" className="edit-primary" onClick={confirmGoalFor} disabled={!goalScorerId}>Valider</button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {isLiveQuitConfirmOpen && (
+            <>
+              <div className="modal-overlay" onClick={() => setIsLiveQuitConfirmOpen(false)} />
+              <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Confirmer la sortie du match live">
+                <div className="drill-modal-head">
+                  <h3>Quitter le match ?</h3>
+                  <button type="button" onClick={() => setIsLiveQuitConfirmOpen(false)} disabled={liveSaving}>✕</button>
+                </div>
+                <p className="muted-line">Si vous confirmez, le match sera considéré comme joué et enregistré.</p>
+                <div className="edit-action-group">
+                  <button type="button" className="edit-secondary" onClick={() => setIsLiveQuitConfirmOpen(false)} disabled={liveSaving}>Annuler</button>
+                  <button type="button" className="edit-primary" onClick={() => { void closePlayOverlay({ markAsPlayed: true }) }} disabled={liveSaving}>
+                    {liveSaving ? 'Enregistrement...' : 'Confirmer'}
+                  </button>
                 </div>
               </div>
             </>
