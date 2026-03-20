@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPut, apiUrl } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -251,6 +251,18 @@ type PersistedLiveMatchState = {
   savedAt: number
 }
 
+type MatchPageSnapshot = {
+  match: MatchDetailsData
+  draft: MatchDraft
+  players: Player[]
+  plateauDateISO: string
+  plateauPlayerIds: string[]
+  matchesOfDay: MatchLite[]
+  tacticalPresetValue: string
+  tacticalPoints: Record<string, TacticalPoint>
+  clubName: string
+}
+
 function readLiveMatchStateMap() {
   if (typeof window === 'undefined') return {} as Record<string, PersistedLiveMatchState>
   try {
@@ -314,9 +326,11 @@ export default function MatchDetailsPage() {
   const [match, setMatch] = useState<MatchDetailsData | null>(null)
   const [plateauDateISO, setPlateauDateISO] = useState<string>('')
   const [matchesOfDay, setMatchesOfDay] = useState<MatchLite[]>([])
+  const [plateauMatchOrderIds, setPlateauMatchOrderIds] = useState<string[]>([])
   const [clubName, setClubName] = useState<string>('Club')
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauPlayerIds, setPlateauPlayerIds] = useState<string[]>([])
+  const [visibleSwipeMatchId, setVisibleSwipeMatchId] = useState<string>('')
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -342,7 +356,12 @@ export default function MatchDetailsPage() {
     offsetY: number
   } | null>(null)
   const tacticalDragRootRef = useRef<HTMLDivElement | null>(null)
+  const swipeTrackRef = useRef<HTMLDivElement | null>(null)
+  const swipeNavigationLockRef = useRef(false)
+  const swipeUnlockTimeoutRef = useRef<number | null>(null)
+  const swipeScrollRafRef = useRef<number | null>(null)
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null)
+  const matchSnapshotCacheRef = useRef<Map<string, MatchPageSnapshot>>(new Map())
   const liveRestoreAttemptedRef = useRef<string | null>(null)
   const [isPlayOverlayOpen, setIsPlayOverlayOpen] = useState(false)
   const [playPhase, setPlayPhase] = useState<'setup' | 'running' | 'ended'>('setup')
@@ -361,8 +380,32 @@ export default function MatchDetailsPage() {
   const [compositionSaving, setCompositionSaving] = useState(false)
   const lastCompositionSignatureRef = useRef<string | null>(null)
 
+  const applySnapshot = useCallback((snapshot: MatchPageSnapshot) => {
+    setMatch(snapshot.match)
+    setDraft(snapshot.draft)
+    setPlayers(snapshot.players)
+    setPlateauDateISO(snapshot.plateauDateISO)
+    setPlateauPlayerIds(snapshot.plateauPlayerIds)
+    setMatchesOfDay(snapshot.matchesOfDay)
+    setTacticalPresetValue(snapshot.tacticalPresetValue)
+    setTacticalPoints(snapshot.tacticalPoints)
+    if (snapshot.clubName.trim()) setClubName(snapshot.clubName.trim())
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!id) return
+    setVisibleSwipeMatchId(id)
+    const cached = matchSnapshotCacheRef.current.get(id)
+    if (!cached) return
+    applySnapshot(cached)
+  }, [applySnapshot, id])
+
   const loadMatch = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
+    const cached = matchSnapshotCacheRef.current.get(id)
+    if (cached) {
+      applySnapshot(cached)
+    }
     const [payload, club, roster] = await Promise.all([
       apiGet<MatchDetailsData>(apiRoutes.matches.byId(id)),
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
@@ -372,10 +415,13 @@ export default function MatchDetailsPage() {
     let plateauSummary: PlateauSummaryResponse | null = null
     let nextPlateauDateISO = ''
     let nextPlateauPlayerIds: string[] = []
-    let nextMatchesOfDay: MatchLite[] = []
+    let nextPlateauMatchOrderIds: string[] = []
+    let matchesById = new Map<string, MatchLite>([[payload.id, payload]])
+    let allMatchesOfDay: MatchLite[] = []
     if (payload.plateauId) {
       plateauSummary = await apiGet<PlateauSummaryResponse>(apiRoutes.plateaus.summary(payload.plateauId)).catch(() => null)
       if (plateauSummary?.plateau?.date) nextPlateauDateISO = plateauSummary.plateau.date
+      nextPlateauMatchOrderIds = (plateauSummary?.matches || []).map((matchItem) => matchItem.id).filter(Boolean)
       nextPlateauPlayerIds = Array.from(new Set(
         (plateauSummary?.convocations || [])
           .filter((convocation) => {
@@ -385,45 +431,119 @@ export default function MatchDetailsPage() {
           .map((convocation) => convocation.player?.id)
           .filter((playerId): playerId is string => Boolean(playerId)),
       ))
-      nextMatchesOfDay = (plateauSummary?.matches || []).filter((matchItem) => matchItem.id !== payload.id)
+      allMatchesOfDay = plateauSummary?.matches || []
+      for (const matchItem of allMatchesOfDay) {
+        if (matchItem?.id) matchesById.set(matchItem.id, matchItem)
+      }
+      const missingIds = nextPlateauMatchOrderIds.filter((matchId) => !matchSnapshotCacheRef.current.has(matchId))
+      if (missingIds.length > 0) {
+        const detailedMatches = await Promise.all(
+          missingIds.map((matchId) => apiGet<MatchDetailsData>(apiRoutes.matches.byId(matchId)).catch(() => null)),
+        )
+        for (const detailed of detailedMatches) {
+          if (detailed?.id) matchesById.set(detailed.id, detailed)
+        }
+      }
     } else {
       const allMatches = await apiGet<MatchLite[]>(apiRoutes.matches.list).catch(() => [])
       const dayKey = toDayKey(payload.createdAt)
-      nextMatchesOfDay = allMatches.filter((matchItem) => matchItem.id !== payload.id && toDayKey(matchItem.createdAt) === dayKey)
+      allMatchesOfDay = allMatches.filter((matchItem) => toDayKey(matchItem.createdAt) === dayKey)
+      for (const matchItem of allMatchesOfDay) {
+        if (matchItem?.id) matchesById.set(matchItem.id, matchItem)
+      }
     }
 
     if (isCancelled()) return
-    setMatch(payload)
-    setDraft(buildDraft(payload))
-    const backendTactic = readBackendTactic(payload)
     const fallbackFormationKey = defaultFormation?.key || ''
+
+    const basePlayersMap = new Map<string, Player>()
+    for (const player of roster) basePlayersMap.set(player.id, player)
+    for (const convocation of plateauSummary?.convocations || []) {
+      if (convocation.player?.id) basePlayersMap.set(convocation.player.id, convocation.player)
+    }
+
+    const orderedMatchIds = nextPlateauMatchOrderIds.length > 0
+      ? nextPlateauMatchOrderIds
+      : [payload.id]
+    const orderedMatches = orderedMatchIds
+      .map((matchId) => matchesById.get(matchId))
+      .filter((matchItem): matchItem is MatchLite => Boolean(matchItem))
+    const fallbackMatches = orderedMatches.length > 0 ? orderedMatches : allMatchesOfDay
+
+    for (const orderedMatch of orderedMatches) {
+      const detailedMatch = matchesById.get(orderedMatch.id)
+      if (!detailedMatch) continue
+      const detailsAsMatch = detailedMatch as MatchDetailsData
+      const backendTactic = readBackendTactic(detailsAsMatch)
+      const nextPreset = typeof backendTactic?.preset === 'string' && backendTactic.preset.trim()
+        ? backendTactic.preset
+        : `formation:${fallbackFormationKey}`
+      const nextPoints = backendTactic?.points && typeof backendTactic.points === 'object'
+        ? buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => backendTactic.points?.[tokenId] || { x: 50, y: 50 }))
+        : getFormationPointsMap(tacticalTokens, fallbackFormationKey, tacticalFormations)
+
+      const playersMap = new Map<string, Player>(basePlayersMap)
+      for (const player of Object.values(detailsAsMatch.playersById || {})) {
+        if (player?.id) playersMap.set(player.id, player)
+      }
+      for (const team of detailsAsMatch.teams || []) {
+        for (const row of team.players || []) {
+          if (row.player?.id) playersMap.set(row.player.id, row.player)
+        }
+      }
+
+      const snapshot: MatchPageSnapshot = {
+        match: detailsAsMatch,
+        draft: buildDraft(detailsAsMatch),
+        players: Array.from(playersMap.values()),
+        plateauDateISO: nextPlateauDateISO,
+        plateauPlayerIds: nextPlateauPlayerIds,
+        matchesOfDay: fallbackMatches.filter((matchItem) => matchItem.id !== detailsAsMatch.id),
+        tacticalPresetValue: nextPreset,
+        tacticalPoints: nextPoints,
+        clubName: club?.name?.trim() || clubName,
+      }
+      matchSnapshotCacheRef.current.set(detailsAsMatch.id, snapshot)
+    }
+
+    setPlateauMatchOrderIds(nextPlateauMatchOrderIds)
+    const activeSnapshot = matchSnapshotCacheRef.current.get(payload.id)
+    if (activeSnapshot) {
+      applySnapshot(activeSnapshot)
+      return
+    }
+
+    const payloadAsMatch = payload as MatchDetailsData
+    const backendTactic = readBackendTactic(payloadAsMatch)
     const nextPreset = typeof backendTactic?.preset === 'string' && backendTactic.preset.trim()
       ? backendTactic.preset
       : `formation:${fallbackFormationKey}`
     const nextPoints = backendTactic?.points && typeof backendTactic.points === 'object'
       ? buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => backendTactic.points?.[tokenId] || { x: 50, y: 50 }))
       : getFormationPointsMap(tacticalTokens, fallbackFormationKey, tacticalFormations)
-    setTacticalPresetValue(nextPreset)
-    setTacticalPoints(nextPoints)
-    const playersMap = new Map<string, Player>()
-    for (const player of roster) playersMap.set(player.id, player)
-    for (const convocation of plateauSummary?.convocations || []) {
-      if (convocation.player?.id) playersMap.set(convocation.player.id, convocation.player)
-    }
-    for (const player of Object.values(payload.playersById || {})) {
+    const playersMap = new Map<string, Player>(basePlayersMap)
+    for (const player of Object.values(payloadAsMatch.playersById || {})) {
       if (player?.id) playersMap.set(player.id, player)
     }
-    for (const team of payload.teams || []) {
+    for (const team of payloadAsMatch.teams || []) {
       for (const row of team.players || []) {
         if (row.player?.id) playersMap.set(row.player.id, row.player)
       }
     }
-    setPlayers(Array.from(playersMap.values()))
-    setPlateauDateISO(nextPlateauDateISO)
-    setPlateauPlayerIds(nextPlateauPlayerIds)
-    setMatchesOfDay(nextMatchesOfDay)
-    if (club?.name?.trim()) setClubName(club.name.trim())
-  }, [defaultFormation?.key, id, tacticalFormations, tacticalTokens])
+    const snapshot: MatchPageSnapshot = {
+      match: payloadAsMatch,
+      draft: buildDraft(payloadAsMatch),
+      players: Array.from(playersMap.values()),
+      plateauDateISO: nextPlateauDateISO,
+      plateauPlayerIds: nextPlateauPlayerIds,
+      matchesOfDay: fallbackMatches.filter((matchItem) => matchItem.id !== payloadAsMatch.id),
+      tacticalPresetValue: nextPreset,
+      tacticalPoints: nextPoints,
+      clubName: club?.name?.trim() || clubName,
+    }
+    matchSnapshotCacheRef.current.set(payloadAsMatch.id, snapshot)
+    applySnapshot(snapshot)
+  }, [applySnapshot, clubName, defaultFormation?.key, id, tacticalFormations, tacticalTokens])
 
   const { loading, error } = useAsyncLoader(loadMatch)
 
@@ -590,6 +710,66 @@ export default function MatchDetailsPage() {
       }),
     [viewDraft.scorers, playerNameById],
   )
+  const swipeMatchById = useMemo(() => {
+    const map = new Map<string, MatchLite>()
+    if (match?.id) map.set(match.id, match)
+    for (const matchItem of matchesOfDay) {
+      if (matchItem?.id) map.set(matchItem.id, matchItem)
+    }
+    return map
+  }, [match, matchesOfDay])
+  const swipeMatchIds = useMemo(() => {
+    if (!id) return [] as string[]
+    if (!match?.plateauId) return [id]
+    const ordered = plateauMatchOrderIds.filter((matchId) => swipeMatchById.has(matchId))
+    if (!ordered.includes(id)) ordered.push(id)
+    return ordered
+  }, [id, match?.plateauId, plateauMatchOrderIds, swipeMatchById])
+  const isPlateauSwipeEnabled = Boolean(match?.plateauId) && swipeMatchIds.length > 1
+  const activeSwipeIndex = useMemo(() => {
+    if (!id) return 0
+    const index = swipeMatchIds.indexOf(id)
+    return index >= 0 ? index : 0
+  }, [id, swipeMatchIds])
+
+  useEffect(() => {
+    if (!isPlateauSwipeEnabled) return
+    const track = swipeTrackRef.current
+    if (!track) return
+    const width = track.clientWidth
+    if (width <= 0) return
+    if (swipeUnlockTimeoutRef.current) window.clearTimeout(swipeUnlockTimeoutRef.current)
+    swipeNavigationLockRef.current = true
+    track.scrollTo({ left: activeSwipeIndex * width, behavior: 'auto' })
+    swipeUnlockTimeoutRef.current = window.setTimeout(() => {
+      swipeNavigationLockRef.current = false
+      swipeUnlockTimeoutRef.current = null
+    }, 120)
+  }, [activeSwipeIndex, isPlateauSwipeEnabled, swipeMatchIds.length])
+
+  useEffect(() => () => {
+    if (swipeUnlockTimeoutRef.current) window.clearTimeout(swipeUnlockTimeoutRef.current)
+    if (swipeScrollRafRef.current) window.cancelAnimationFrame(swipeScrollRafRef.current)
+  }, [])
+
+  const handleSwipeTrackScroll = useCallback(() => {
+    if (!isPlateauSwipeEnabled) return
+    const track = swipeTrackRef.current
+    if (!track || swipeNavigationLockRef.current) return
+    if (swipeScrollRafRef.current) window.cancelAnimationFrame(swipeScrollRafRef.current)
+    swipeScrollRafRef.current = window.requestAnimationFrame(() => {
+      swipeScrollRafRef.current = null
+      const width = track.clientWidth
+      if (!width) return
+      const nextIndex = Math.max(0, Math.min(swipeMatchIds.length - 1, Math.round(track.scrollLeft / width)))
+      const nextMatchId = swipeMatchIds[nextIndex]
+      if (!nextMatchId || nextMatchId === id) return
+      setVisibleSwipeMatchId(nextMatchId)
+      const cachedNext = matchSnapshotCacheRef.current.get(nextMatchId)
+      if (cachedNext) applySnapshot(cachedNext)
+      navigate(`/match/${nextMatchId}`, { replace: true })
+    })
+  }, [applySnapshot, id, isPlateauSwipeEnabled, navigate, swipeMatchIds])
 
   const tacticalSlots = useMemo(() => {
     const counters: Record<string, number> = {}
@@ -1299,12 +1479,250 @@ export default function MatchDetailsPage() {
     }
   }
 
-  if (loading) return <div style={{ padding: 20 }}>Chargement…</div>
+  function renderLoadedSwipeSlide(matchId: string) {
+    const snapshot = matchSnapshotCacheRef.current.get(matchId)
+    if (!snapshot) {
+      return <div className="match-swipe-loading-hint">Chargement du match…</div>
+    }
+
+    const previewMatch = snapshot.match
+    const previewHome = getTeam(previewMatch, 'home')
+    const previewAway = getTeam(previewMatch, 'away')
+    const previewPending = isMatchNotPlayed(previewMatch, { referenceDate: snapshot.plateauDateISO || null })
+    const previewHomeScore = previewHome?.score ?? 0
+    const previewAwayScore = previewAway?.score ?? 0
+    const previewOpponent = previewMatch.opponentName || 'Adversaire'
+    const previewDateSource = snapshot.plateauDateISO || previewMatch.createdAt
+    const previewDateLabel = previewDateSource
+      ? new Date(previewDateSource).toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+      : ''
+    const previewPlayerById = new Map(snapshot.players.map((player) => [player.id, player] as const))
+    const previewNameById = new Map(snapshot.players.map((player) => [player.id, player.name] as const))
+    const previewAllowedSet = new Set(
+      snapshot.plateauPlayerIds.length > 0 ? snapshot.plateauPlayerIds : snapshot.players.map((player) => player.id),
+    )
+    const previewStarters = snapshot.draft.home.starters
+      .filter((playerId) => previewAllowedSet.has(playerId))
+      .slice(0, tacticalTokens.length)
+    const previewStarterSet = new Set(previewStarters)
+    const previewBenchPlayers = snapshot.players
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .filter((player) => previewAllowedSet.has(player.id) && !previewStarterSet.has(player.id))
+    const previewScorers = snapshot.draft.scorers
+      .filter((scorer) => scorer.side === 'home')
+      .map((scorer) => {
+        const scorerName = previewNameById.get(scorer.playerId) || scorer.playerId
+        if (!scorer.assistId) return scorerName
+        const assistName = previewNameById.get(scorer.assistId) || scorer.assistId
+        return `${scorerName} (${assistName})`
+      })
+    const previewTacticalSlots = (() => {
+      const counters: Record<string, number> = {}
+      return tacticalTokens.map((tokenId) => {
+        const point = snapshot.tacticalPoints[tokenId] || { x: 50, y: 50 }
+        const role = getRole(point)
+        counters[role] = (counters[role] || 0) + 1
+        const roleIndex = counters[role]
+        return {
+          id: tokenId,
+          role,
+          point,
+          label: role === 'GARDIEN' ? roleLabel(role) : `${roleLabel(role)} ${roleIndex}`,
+        }
+      })
+    })()
+
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        className="match-swipe-preview-full"
+        onClick={() => {
+          setVisibleSwipeMatchId(matchId)
+          applySnapshot(snapshot)
+          navigate(`/match/${matchId}`, { replace: true })
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          setVisibleSwipeMatchId(matchId)
+          applySnapshot(snapshot)
+          navigate(`/match/${matchId}`, { replace: true })
+        }}
+      >
+        <header className="match-details-topbar match-swipe-preview-topbar" aria-hidden="true">
+          <span className="back-link-button match-swipe-preview-nav-item">
+            <ChevronLeftIcon size={18} />
+            <span>Retour</span>
+          </span>
+          <div className="topbar-menu-wrap">
+            <RoundIconButton ariaLabel="Menu" className="menu-dots-button match-swipe-preview-nav-item">
+              <DotsHorizontalIcon size={18} />
+            </RoundIconButton>
+          </div>
+        </header>
+
+        <div className="match-hero">
+          <div className="match-hero-row">
+            <div className="match-team-block is-home">
+              <div className="match-team-content">
+                <div className="team-name">{clubName}</div>
+              </div>
+            </div>
+            <div className="match-scoreboard">
+              <div className="score-line">
+                {previewPending ? (
+                  <span>vs</span>
+                ) : (
+                  <>
+                    <span>{previewHomeScore}</span>
+                    <span>-</span>
+                    <span>{previewAwayScore}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="match-team-block is-away">
+              <div className="match-team-content">
+                <div className="team-name">{previewOpponent}</div>
+              </div>
+            </div>
+          </div>
+          <div className="hero-scorers-row">
+            <div className="hero-scorers-col">
+              {previewScorers.map((name, idx) => (
+                <div className="hero-scorer-line" key={`hero-preview-scorer-${idx}-${name}`}>
+                  <span className="hero-scorer-ball" aria-hidden="true">⚽</span>
+                  <span>{name}</span>
+                </div>
+              ))}
+            </div>
+            <div />
+            <div className="hero-scorers-col" />
+          </div>
+          <div className="match-result-row">
+            <div className={`result-pill ${previewPending ? 'pending' : previewHomeScore > previewAwayScore ? 'win' : previewHomeScore < previewAwayScore ? 'loss' : 'draw'}`}>
+              {previewPending ? 'Pas encore joué' : previewHomeScore > previewAwayScore ? 'Victoire' : previewHomeScore < previewAwayScore ? 'Défaite' : 'Nul'}
+            </div>
+          </div>
+          {previewDateLabel && <p className="match-meta-line">{previewDateLabel}</p>}
+        </div>
+
+        <section className="match-content-grid">
+          <article className="match-card">
+            <div className="match-details-topbar">
+              <h3>Composition</h3>
+            </div>
+            <div className="lineup-stack">
+              <div className="match-tactical-head">
+                <label htmlFor={`match-tactic-select-preview-${matchId}`}>Tactique</label>
+                <select
+                  id={`match-tactic-select-preview-${matchId}`}
+                  value={snapshot.tacticalPresetValue}
+                  disabled
+                >
+                  <optgroup label="Formations">
+                    {tacticalFormations.map((formation) => (
+                      <option key={`preview-formation-${matchId}-${formation.key}`} value={`formation:${formation.key}`}>
+                        {formation.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {savedTactics.length > 0 && (
+                    <optgroup label="Tactiques sauvegardées">
+                      {savedTactics.map((saved) => (
+                        <option key={`preview-saved-${matchId}-${saved.name}`} value={`tactic:${saved.name}`}>
+                          {saved.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+              <div className="match-tactical-layout">
+                <div className="match-tactical-roster">
+                  <p>Remplaçants</p>
+                  <div className="match-bench-grid">
+                    {previewBenchPlayers.map((player) => {
+                      const avatar = getAvatarUrl(player)
+                      return (
+                        <div
+                          key={`preview-bench-${matchId}-${player.id}`}
+                          className="match-player-avatar-token is-static"
+                          title={player.name}
+                        >
+                          {avatar ? (
+                            <img src={avatar} alt={player.name} />
+                          ) : (
+                            <span style={{ background: colorFromName(player.name) }}>{getInitials(player.name)}</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {previewBenchPlayers.length === 0 && <p className="muted-inline">Tous les joueurs sont placés.</p>}
+                  </div>
+                </div>
+
+                <div className="match-tactical-pitch match-tactical-pitch--compact" role="img" aria-label="Composition tactique du match voisin">
+                  <div className="match-tactical-center-line" />
+                  <div className="match-tactical-center-circle" />
+                  {previewTacticalSlots.map((slot, index) => {
+                    const assignedPlayerId = previewStarters[index] || ''
+                    const assignedPlayer = assignedPlayerId ? previewPlayerById.get(assignedPlayerId) : undefined
+                    const assignedAvatar = getAvatarUrl(assignedPlayer)
+                    const assignedName = assignedPlayer?.name || assignedPlayerId
+                    return (
+                      <div
+                        key={`preview-slot-${matchId}-${slot.id}`}
+                        className={`match-tactical-slot ${assignedPlayerId ? 'is-filled' : ''}`}
+                        style={{
+                          left: `calc(${slot.point.x}% - 40px)`,
+                          top: `calc(${slot.point.y}% - 40px)`,
+                        }}
+                      >
+                        <span>{slot.label}</span>
+                        <div className="match-tactical-slot-token">
+                          {assignedPlayerId ? (
+                            <div className="match-player-avatar-token is-static" title={assignedName}>
+                              {assignedAvatar ? (
+                                <img src={assignedAvatar} alt={assignedName} />
+                              ) : (
+                                <span style={{ background: colorFromName(assignedName) }}>{getInitials(assignedName)}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="match-slot-placeholder">Drop</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+      </div>
+    )
+  }
+
+  if (loading && !match) return <div style={{ padding: 20 }}>Chargement…</div>
   if (error) return <div style={{ padding: 20, color: '#b91c1c' }}>Erreur: {toErrorMessage(error)}</div>
   if (!match) return <div style={{ padding: 20 }}>Match introuvable.</div>
+  const activeViewMatchId = visibleSwipeMatchId || id || ''
+  const isCurrentMatchReady = Boolean(activeViewMatchId && match.id === activeViewMatchId)
+  const hasRouteSnapshotCached = Boolean(activeViewMatchId && matchSnapshotCacheRef.current.has(activeViewMatchId))
+  const canRenderCurrentRoute = isCurrentMatchReady || hasRouteSnapshotCached
+  if (!canRenderCurrentRoute && !isPlateauSwipeEnabled) return <div style={{ padding: 20 }}>Chargement…</div>
 
-  return (
-    <div className="match-details-page">
+  const activeMatchView = (
+    <>
       <header className="match-details-topbar">
         <button type="button" className="back-link-button" onClick={() => navigate(-1)}>
           <ChevronLeftIcon size={18} />
@@ -1930,6 +2348,36 @@ export default function MatchDetailsPage() {
           </div>
         </>
       )}
-    </div>
+    </>
   )
+
+  if (isPlateauSwipeEnabled) {
+    return (
+      <div className="match-details-page match-details-page--swipe">
+        <div
+          ref={swipeTrackRef}
+          className="match-swipe-track"
+          onScroll={handleSwipeTrackScroll}
+          aria-label="Navigation entre les matchs du plateau"
+        >
+          {swipeMatchIds.map((matchId) => {
+            const isActiveSlide = matchId === activeViewMatchId
+            return (
+              <section key={matchId} className="match-swipe-slide" data-match-id={matchId} aria-current={isActiveSlide ? 'page' : undefined}>
+                {isActiveSlide ? (
+                  canRenderCurrentRoute
+                    ? activeMatchView
+                    : <div className="match-swipe-loading-hint">Chargement du match…</div>
+                ) : (
+                  renderLoadedSwipeSlide(matchId)
+                )}
+              </section>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  return <div className="match-details-page">{activeMatchView}</div>
 }
