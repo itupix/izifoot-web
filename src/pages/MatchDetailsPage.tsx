@@ -1814,14 +1814,37 @@ export default function MatchDetailsPage() {
       clubName,
     }
 
-    const relevantMatchIds = plateauMatchOrderIds.length > 0 ? plateauMatchOrderIds : (swipeMatchIds.length > 0 ? swipeMatchIds : [match.id])
+    const fallbackPlateauIds = [match.id, ...matchesOfDay.map((item) => item.id)].filter(Boolean)
+    const relevantMatchIds = (
+      plateauMatchOrderIds.length > 0
+        ? plateauMatchOrderIds
+        : (swipeMatchIds.length > 0 ? swipeMatchIds : fallbackPlateauIds)
+    )
     let plateauTotalMinutes = 0
     const presentPlayerSet = new Set<string>(plateauPresentPlayerIds)
+    const liteMatchById = new Map<string, MatchLite>([[match.id, match], ...matchesOfDay.map((item) => [item.id, item] as const)])
 
     for (const relevantMatchId of relevantMatchIds) {
-      const snapshot = relevantMatchId === match.id
+      const cachedSnapshot = relevantMatchId === match.id
         ? activeMatchSnapshot
         : matchSnapshotCacheRef.current.get(relevantMatchId)
+      const fallbackLiteMatch = liteMatchById.get(relevantMatchId)
+      const snapshot = cachedSnapshot ?? (
+        fallbackLiteMatch
+          ? {
+            match: fallbackLiteMatch as MatchDetailsData,
+            draft: buildDraft(fallbackLiteMatch as MatchDetailsData),
+            players,
+            plateauDateISO,
+            plateauPlayerIds,
+            plateauPresentPlayerIds,
+            matchesOfDay: matchesOfDay.filter((item) => item.id !== fallbackLiteMatch.id),
+            tacticalPresetValue,
+            tacticalPoints,
+            clubName,
+          } satisfies MatchPageSnapshot
+          : null
+      )
       if (!snapshot) continue
 
       for (const player of snapshot.players) {
@@ -1830,9 +1853,7 @@ export default function MatchDetailsPage() {
         }
       }
 
-      const pendingMatch = isMatchNotPlayed(snapshot.match, { referenceDate: snapshot.plateauDateISO || plateauDateISO || null })
       const isCurrentMatchScope = relevantMatchId === match.id
-      if (pendingMatch && !isCurrentMatchScope) continue
 
       const persisted = persistedByMatchId[relevantMatchId]
       const currentDurationMinutes = isCurrentMatchScope
