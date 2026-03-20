@@ -154,6 +154,7 @@ type LiveMatchEvent = {
 }
 
 const LIVE_MATCH_STATE_STORAGE_KEY = 'izifoot.liveMatchStateByMatchId'
+const PLAYTIME_DOCK_COLLAPSED_STORAGE_KEY = 'izifoot.playtimeDockCollapsed'
 
 const STARTER_LOAD_WEIGHT = 1
 const SUB_LOAD_WEIGHT = 0.45
@@ -263,6 +264,13 @@ type MatchPageSnapshot = {
   clubName: string
 }
 
+type PlayerPlaytimeRow = {
+  playerId: string
+  name: string
+  minutes: number
+  percent: number
+}
+
 function readLiveMatchStateMap() {
   if (typeof window === 'undefined') return {} as Record<string, PersistedLiveMatchState>
   try {
@@ -331,6 +339,7 @@ export default function MatchDetailsPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauPlayerIds, setPlateauPlayerIds] = useState<string[]>([])
   const [visibleSwipeMatchId, setVisibleSwipeMatchId] = useState<string>('')
+  const [isPlaytimeDockCollapsed, setIsPlaytimeDockCollapsed] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -546,6 +555,22 @@ export default function MatchDetailsPage() {
   }, [applySnapshot, clubName, defaultFormation?.key, id, tacticalFormations, tacticalTokens])
 
   const { loading, error } = useAsyncLoader(loadMatch)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = window.localStorage.getItem(PLAYTIME_DOCK_COLLAPSED_STORAGE_KEY)
+    setIsPlaytimeDockCollapsed(raw === '1')
+  }, [])
+
+  const togglePlaytimeDock = useCallback(() => {
+    setIsPlaytimeDockCollapsed((prev) => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(PLAYTIME_DOCK_COLLAPSED_STORAGE_KEY, next ? '1' : '0')
+      }
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     const libraryKey = `izifoot.tactical.library.${selectedTeamId || 'all'}`
@@ -1754,6 +1779,112 @@ export default function MatchDetailsPage() {
   const isPageBusy = loading || compositionSaving || saving || liveSaving || autoComposing
   if (!canRenderCurrentRoute && !isPlateauSwipeEnabled) return <div style={{ padding: 20 }}>Chargement…</div>
 
+  const playtimeRows = (() => {
+    if (!match?.plateauId) return [] as PlayerPlaytimeRow[]
+
+    const persistedByMatchId = readLiveMatchStateMap()
+    const totalMinutesByPlayerId = new Map<string, number>()
+    const playerNameByPlayerId = new Map<string, string>()
+
+    const activeMatchSnapshot: MatchPageSnapshot = {
+      match,
+      draft: draft ?? buildDraft(match),
+      players,
+      plateauDateISO,
+      plateauPlayerIds,
+      matchesOfDay,
+      tacticalPresetValue,
+      tacticalPoints,
+      clubName,
+    }
+
+    const relevantMatchIds = swipeMatchIds.length > 0 ? swipeMatchIds : [match.id]
+    let plateauTotalMinutes = 0
+    const declaredPlayerIds = new Set<string>(plateauPlayerIds)
+
+    for (const relevantMatchId of relevantMatchIds) {
+      const snapshot = relevantMatchId === match.id
+        ? activeMatchSnapshot
+        : matchSnapshotCacheRef.current.get(relevantMatchId)
+      if (!snapshot) continue
+
+      for (const player of snapshot.players) {
+        if (player?.id) {
+          playerNameByPlayerId.set(player.id, player.name)
+          declaredPlayerIds.add(player.id)
+        }
+      }
+
+      const pendingMatch = isMatchNotPlayed(snapshot.match, { referenceDate: snapshot.plateauDateISO || plateauDateISO || null })
+      const isCurrentMatchScope = relevantMatchId === match.id
+      if (pendingMatch && !isCurrentMatchScope) continue
+
+      const persisted = persistedByMatchId[relevantMatchId]
+      const currentDurationMinutes = isCurrentMatchScope
+        ? Math.max(1, isPlayOverlayOpen ? playDurationMinutes : (persisted?.durationMinutes || 10))
+        : Math.max(1, persisted?.durationMinutes || 10)
+      const durationMinutes = currentDurationMinutes
+      plateauTotalMinutes += durationMinutes
+
+      const eligibleSet = new Set(
+        snapshot.plateauPlayerIds.length > 0
+          ? snapshot.plateauPlayerIds
+          : snapshot.players.map((player) => player.id),
+      )
+      const starters = snapshot.draft.home.starters
+        .filter((playerId) => eligibleSet.has(playerId))
+        .slice(0, tacticalTokens.length)
+      const onField = new Set(starters)
+      const substitutions = (persisted?.events || [])
+        .filter((event) => event.type === 'SUBSTITUTION')
+        .slice()
+        .sort((a, b) => a.minute - b.minute)
+      const effectiveSubstitutions = (isCurrentMatchScope && isPlayOverlayOpen ? liveEvents : substitutions)
+        .filter((event) => event.type === 'SUBSTITUTION')
+        .slice()
+        .sort((a, b) => a.minute - b.minute)
+
+      for (const starterId of starters) {
+        totalMinutesByPlayerId.set(starterId, (totalMinutesByPlayerId.get(starterId) || 0) + durationMinutes)
+      }
+
+      for (const event of effectiveSubstitutions) {
+        const clampedMinute = Math.max(0, Math.min(durationMinutes, event.minute))
+        const progress = Math.max(0, Math.min(1, clampedMinute / durationMinutes))
+        const remainingMinutes = (1 - progress) * durationMinutes
+        if (remainingMinutes <= 0) continue
+
+        if (event.outPlayerId && onField.has(event.outPlayerId)) {
+          const previous = totalMinutesByPlayerId.get(event.outPlayerId) || 0
+          totalMinutesByPlayerId.set(event.outPlayerId, Math.max(0, previous - remainingMinutes))
+          onField.delete(event.outPlayerId)
+        }
+        if (event.inPlayerId && !onField.has(event.inPlayerId)) {
+          totalMinutesByPlayerId.set(event.inPlayerId, (totalMinutesByPlayerId.get(event.inPlayerId) || 0) + remainingMinutes)
+          onField.add(event.inPlayerId)
+        }
+      }
+    }
+
+    for (const declaredPlayerId of declaredPlayerIds) {
+      if (!totalMinutesByPlayerId.has(declaredPlayerId)) totalMinutesByPlayerId.set(declaredPlayerId, 0)
+    }
+
+    const denominator = plateauTotalMinutes > 0 ? plateauTotalMinutes : 1
+    return Array.from(totalMinutesByPlayerId.entries())
+      .map(([playerId, minutes]) => ({
+        playerId,
+        name: playerNameByPlayerId.get(playerId) || playerId,
+        minutes,
+        percent: Math.max(0, Math.min(100, (minutes / denominator) * 100)),
+      }))
+      .sort((a, b) => {
+        if (b.minutes !== a.minutes) return b.minutes - a.minutes
+        return a.name.localeCompare(b.name)
+      })
+  })()
+  const showPlaytimeDock = Boolean(match?.plateauId)
+
   const activeMatchView = (
     <>
       <header className="match-details-topbar">
@@ -1972,6 +2103,35 @@ export default function MatchDetailsPage() {
           </div>
         </article>
       </section>
+
+      {showPlaytimeDock && (
+        <aside className={`match-playtime-dock ${isPlaytimeDockCollapsed ? 'is-collapsed' : ''}`} aria-label="Temps de jeu des joueurs du plateau">
+          <div className="match-playtime-dock-head">
+            <strong>Temps de jeu plateau</strong>
+            <button type="button" className="match-playtime-toggle" onClick={togglePlaytimeDock}>
+              {isPlaytimeDockCollapsed ? 'Ouvrir' : 'Reduire'}
+            </button>
+          </div>
+          {!isPlaytimeDockCollapsed && (
+            <div className="match-playtime-dock-list">
+            {playtimeRows.map((row) => (
+              <div key={`playtime-${row.playerId}`} className="match-playtime-row">
+                <div className="match-playtime-row-head">
+                  <span>{row.name}</span>
+                  <span>{Math.round(row.minutes)} min</span>
+                </div>
+                <div className="match-playtime-bar-track" role="presentation">
+                  <div className="match-playtime-bar-fill" style={{ width: `${row.percent}%` }} />
+                </div>
+              </div>
+            ))}
+            {playtimeRows.length === 0 && (
+              <p className="muted-inline">Aucun temps de jeu enregistré pour le moment.</p>
+            )}
+            </div>
+          )}
+        </aside>
+      )}
 
       {isPlayOverlayOpen && (
         <div className="live-overlay" role="dialog" aria-modal="true" aria-label="Jouer le match">
@@ -2389,7 +2549,7 @@ export default function MatchDetailsPage() {
 
   if (isPlateauSwipeEnabled) {
     return (
-      <div className="match-details-page match-details-page--swipe">
+      <div className={`match-details-page match-details-page--swipe ${showPlaytimeDock ? (isPlaytimeDockCollapsed ? 'has-playtime-dock-collapsed' : 'has-playtime-dock') : ''}`}>
         <div
           ref={swipeTrackRef}
           className="match-swipe-track"
@@ -2430,5 +2590,5 @@ export default function MatchDetailsPage() {
     )
   }
 
-  return <div className="match-details-page">{activeMatchView}</div>
+  return <div className={`match-details-page ${showPlaytimeDock ? (isPlaytimeDockCollapsed ? 'has-playtime-dock-collapsed' : 'has-playtime-dock') : ''}`}>{activeMatchView}</div>
 }
