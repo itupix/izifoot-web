@@ -143,6 +143,10 @@
   gap: 0;
 }
 
+.match-playtime-dock.is-drag-disabled {
+  pointer-events: none;
+}
+
 .match-playtime-dock-list {
   display: grid;
   gap: 8px;

@@ -367,6 +367,7 @@ export default function MatchDetailsPage() {
     offsetY: number
   } | null>(null)
   const tacticalDragRootRef = useRef<HTMLDivElement | null>(null)
+  const slotSyncMatchIdRef = useRef<string | null>(null)
   const swipeTrackRef = useRef<HTMLDivElement | null>(null)
   const swipeNavigationLockRef = useRef(false)
   const swipeUnlockTimeoutRef = useRef<number | null>(null)
@@ -724,13 +725,14 @@ export default function MatchDetailsPage() {
   const compositionPlayerIds = useMemo(() => {
     const ids = usePlateauEligibility ? plateauPlayerIds : sortedPlayers.map((player) => player.id)
     const unique = new Set(ids)
-    if (!usePlateauEligibility) {
-      for (const playerId of [...viewDraft.home.starters, ...viewDraft.home.subs]) {
-        unique.add(playerId)
-      }
+    for (const playerId of [...viewDraft.home.starters, ...viewDraft.home.subs]) {
+      unique.add(playerId)
+    }
+    for (const playerId of Object.values(slotAssignments)) {
+      if (playerId) unique.add(playerId)
     }
     return Array.from(unique)
-  }, [usePlateauEligibility, plateauPlayerIds, sortedPlayers, viewDraft.home.starters, viewDraft.home.subs])
+  }, [usePlateauEligibility, plateauPlayerIds, slotAssignments, sortedPlayers, viewDraft.home.starters, viewDraft.home.subs])
   const displayedHomeStarters = useMemo(
     () => (
       usePlateauEligibility
@@ -948,15 +950,26 @@ export default function MatchDetailsPage() {
 
   useEffect(() => {
     setSlotAssignments((prev) => {
+      const activeMatchId = id || null
+      const shouldResyncFromDraft = (
+        slotSyncMatchIdRef.current !== activeMatchId
+        || Object.keys(prev).length === 0
+      )
+      if (!shouldResyncFromDraft) return prev
+
       const next: Record<string, string> = {}
       tacticalTokens.forEach((tokenId, index) => {
         next[tokenId] = displayedHomeStarters[index] || ''
       })
       const changed = tacticalTokens.some((tokenId) => (prev[tokenId] || '') !== (next[tokenId] || ''))
-      if (!changed && Object.keys(prev).length === tacticalTokens.length) return prev
+      if (!changed && Object.keys(prev).length === tacticalTokens.length) {
+        slotSyncMatchIdRef.current = activeMatchId
+        return prev
+      }
+      slotSyncMatchIdRef.current = activeMatchId
       return next
     })
-  }, [displayedHomeStarters, tacticalTokens])
+  }, [displayedHomeStarters, id, tacticalTokens])
 
   useEffect(() => {
     if (!match || !id || !compositionSaveSnapshot) return
@@ -1319,6 +1332,15 @@ export default function MatchDetailsPage() {
 
   function applyDrop(playerId: string, clientX: number, clientY: number) {
     const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+    const benchPlayerTarget = target?.closest<HTMLElement>('[data-bench-player-id]')
+    if (benchPlayerTarget) {
+      const benchPlayerId = benchPlayerTarget.dataset.benchPlayerId
+      const sourceSlotId = tacticalTokens.find((tokenId) => slotAssignments[tokenId] === playerId)
+      if (benchPlayerId && sourceSlotId && benchPlayerId !== playerId) {
+        assignPlayerToSlot(sourceSlotId, benchPlayerId)
+        return
+      }
+    }
     const slotTarget = target?.closest<HTMLElement>('[data-slot-id]')
     if (slotTarget) {
       const slotId = slotTarget.dataset.slotId
@@ -2050,6 +2072,7 @@ export default function MatchDetailsPage() {
                         key={`page-bench-${player.id}`}
                         type="button"
                         className="match-player-avatar-token"
+                        data-bench-player-id={player.id}
                         title={player.name}
                         onPointerDown={(event) => handleTokenPointerDown(event, player.id)}
                         onPointerMove={handleTokenPointerMove}
@@ -2141,7 +2164,10 @@ export default function MatchDetailsPage() {
       </section>
 
       {showPlaytimeDock && (
-        <aside className={`match-playtime-dock ${isPlaytimeDockCollapsed ? 'is-collapsed' : ''}`} aria-label="Temps de jeu des joueurs du plateau">
+        <aside
+          className={`match-playtime-dock ${isPlaytimeDockCollapsed ? 'is-collapsed' : ''} ${dragState ? 'is-drag-disabled' : ''}`}
+          aria-label="Temps de jeu des joueurs du plateau"
+        >
           <div className="match-playtime-dock-head">
             <strong>Temps de jeu plateau</strong>
             <button type="button" className="match-playtime-toggle" onClick={togglePlaytimeDock}>
@@ -2300,6 +2326,7 @@ export default function MatchDetailsPage() {
                         key={`live-bench-${player.id}`}
                         type="button"
                         className="match-player-avatar-token"
+                        data-bench-player-id={player.id}
                         title={player.name}
                         onPointerDown={(event) => handleTokenPointerDown(event, player.id)}
                         onPointerMove={handleTokenPointerMove}
