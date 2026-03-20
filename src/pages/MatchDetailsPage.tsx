@@ -258,6 +258,7 @@ type MatchPageSnapshot = {
   players: Player[]
   plateauDateISO: string
   plateauPlayerIds: string[]
+  plateauPresentPlayerIds: string[]
   matchesOfDay: MatchLite[]
   tacticalPresetValue: string
   tacticalPoints: Record<string, TacticalPoint>
@@ -338,6 +339,7 @@ export default function MatchDetailsPage() {
   const [clubName, setClubName] = useState<string>('Club')
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauPlayerIds, setPlateauPlayerIds] = useState<string[]>([])
+  const [plateauPresentPlayerIds, setPlateauPresentPlayerIds] = useState<string[]>([])
   const [visibleSwipeMatchId, setVisibleSwipeMatchId] = useState<string>('')
   const [isPlaytimeDockCollapsed, setIsPlaytimeDockCollapsed] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -395,6 +397,7 @@ export default function MatchDetailsPage() {
     setPlayers(snapshot.players)
     setPlateauDateISO(snapshot.plateauDateISO)
     setPlateauPlayerIds(snapshot.plateauPlayerIds)
+    setPlateauPresentPlayerIds(snapshot.plateauPresentPlayerIds)
     setMatchesOfDay(snapshot.matchesOfDay)
     setTacticalPresetValue(snapshot.tacticalPresetValue)
     setTacticalPoints(snapshot.tacticalPoints)
@@ -424,6 +427,7 @@ export default function MatchDetailsPage() {
     let plateauSummary: PlateauSummaryResponse | null = null
     let nextPlateauDateISO = ''
     let nextPlateauPlayerIds: string[] = []
+    let nextPlateauPresentPlayerIds: string[] = []
     let nextPlateauMatchOrderIds: string[] = []
     let matchesById = new Map<string, MatchLite>([[payload.id, payload]])
     let allMatchesOfDay: MatchLite[] = []
@@ -436,6 +440,15 @@ export default function MatchDetailsPage() {
           .filter((convocation) => {
             const status = convocation.status ?? (convocation.present ? 'present' : 'non_convoque')
             return status === 'present' || status === 'convoque'
+          })
+          .map((convocation) => convocation.player?.id)
+          .filter((playerId): playerId is string => Boolean(playerId)),
+      ))
+      nextPlateauPresentPlayerIds = Array.from(new Set(
+        (plateauSummary?.convocations || [])
+          .filter((convocation) => {
+            const status = convocation.status ?? (convocation.present ? 'present' : 'non_convoque')
+            return status === 'present' || convocation.present === true
           })
           .map((convocation) => convocation.player?.id)
           .filter((playerId): playerId is string => Boolean(playerId)),
@@ -507,6 +520,7 @@ export default function MatchDetailsPage() {
         players: Array.from(playersMap.values()),
         plateauDateISO: nextPlateauDateISO,
         plateauPlayerIds: nextPlateauPlayerIds,
+        plateauPresentPlayerIds: nextPlateauPresentPlayerIds,
         matchesOfDay: fallbackMatches.filter((matchItem) => matchItem.id !== detailsAsMatch.id),
         tacticalPresetValue: nextPreset,
         tacticalPoints: nextPoints,
@@ -545,6 +559,7 @@ export default function MatchDetailsPage() {
       players: Array.from(playersMap.values()),
       plateauDateISO: nextPlateauDateISO,
       plateauPlayerIds: nextPlateauPlayerIds,
+      plateauPresentPlayerIds: nextPlateauPresentPlayerIds,
       matchesOfDay: fallbackMatches.filter((matchItem) => matchItem.id !== payloadAsMatch.id),
       tacticalPresetValue: nextPreset,
       tacticalPoints: nextPoints,
@@ -1792,15 +1807,16 @@ export default function MatchDetailsPage() {
       players,
       plateauDateISO,
       plateauPlayerIds,
+      plateauPresentPlayerIds,
       matchesOfDay,
       tacticalPresetValue,
       tacticalPoints,
       clubName,
     }
 
-    const relevantMatchIds = swipeMatchIds.length > 0 ? swipeMatchIds : [match.id]
+    const relevantMatchIds = plateauMatchOrderIds.length > 0 ? plateauMatchOrderIds : (swipeMatchIds.length > 0 ? swipeMatchIds : [match.id])
     let plateauTotalMinutes = 0
-    const declaredPlayerIds = new Set<string>(plateauPlayerIds)
+    const presentPlayerSet = new Set<string>(plateauPresentPlayerIds)
 
     for (const relevantMatchId of relevantMatchIds) {
       const snapshot = relevantMatchId === match.id
@@ -1809,9 +1825,8 @@ export default function MatchDetailsPage() {
       if (!snapshot) continue
 
       for (const player of snapshot.players) {
-        if (player?.id) {
+        if (player?.id && presentPlayerSet.has(player.id)) {
           playerNameByPlayerId.set(player.id, player.name)
-          declaredPlayerIds.add(player.id)
         }
       }
 
@@ -1827,9 +1842,9 @@ export default function MatchDetailsPage() {
       plateauTotalMinutes += durationMinutes
 
       const eligibleSet = new Set(
-        snapshot.plateauPlayerIds.length > 0
-          ? snapshot.plateauPlayerIds
-          : snapshot.players.map((player) => player.id),
+        snapshot.plateauPresentPlayerIds.length > 0
+          ? snapshot.plateauPresentPlayerIds
+          : Array.from(presentPlayerSet),
       )
       const starters = snapshot.draft.home.starters
         .filter((playerId) => eligibleSet.has(playerId))
@@ -1866,8 +1881,8 @@ export default function MatchDetailsPage() {
       }
     }
 
-    for (const declaredPlayerId of declaredPlayerIds) {
-      if (!totalMinutesByPlayerId.has(declaredPlayerId)) totalMinutesByPlayerId.set(declaredPlayerId, 0)
+    for (const presentPlayerId of presentPlayerSet) {
+      if (!totalMinutesByPlayerId.has(presentPlayerId)) totalMinutesByPlayerId.set(presentPlayerId, 0)
     }
 
     const denominator = plateauTotalMinutes > 0 ? plateauTotalMinutes : 1
