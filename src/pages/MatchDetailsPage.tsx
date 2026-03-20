@@ -1556,6 +1556,7 @@ export default function MatchDetailsPage() {
           navigate(`/match/${matchId}`, { replace: true })
         }}
       >
+        <div className="match-swipe-slide-layout">
         <header className="match-details-topbar match-swipe-preview-topbar" aria-hidden="true">
           <span className="back-link-button match-swipe-preview-nav-item">
             <ChevronLeftIcon size={18} />
@@ -1611,6 +1612,23 @@ export default function MatchDetailsPage() {
               {previewPending ? 'Pas encore joué' : previewHomeScore > previewAwayScore ? 'Victoire' : previewHomeScore < previewAwayScore ? 'Défaite' : 'Nul'}
             </div>
           </div>
+          {previewPending && (
+            <div className="match-result-row">
+              <button
+                type="button"
+                className="edit-primary live-start-btn"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setVisibleSwipeMatchId(matchId)
+                  applySnapshot(snapshot)
+                  navigate(`/match/${matchId}`, { replace: true })
+                }}
+              >
+                Jouer le match
+              </button>
+            </div>
+          )}
           {previewDateLabel && <p className="match-meta-line">{previewDateLabel}</p>}
         </div>
 
@@ -1618,6 +1636,19 @@ export default function MatchDetailsPage() {
           <article className="match-card">
             <div className="match-details-topbar">
               <h3>Composition</h3>
+              <button
+                type="button"
+                className="edit-secondary"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setVisibleSwipeMatchId(matchId)
+                  applySnapshot(snapshot)
+                  navigate(`/match/${matchId}`, { replace: true })
+                }}
+              >
+                Auto
+              </button>
             </div>
             <div className="lineup-stack">
               <div className="match-tactical-head">
@@ -1708,6 +1739,7 @@ export default function MatchDetailsPage() {
             </div>
           </article>
         </section>
+        </div>
       </div>
     )
   }
@@ -1719,6 +1751,7 @@ export default function MatchDetailsPage() {
   const isCurrentMatchReady = Boolean(activeViewMatchId && match.id === activeViewMatchId)
   const hasRouteSnapshotCached = Boolean(activeViewMatchId && matchSnapshotCacheRef.current.has(activeViewMatchId))
   const canRenderCurrentRoute = isCurrentMatchReady || hasRouteSnapshotCached
+  const isPageBusy = loading || compositionSaving || saving || liveSaving || autoComposing
   if (!canRenderCurrentRoute && !isPlateauSwipeEnabled) return <div style={{ padding: 20 }}>Chargement…</div>
 
   const activeMatchView = (
@@ -1729,6 +1762,12 @@ export default function MatchDetailsPage() {
           <span>Retour</span>
         </button>
         <div className="topbar-menu-wrap">
+          {isPageBusy && (
+            <span
+              className="match-inline-spinner"
+              aria-hidden="true"
+            />
+          )}
           <RoundIconButton ariaLabel="Ouvrir les actions du match" className="menu-dots-button" onClick={() => setMenuOpen((prev) => !prev)}>
             <DotsHorizontalIcon size={18} />
           </RoundIconButton>
@@ -1802,9 +1841,6 @@ export default function MatchDetailsPage() {
             <button type="button" className="edit-secondary" onClick={() => { void autoCompose() }} disabled={autoComposing || compositionPlayers.length === 0}>
               {autoComposing ? '...' : 'Auto'}
             </button>
-          </div>
-          <div className="edit-action-group" style={{ marginBottom: 10, justifyContent: 'space-between' }}>
-            {compositionSaving && <span className="muted-inline">Enregistrement...</span>}
           </div>
           <div className="lineup-stack">
             <div className="match-tactical-head">
@@ -2162,7 +2198,7 @@ export default function MatchDetailsPage() {
               </p>
               <p className="live-end-score">{playHomeScore} - {playAwayScore}</p>
               <button type="button" className="edit-primary live-cta" onClick={() => { void closePlayOverlay({ markAsPlayed: true }) }} disabled={liveSaving}>
-                {liveSaving ? 'Enregistrement...' : 'Retour au match'}
+                Retour au match
               </button>
             </section>
           )}
@@ -2215,7 +2251,7 @@ export default function MatchDetailsPage() {
                 <div className="edit-action-group">
                   <button type="button" className="edit-secondary" onClick={() => setIsLiveQuitConfirmOpen(false)} disabled={liveSaving}>Annuler</button>
                   <button type="button" className="edit-primary" onClick={() => { void closePlayOverlay({ markAsPlayed: true }) }} disabled={liveSaving}>
-                    {liveSaving ? 'Enregistrement...' : 'Confirmer'}
+                    Confirmer
                   </button>
                 </div>
               </div>
@@ -2307,7 +2343,7 @@ export default function MatchDetailsPage() {
             <div className="edit-action-group">
               <button type="button" className="edit-secondary" onClick={closeEditModal} disabled={saving}>Annuler</button>
               <button type="button" className="edit-primary" onClick={() => void saveDraft()} disabled={saving}>
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
+                Enregistrer
               </button>
             </div>
           </div>
@@ -2366,8 +2402,23 @@ export default function MatchDetailsPage() {
               <section key={matchId} className="match-swipe-slide" data-match-id={matchId} aria-current={isActiveSlide ? 'page' : undefined}>
                 {isActiveSlide ? (
                   canRenderCurrentRoute
-                    ? activeMatchView
-                    : <div className="match-swipe-loading-hint">Chargement du match…</div>
+                    ? <div className="match-swipe-slide-layout">{activeMatchView}</div>
+                    : (
+                      <div className="match-swipe-slide-layout">
+                        <header className="match-details-topbar">
+                          <button type="button" className="back-link-button" disabled>
+                            <ChevronLeftIcon size={18} />
+                            <span>Retour</span>
+                          </button>
+                          <div className="topbar-menu-wrap">
+                            <span className="match-inline-spinner" aria-hidden="true" />
+                            <RoundIconButton ariaLabel="Menu" className="menu-dots-button" disabled>
+                              <DotsHorizontalIcon size={18} />
+                            </RoundIconButton>
+                          </div>
+                        </header>
+                      </div>
+                    )
                 ) : (
                   renderLoadedSwipeSlide(matchId)
                 )}

@@ -16,6 +16,9 @@
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  gap: 8px;
+  margin: -16px;
+  padding: 16px;
 }
 
 .match-swipe-track::-webkit-scrollbar {
@@ -23,8 +26,15 @@
 }
 
 .match-swipe-slide {
-  scroll-snap-align: start;
+  scroll-snap-align: center;
   padding-right: 1px;
+}
+
+
+
+.match-swipe-slide-layout {
+  display: grid;
+  gap: 14px;
 }
 
 .match-swipe-loading-hint {
@@ -40,8 +50,7 @@
   background: transparent;
   color: #0f172a;
   padding: 0;
-  display: grid;
-  gap: 14px;
+  display: block;
   text-align: left;
   cursor: pointer;
 }
@@ -61,6 +70,32 @@
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+}
+
+.match-details-topbar .topbar-menu-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.match-inline-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #2563eb;
+  border-radius: 999px;
+  animation: match-inline-spin 0.7s linear infinite;
+}
+
+@keyframes match-inline-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .match-hero {
@@ -287,7 +322,7 @@
   margin-top: 6px;
 }
 
-.lineup-stack > p {
+.lineup-stack>p {
   margin: 0;
   font-size: 12px;
   color: #64748b;
@@ -422,7 +457,7 @@
   margin-top: 0;
 }
 
-.match-edit-modal .lineup-stack > p {
+.match-edit-modal .lineup-stack>p {
   font-size: 12px;
   font-weight: 700;
   color: #475569;
@@ -487,7 +522,7 @@
   gap: 6px;
 }
 
-.modal-score-item > span {
+.modal-score-item>span {
   font-size: 12px;
   color: #64748b;
 }
@@ -552,7 +587,7 @@
   align-content: start;
 }
 
-.match-tactical-roster > p {
+.match-tactical-roster>p {
   margin: 0;
   font-size: 12px;
   color: #475569;
@@ -617,7 +652,7 @@
   justify-items: center;
 }
 
-.match-tactical-slot > span {
+.match-tactical-slot>span {
   font-size: 11px;
   font-weight: 700;
   color: #f8fafc;
@@ -774,7 +809,7 @@
   gap: 8px;
 }
 
-.live-duration-picker > span {
+.live-duration-picker>span {
   font-size: 12px;
   color: #475569;
   font-weight: 700;
