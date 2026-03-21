@@ -8,7 +8,7 @@ import { toErrorMessage } from '../errors'
 import { buildPointsMap, buildTacticalFormations, buildTacticalTokens, type TacticalPoint } from '../features/tactical'
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import { isMatchNotPlayed } from '../matchStatus'
+import { isMatchCancelled, isMatchNotPlayed } from '../matchStatus'
 import type { ClubMe, MatchLite, MatchTeamLite, Plateau, Player } from '../types/api'
 import { uiAlert } from '../ui'
 import { useTeamScope } from '../useTeamScope'
@@ -684,9 +684,10 @@ export default function MatchDetailsPage() {
   const away = useMemo(() => (match ? getTeam(match, 'away') : undefined), [match])
   const homeScore = home?.score ?? 0
   const awayScore = away?.score ?? 0
-  const pending = match ? isMatchNotPlayed(match, { referenceDate: plateauDateISO || null }) : false
-  const outcomeLabel = pending ? 'Pas encore joué' : homeScore > awayScore ? 'Victoire' : homeScore < awayScore ? 'Défaite' : 'Nul'
-  const outcomeClass = pending ? 'pending' : homeScore > awayScore ? 'win' : homeScore < awayScore ? 'loss' : 'draw'
+  const cancelled = match ? isMatchCancelled(match) : false
+  const pending = match ? (!cancelled && isMatchNotPlayed(match, { referenceDate: plateauDateISO || null })) : false
+  const outcomeLabel = cancelled ? 'Annulé' : (pending ? 'Pas encore joué' : homeScore > awayScore ? 'Victoire' : homeScore < awayScore ? 'Défaite' : 'Nul')
+  const outcomeClass = cancelled ? 'loss' : (pending ? 'pending' : homeScore > awayScore ? 'win' : homeScore < awayScore ? 'loss' : 'draw')
   const homeLabel = clubName
   const awayLabel = match?.opponentName || 'Adversaire'
   const matchDate = useMemo(() => {
@@ -1981,7 +1982,9 @@ export default function MatchDetailsPage() {
           </div>
           <div className="match-scoreboard">
             <div className="score-line">
-              {pending ? (
+              {cancelled ? (
+                <span>Annulé</span>
+              ) : pending ? (
                 <span>vs</span>
               ) : (
                 <>

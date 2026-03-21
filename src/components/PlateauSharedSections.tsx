@@ -10,6 +10,7 @@ export type PlateauRotationDisplayGame = {
   isClickable?: boolean
   showLinkIndicator?: boolean
   scoreLabel?: string | null
+  isCancelled?: boolean
   onOpen?: () => void
 }
 
@@ -169,7 +170,7 @@ export function PlateauRotationContent({
               {slot.games.map((game) => (
                 <div
                   key={game.key}
-                  className={`rotation-game-card ${game.isClickable ? 'is-clickable' : ''}`}
+                  className={`rotation-game-card ${game.isClickable ? 'is-clickable' : ''} ${game.isCancelled ? 'is-cancelled' : ''}`}
                   role={game.isClickable ? 'button' : undefined}
                   tabIndex={game.isClickable ? 0 : undefined}
                   onClick={game.isClickable ? game.onOpen : undefined}
@@ -183,7 +184,10 @@ export function PlateauRotationContent({
                   {(game.pitch != null || game.showLinkIndicator) ? (
                     <div className="rotation-game-head">
                       {game.pitch != null ? <div className="rotation-game-pitch">Terrain {game.pitch}</div> : <div />}
-                      {game.showLinkIndicator ? <span className="rotation-game-link-indicator" aria-hidden="true">›</span> : null}
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {game.isCancelled ? <span className="rotation-game-cancel-badge">Annulé</span> : null}
+                        {game.showLinkIndicator ? <span className="rotation-game-link-indicator" aria-hidden="true">›</span> : null}
+                      </div>
                     </div>
                   ) : null}
                   <div className="rotation-game-teams-row">
@@ -197,8 +201,8 @@ export function PlateauRotationContent({
                     </div>
                     <div className="rotation-game-side is-score">
                       <div className="rotation-game-score-wrap">
-                        <div className={`rotation-game-score ${game.scoreLabel ? '' : 'rotation-game-score-muted'}`}>
-                          {game.scoreLabel || 'vs'}
+                        <div className={`rotation-game-score ${game.isCancelled ? 'rotation-game-score-cancelled' : (game.scoreLabel ? '' : 'rotation-game-score-muted')}`}>
+                          {game.isCancelled ? 'Annulé' : (game.scoreLabel || 'vs')}
                         </div>
                       </div>
                     </div>

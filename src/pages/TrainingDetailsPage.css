@@ -323,6 +323,63 @@
   font: inherit;
 }
 
+.rotation-team-absences {
+  border: 1px solid #dbe5f1;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.rotation-team-absences-head {
+  display: grid;
+  gap: 4px;
+}
+
+.rotation-team-absences-head strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.rotation-team-absences-head span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rotation-team-absences-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rotation-team-absent-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.rotation-team-absent-item.is-checked {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.rotation-team-absent-item input {
+  margin: 0;
+}
+
+.rotation-team-absent-item small {
+  color: #64748b;
+  font-size: 11px;
+}
+
 .rotation-slots {
   display: grid;
   gap: 0;
@@ -354,6 +411,12 @@
   background: #f8fafc;
   display: grid;
   gap: 10px;
+}
+
+.rotation-game-card.is-cancelled {
+  border-color: #fecaca;
+  background: #fff1f2;
+  box-shadow: inset 4px 0 0 #ef4444;
 }
 
 .rotation-game-teams-row {
@@ -481,10 +544,28 @@
   color: #94a3b8;
 }
 
+.rotation-game-score-cancelled {
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .rotation-game-link-indicator {
   font-size: 18px;
   line-height: 1;
   color: #94a3b8;
+}
+
+.rotation-game-cancel-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #fecaca;
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .rotation-empty-state {

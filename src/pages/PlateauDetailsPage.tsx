@@ -17,7 +17,12 @@ import { applyAttendanceValue, extractPresentPlayerIds, persistAttendanceToggle 
 import { readDefaultTactic } from '../features/defaultTactic'
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import { isMatchNotPlayed as isPendingMatch } from '../matchStatus'
+import {
+  getStoredCancelledMatchIds,
+  isMatchCancelled,
+  isMatchNotPlayed as isPendingMatch,
+  setStoredMatchCancelled,
+} from '../matchStatus'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
@@ -137,6 +142,32 @@ function findPlanningTeamLabel(labels: string[], preferredNames: string[]) {
   return ''
 }
 
+type PlanningTeamEntry = {
+  label: string
+  color?: string
+  absent?: boolean
+}
+
+function buildSidesPayload(match: MatchLite) {
+  const toPayload = (side: 'home' | 'away') => {
+    const rows = match.teams.find((team) => team.side === side)?.players ?? []
+    const starters = rows
+      .filter((row) => row.role !== 'sub')
+      .map((row) => row.playerId || row.player?.id)
+      .filter((playerId): playerId is string => Boolean(playerId))
+    const subs = rows
+      .filter((row) => row.role === 'sub')
+      .map((row) => row.playerId || row.player?.id)
+      .filter((playerId): playerId is string => Boolean(playerId))
+    return { starters, subs }
+  }
+
+  return {
+    home: toPayload('home'),
+    away: toPayload('away'),
+  }
+}
+
 export default function PlateauDetailsPage() {
   const { me } = useAuth()
   const { selectedTeamId, selectedTeamFormat, requiresSelection, teamOptions } = useTeamScope()
@@ -172,6 +203,8 @@ export default function PlateauDetailsPage() {
   const [startTimeDraft, setStartTimeDraft] = useState('')
   const [meetingTimeDraft, setMeetingTimeDraft] = useState('')
   const [savingInfo, setSavingInfo] = useState(false)
+  const [absentTeamsSaving, setAbsentTeamsSaving] = useState<Set<string>>(new Set())
+  const [localCancelledMatchIds, setLocalCancelledMatchIds] = useState<Set<string>>(() => getStoredCancelledMatchIds())
 
   const [homeScore, setHomeScore] = useState<number>(0)
   const [awayScore, setAwayScore] = useState<number>(0)
@@ -289,6 +322,50 @@ export default function PlateauDetailsPage() {
       }),
     }))
   }, [clubName, plateau?.teamId, plateauMatches, plateauPlanningTeams, selectedTeamId, teamOptions, visiblePlanningSlots])
+  const absentTeamLabels = useMemo(() => {
+    const teams = Array.isArray(plateauPlanningData?.teams)
+      ? (plateauPlanningData?.teams as PlanningTeamEntry[])
+      : []
+    return new Set(
+      teams
+        .filter((entry) => Boolean(entry?.label) && Boolean(entry?.absent))
+        .map((entry) => entry.label.trim())
+        .filter(Boolean)
+    )
+  }, [plateauPlanningData?.teams])
+  const rotationMatchIdsByTeam = useMemo(() => {
+    const byTeam = new Map<string, Set<string>>()
+    if (!plateauPlanningData?.slots?.length) return byTeam
+    const activePlateauTeamName = (() => {
+      const activeId = selectedTeamId || plateau?.teamId
+      if (!activeId) return ''
+      return teamOptions.find((team) => team.id === activeId)?.name || ''
+    })()
+    const clubPlanningTeam = findPlanningTeamLabel(plateauPlanningTeams, [clubName, activePlateauTeamName])
+    if (!clubPlanningTeam) return byTeam
+    const opponentSeenCount = new Map<string, number>()
+    const matchesByOpponent = new Map<string, MatchLite[]>()
+    for (const match of plateauMatches) {
+      const key = (match.opponentName || '').trim()
+      if (!matchesByOpponent.has(key)) matchesByOpponent.set(key, [])
+      matchesByOpponent.get(key)?.push(match)
+    }
+    for (const slot of plateauPlanningData.slots) {
+      for (const game of slot.games) {
+        if (game.A !== clubPlanningTeam && game.B !== clubPlanningTeam) continue
+        const opponent = game.A === clubPlanningTeam ? game.B : game.A
+        const occurrence = opponentSeenCount.get(opponent) ?? 0
+        opponentSeenCount.set(opponent, occurrence + 1)
+        const linkedMatch = matchesByOpponent.get(opponent)?.[occurrence]
+        if (!linkedMatch?.id) continue
+        for (const teamLabel of [game.A, game.B]) {
+          if (!byTeam.has(teamLabel)) byTeam.set(teamLabel, new Set())
+          byTeam.get(teamLabel)?.add(linkedMatch.id)
+        }
+      }
+    }
+    return byTeam
+  }, [clubName, plateau?.teamId, plateauMatches, plateauPlanningData, plateauPlanningTeams, selectedTeamId, teamOptions])
 
   useEffect(() => {
     if (!id) return
@@ -315,24 +392,33 @@ export default function PlateauDetailsPage() {
     visibleRotationMatches.map((slot) => ({
       key: slot.time,
       time: slot.time,
-      games: slot.games.map((game) => ({
-        key: `${slot.time}-${game.pitch}-${game.A}-${game.B}`,
-        pitch: game.pitch,
-        teamA: game.A,
-        teamB: game.B,
-        teamAColor: plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0],
-        teamBColor: plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1],
-        isClickable: game.isClubGame && Boolean(game.linkedMatch),
-        showLinkIndicator: game.isClubGame && Boolean(game.linkedMatch),
-        scoreLabel: game.isClubGame && game.linkedMatch && !isPendingMatch(game.linkedMatch, {
-          referenceDate: plateau?.date ?? null,
+      games: slot.games.map((game) => {
+        const cancelledByAbsence = absentTeamLabels.has(game.A) || absentTeamLabels.has(game.B)
+        const cancelledByMatchStatus = game.isClubGame && Boolean(game.linkedMatch) && isMatchCancelled(game.linkedMatch as MatchLite, {
+          localCancelledIds: localCancelledMatchIds,
         })
-          ? `${game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0} - ${game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0}`
-          : null,
-        onOpen: game.isClubGame && game.linkedMatch ? () => navigate(`/match/${game.linkedMatch?.id}`) : undefined,
-      })),
+        const isCancelled = cancelledByAbsence || cancelledByMatchStatus
+        return {
+          key: `${slot.time}-${game.pitch}-${game.A}-${game.B}`,
+          pitch: game.pitch,
+          teamA: game.A,
+          teamB: game.B,
+          teamAColor: plateauPlanningTeamColorMap.get(game.A) ?? TEAM_COLORS[0],
+          teamBColor: plateauPlanningTeamColorMap.get(game.B) ?? TEAM_COLORS[1],
+          isClickable: game.isClubGame && Boolean(game.linkedMatch) && !isCancelled,
+          showLinkIndicator: game.isClubGame && Boolean(game.linkedMatch) && !isCancelled,
+          isCancelled,
+          scoreLabel: game.isClubGame
+            && game.linkedMatch
+            && !isCancelled
+            && !isPendingMatch(game.linkedMatch, { referenceDate: plateau?.date ?? null, localCancelledIds: localCancelledMatchIds })
+            ? `${game.linkedMatch.teams.find((team) => team.side === 'home')?.score ?? 0} - ${game.linkedMatch.teams.find((team) => team.side === 'away')?.score ?? 0}`
+            : null,
+          onOpen: game.isClubGame && game.linkedMatch && !isCancelled ? () => navigate(`/match/${game.linkedMatch?.id}`) : undefined,
+        }
+      }),
     }))
-  ), [navigate, plateau?.date, plateauPlanningTeamColorMap, visibleRotationMatches])
+  ), [absentTeamLabels, localCancelledMatchIds, navigate, plateau?.date, plateauPlanningTeamColorMap, visibleRotationMatches])
   const manualDisplaySlots = useMemo(() => {
     if (matchSourceMode !== 'MANUAL' || plateauMatches.length === 0) return []
     const activePlateauTeamName = (() => {
@@ -347,7 +433,8 @@ export default function PlateauDetailsPage() {
         const away = match.teams.find((team) => team.side === 'away')
         const homeScoreValue = home?.score ?? 0
         const awayScoreValue = away?.score ?? 0
-        const isNotPlayed = isPendingMatch(match, { referenceDate: plateau?.date ?? null })
+        const cancelled = isMatchCancelled(match, { localCancelledIds: localCancelledMatchIds })
+        const isNotPlayed = isPendingMatch(match, { referenceDate: plateau?.date ?? null, localCancelledIds: localCancelledMatchIds })
         return {
           key: match.id,
           teamA: clubName || activePlateauTeamName || 'Nous',
@@ -356,12 +443,13 @@ export default function PlateauDetailsPage() {
           teamBColor: '#64748b',
           isClickable: true,
           showLinkIndicator: false,
-          scoreLabel: isNotPlayed ? null : `${homeScoreValue} - ${awayScoreValue}`,
+          isCancelled: cancelled,
+          scoreLabel: cancelled || isNotPlayed ? null : `${homeScoreValue} - ${awayScoreValue}`,
           onOpen: () => navigate(`/match/${match.id}`),
         }
       }),
     }]
-  }, [clubName, matchSourceMode, navigate, plateau?.teamId, plateauMatches, selectedTeamId, teamOptions])
+  }, [clubName, localCancelledMatchIds, matchSourceMode, navigate, plateau?.date, plateau?.teamId, plateauMatches, selectedTeamId, teamOptions])
   const activeTeamName = useMemo(() => {
     const activeId = selectedTeamId || plateau?.teamId
     if (!activeId) return ''
@@ -642,6 +730,84 @@ export default function PlateauDetailsPage() {
     }
   }
 
+  async function syncTeamAbsence(teamLabel: string, absent: boolean) {
+    if (!writable) return
+    if (!plateauPlanning || !plateauPlanningData) return
+    const normalizedLabel = teamLabel.trim()
+    if (!normalizedLabel) return
+    setAbsentTeamsSaving((prev) => new Set(prev).add(normalizedLabel))
+    try {
+      const currentEntries = Array.isArray(plateauPlanningData.teams)
+        ? (plateauPlanningData.teams as PlanningTeamEntry[])
+        : []
+      const entriesByLabel = new Map(currentEntries.map((entry) => [entry.label, entry] as const))
+      const nextTeams = plateauPlanningTeams.map((label, index) => {
+        const existing = entriesByLabel.get(label)
+        return {
+          label,
+          color: existing?.color || TEAM_COLORS[index % TEAM_COLORS.length],
+          absent: label === normalizedLabel ? absent : Boolean(existing?.absent),
+        }
+      })
+      const savedPlanning = await api.updatePlanning(plateauPlanning.id, {
+        ...plateauPlanningData,
+        teams: nextTeams,
+      })
+      setPlateauPlannings([savedPlanning])
+
+      const affectedMatchIds = Array.from(rotationMatchIdsByTeam.get(normalizedLabel) ?? [])
+      if (!affectedMatchIds.length) return
+      const updatedMatches = await Promise.all(affectedMatchIds.map(async (matchId) => {
+        const source = plateauMatches.find((item) => item.id === matchId)
+        if (!source) return null
+        const payload = {
+          type: source.type,
+          plateauId: source.plateauId ?? undefined,
+          sides: buildSidesPayload(source),
+          score: {
+            home: source.teams.find((team) => team.side === 'home')?.score ?? 0,
+            away: source.teams.find((team) => team.side === 'away')?.score ?? 0,
+          },
+          buteurs: (source.scorers || []).map((scorer) => ({
+            playerId: scorer.playerId,
+            side: scorer.side,
+          })),
+          opponentName: source.opponentName || '',
+          played: absent ? false : source.played,
+          status: absent ? 'CANCELLED' : 'PLANNED',
+        }
+        const updated = await apiPut<MatchLite>(apiRoutes.matches.byId(matchId), payload)
+        return updated
+      }))
+      const validUpdated = updatedMatches.filter((item): item is MatchLite => Boolean(item))
+      if (!validUpdated.length) return
+      const updatedMap = new Map(validUpdated.map((item) => [item.id, item] as const))
+      setPlateauMatches((prev) => prev.map((item) => {
+        const updated = updatedMap.get(item.id)
+        if (!updated) return item
+        if (absent) return { ...updated, status: updated.status || 'CANCELLED' }
+        return updated
+      }))
+      setLocalCancelledMatchIds((prev) => {
+        const next = new Set(prev)
+        for (const matchId of affectedMatchIds) {
+          if (absent) next.add(matchId)
+          else next.delete(matchId)
+          setStoredMatchCancelled(matchId, absent)
+        }
+        return next
+      })
+    } catch (err: unknown) {
+      uiAlert(`Erreur mise à jour absences équipe: ${toErrorMessage(err)}`)
+    } finally {
+      setAbsentTeamsSaving((prev) => {
+        const next = new Set(prev)
+        next.delete(normalizedLabel)
+        return next
+      })
+    }
+  }
+
   async function generateMatchesFromRotation(planningArg?: Planning | null) {
     if (!writable) return
     if (!id) return
@@ -910,6 +1076,32 @@ export default function PlateauDetailsPage() {
             <div className="matches-section-body">
               {matchSourceMode === 'ROTATION' && (
                 <>
+                  {plateauPlanningTeams.length > 0 && (
+                    <div className="rotation-team-absences">
+                      <div className="rotation-team-absences-head">
+                        <strong>Équipes absentes</strong>
+                        <span>Tous les matchs liés à une équipe absente sont annulés.</span>
+                      </div>
+                      <div className="rotation-team-absences-list">
+                        {plateauPlanningTeams.map((teamLabel) => {
+                          const checked = absentTeamLabels.has(teamLabel)
+                          const saving = absentTeamsSaving.has(teamLabel)
+                          return (
+                            <label key={`absent-${teamLabel}`} className={`rotation-team-absent-item ${checked ? 'is-checked' : ''}`}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={!writable || saving}
+                                onChange={(event) => { void syncTeamAbsence(teamLabel, event.target.checked) }}
+                              />
+                              <span>{teamLabel}</span>
+                              {saving ? <small>…</small> : null}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                   {plateauPlanning ? (
                     <PlateauRotationContent
                       updatedAtLabel={`Mise à jour le ${new Date(plateauPlanning.updatedAt).toLocaleString()}`}

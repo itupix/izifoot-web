@@ -173,6 +173,7 @@ export interface MatchLite {
   createdAt: string
   type: 'ENTRAINEMENT' | 'PLATEAU'
   plateauId?: string | null
+  status?: 'PLANNED' | 'PLAYED' | 'CANCELLED' | string
   played?: boolean
   teams: MatchTeamLite[]
   scorers: MatchScorer[]

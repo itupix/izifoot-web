@@ -22,6 +22,7 @@ type RotationSlot = {
 type RotationTeam = {
   label: string
   color: string
+  absent?: boolean
 }
 
 type PublicPlateauResponse = {
@@ -105,6 +106,15 @@ export default function PublicPlateauPage() {
     }
     return map
   }, [rotation, teamLabels])
+  const absentTeamLabels = useMemo(() => {
+    const teams = Array.isArray(rotation?.teams) ? rotation.teams : []
+    return new Set(
+      teams
+        .filter((team) => Boolean(team?.label) && Boolean(team?.absent))
+        .map((team) => team.label.trim())
+        .filter(Boolean)
+    )
+  }, [rotation?.teams])
   const plateauStartTimeLabel = useMemo(() => {
     if (plateau?.startTime) return plateau.startTime
     if (rotation?.slots?.[0]?.time) return rotation.slots[0].time
@@ -148,9 +158,10 @@ export default function PublicPlateauPage() {
         teamB: game.B,
         teamAColor: teamColorMap.get(game.A) ?? TEAM_COLORS[0],
         teamBColor: teamColorMap.get(game.B) ?? TEAM_COLORS[1],
+        isCancelled: absentTeamLabels.has(game.A) || absentTeamLabels.has(game.B),
       })),
     }))
-  ), [teamColorMap, visibleSlots])
+  ), [absentTeamLabels, teamColorMap, visibleSlots])
 
   useEffect(() => {
     let cancelled = false
