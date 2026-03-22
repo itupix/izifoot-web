@@ -16,6 +16,7 @@ import { toErrorMessage } from '../errors'
 import { applyAttendanceValue, extractPresentPlayerIds, persistAttendanceToggle } from '../features/attendance'
 import { readDefaultTactic } from '../features/defaultTactic'
 import { detectMatchdayMode } from '../features/matchdayMode'
+import { linkRotationSlotsToMatches } from '../features/rotationLinking'
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import {
@@ -266,8 +267,8 @@ export default function PlateauDetailsPage() {
     setPlateau(p)
     setClubName(club?.name?.trim() || '')
     setPlayers(ps)
-    setPlateauMatches(matches)
     const sourceMatches = (summary?.matches && summary.matches.length > 0) ? summary.matches : matches
+    setPlateauMatches(sourceMatches)
     setMatchSourceMode(detectMatchdayMode(summary?.mode, sourceMatches))
     setPlateauAttendance(extractPresentPlayerIds(attends))
     const linkedPlanningId = getPlateauPlanningLink(p.id)
@@ -325,36 +326,62 @@ export default function PlateauDetailsPage() {
       .filter((slot) => slot.games.length > 0)
   }, [plateauPlanningData, selectedPlanningTeam])
   const visibleRotationMatches = useMemo(() => {
-    const opponentSeenCount = new Map<string, number>()
-    const matchesByOpponent = new Map<string, MatchLite[]>()
     const activePlateauTeamName = (() => {
       const activeId = selectedTeamId || plateau?.teamId
       if (!activeId) return ''
       return teamOptions.find((team) => team.id === activeId)?.name || ''
     })()
     const clubPlanningTeam = findPlanningTeamLabel(plateauPlanningTeams, [clubName, activePlateauTeamName])
-    for (const match of plateauMatches) {
-      const key = (match.opponentName || '').trim()
-      if (!matchesByOpponent.has(key)) matchesByOpponent.set(key, [])
-      matchesByOpponent.get(key)?.push(match)
-    }
-    return visiblePlanningSlots.map((slot) => ({
-      ...slot,
-      games: slot.games.map((game) => {
-        const isClubGame = Boolean(clubPlanningTeam) && (game.A === clubPlanningTeam || game.B === clubPlanningTeam)
-        const opponent = isClubGame
-          ? (game.A === clubPlanningTeam ? game.B : game.A)
-          : ''
-        let linkedMatch: MatchLite | null = null
-        if (isClubGame) {
-          const occurrence = opponentSeenCount.get(opponent) ?? 0
-          opponentSeenCount.set(opponent, occurrence + 1)
-          linkedMatch = matchesByOpponent.get(opponent)?.[occurrence] ?? null
-        }
-        return { ...game, isClubGame, opponent, linkedMatch }
-      }),
-    }))
+    const linked = linkRotationSlotsToMatches({
+      slots: visiblePlanningSlots,
+      matches: plateauMatches,
+      clubPlanningTeam,
+    })
+    return linked.slots
   }, [clubName, plateau?.teamId, plateauMatches, plateauPlanningTeams, selectedTeamId, teamOptions, visiblePlanningSlots])
+  const matchedRotationGames = useMemo(
+    () => visibleRotationMatches.flatMap((slot) => slot.games).filter((game) => game.isClubGame && Boolean(game.linkedMatch)).length,
+    [visibleRotationMatches],
+  )
+  const unmatchedRotationDisplaySlots = useMemo(() => {
+    if (matchSourceMode !== 'ROTATION' || plateauMatches.length === 0) return []
+    const linkedIds = new Set(
+      visibleRotationMatches
+        .flatMap((slot) => slot.games)
+        .map((game) => game.linkedMatch?.id)
+        .filter((matchId): matchId is string => Boolean(matchId)),
+    )
+    const unmatched = plateauMatches.filter((match) => !linkedIds.has(match.id))
+    if (unmatched.length === 0) return []
+    const activePlateauTeamName = (() => {
+      const activeId = selectedTeamId || plateau?.teamId
+      if (!activeId) return ''
+      return teamOptions.find((team) => team.id === activeId)?.name || ''
+    })()
+    return [{
+      key: 'rotation-unmatched',
+      games: unmatched.map((match) => {
+        const home = match.teams.find((team) => team.side === 'home')
+        const away = match.teams.find((team) => team.side === 'away')
+        const homeScoreValue = home?.score ?? 0
+        const awayScoreValue = away?.score ?? 0
+        const cancelled = isMatchCancelled(match, { localCancelledIds: localCancelledMatchIds })
+        const isNotPlayed = isPendingMatch(match, { referenceDate: plateau?.date ?? null, localCancelledIds: localCancelledMatchIds })
+        return {
+          key: match.id,
+          teamA: clubName || activePlateauTeamName || 'Nous',
+          teamB: match.opponentName || 'Adversaire',
+          teamAColor: '#1d4ed8',
+          teamBColor: '#64748b',
+          isClickable: true,
+          showLinkIndicator: false,
+          isCancelled: cancelled,
+          scoreLabel: cancelled || isNotPlayed ? null : `${homeScoreValue} - ${awayScoreValue}`,
+          onOpen: () => navigate(`/match/${match.id}`),
+        }
+      }),
+    }]
+  }, [clubName, localCancelledMatchIds, matchSourceMode, navigate, plateau?.date, plateau?.teamId, plateauMatches, selectedTeamId, teamOptions, visibleRotationMatches])
   const absentTeamLabels = useMemo(() => {
     const teams = Array.isArray(plateauPlanningData?.teams)
       ? (plateauPlanningData?.teams as PlanningTeamEntry[])
@@ -527,6 +554,23 @@ export default function PlateauDetailsPage() {
   }, [plateau?.date, plateau?.meetingTime, plateauPlanningData?.start])
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    if (matchSourceMode !== 'ROTATION') return
+    if (plateauMatches.length === 0) return
+    if (matchedRotationGames > 0) return
+    const sampleKeys = plateauMatches
+      .map((match) => match.rotationGameKey)
+      .filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+      .slice(0, 5)
+    console.warn('[matchday][rotation] no games matched; fallback applied', {
+      mode: matchSourceMode,
+      matches: plateauMatches.length,
+      matchedGames: matchedRotationGames,
+      rotationGameKeySample: sampleKeys,
+    })
+  }, [matchSourceMode, matchedRotationGames, plateauMatches])
 
   useEffect(() => {
     let cancelled = false
@@ -1132,22 +1176,45 @@ export default function PlateauDetailsPage() {
                     </div>
                   )}
                   {plateauPlanning ? (
-                    <PlateauRotationContent
-                      updatedAtLabel={`Mise à jour le ${new Date(plateauPlanning.updatedAt).toLocaleString()}`}
-                      filterValue={selectedPlanningTeam}
-                      filterOptions={plateauPlanningTeams}
-                      onFilterChange={setSelectedPlanningTeam}
-                      slots={rotationDisplaySlots}
-                      emptyMessage={selectedPlanningTeam ? 'Aucun créneau pour cette équipe.' : 'Aucun créneau disponible.'}
-                      topAction={writable ? (
-                        <button type="button" className="rotation-edit-link" onClick={() => openEditPlanningModal(plateauPlanning)}>
-                          Modifier
-                        </button>
-                      ) : undefined}
-                    />
+                    <>
+                      <PlateauRotationContent
+                        updatedAtLabel={`Mise à jour le ${new Date(plateauPlanning.updatedAt).toLocaleString()}`}
+                        filterValue={selectedPlanningTeam}
+                        filterOptions={plateauPlanningTeams}
+                        onFilterChange={setSelectedPlanningTeam}
+                        slots={rotationDisplaySlots}
+                        emptyMessage={selectedPlanningTeam ? 'Aucun créneau pour cette équipe.' : 'Aucun créneau disponible.'}
+                        topAction={writable ? (
+                          <button type="button" className="rotation-edit-link" onClick={() => openEditPlanningModal(plateauPlanning)}>
+                            Modifier
+                          </button>
+                        ) : undefined}
+                      />
+                      {unmatchedRotationDisplaySlots.length > 0 && (
+                        <PlateauRotationContent
+                          updatedAtLabel="Matchs non rattachés à la grille"
+                          filterValue=""
+                          filterOptions={[]}
+                          onFilterChange={() => {}}
+                          slots={unmatchedRotationDisplaySlots}
+                          emptyMessage="Aucun match."
+                        />
+                      )}
+                    </>
                   ) : (
                     <div className="matches-section-body">
-                      <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
+                      {plateauMatches.length > 0 ? (
+                        <PlateauRotationContent
+                          updatedAtLabel="Matchs disponibles"
+                          filterValue=""
+                          filterOptions={[]}
+                          onFilterChange={() => {}}
+                          slots={unmatchedRotationDisplaySlots.length > 0 ? unmatchedRotationDisplaySlots : manualDisplaySlots}
+                          emptyMessage="Aucun match."
+                        />
+                      ) : (
+                        <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
+                      )}
                     </div>
                   )}
                 </>
