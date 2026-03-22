@@ -57,8 +57,9 @@ export function linkRotationSlotsToMatches(params: {
   slots: RotationSlot[]
   matches: MatchLite[]
   clubPlanningTeam: string
+  linkAllGames?: boolean
 }) {
-  const { slots, matches, clubPlanningTeam } = params
+  const { slots, matches, clubPlanningTeam, linkAllGames = false } = params
   const sortedMatches = matches
     .slice()
     .sort((a, b) => {
@@ -81,7 +82,7 @@ export function linkRotationSlotsToMatches(params: {
   const linkedSlots: LinkedRotationSlot[] = slots.map((slot) => ({
     ...slot,
     games: slot.games.map((game) => {
-      const isClubGame = Boolean(clubPlanningTeam) && (game.A === clubPlanningTeam || game.B === clubPlanningTeam)
+      const isClubGame = linkAllGames || (Boolean(clubPlanningTeam) && (game.A === clubPlanningTeam || game.B === clubPlanningTeam))
       const opponent = isClubGame ? (game.A === clubPlanningTeam ? game.B : game.A) : ''
       return { ...game, isClubGame, opponent, linkedMatch: null }
     }),

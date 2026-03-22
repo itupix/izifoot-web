@@ -5,8 +5,10 @@ import { apiGet } from '../apiClient'
 import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { PlateauInfoSection, PlateauPageHeader, PlateauRotationContent } from '../components/PlateauSharedSections'
+import { linkRotationSlotsToMatches } from '../features/rotationLinking'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import type { Matchday } from '../types/api'
+import { isMatchCancelled } from '../matchStatus'
+import type { MatchLite, Matchday } from '../types/api'
 import './TrainingDetailsPage.css'
 
 type RotationGame = {
@@ -28,6 +30,7 @@ type RotationTeam = {
 
 type PublicPlateauResponse = {
   matchday: Matchday
+  matches?: MatchLite[]
   rotation: {
     updatedAt: string
     teams?: RotationTeam[]
@@ -45,6 +48,7 @@ const TEAM_COLORS = [
 export default function PublicPlateauPage() {
   const { token } = useParams<{ token: string }>()
   const [matchday, setMatchday] = useState<Matchday | null>(null)
+  const [matches, setMatches] = useState<MatchLite[]>([])
   const [rotation, setRotation] = useState<PublicPlateauResponse['rotation']>(null)
   const [selectedTeam, setSelectedTeam] = useState('')
   const [infoTab, setInfoTab] = useState<'LIEU' | 'HORAIRES'>('LIEU')
@@ -58,6 +62,7 @@ export default function PublicPlateauPage() {
     const data = normalizeMatchdayPayload<PublicPlateauResponse>(await apiGet(apiRoutes.public.matchdayByToken(token)))
     if (isCancelled()) return
     setMatchday(data.matchday)
+    setMatches(data.matches || [])
     setRotation(data.rotation)
   }, [token])
 
@@ -149,7 +154,14 @@ export default function PublicPlateauPage() {
     return `${window.location.origin}/matchday/public/${encodeURIComponent(token)}`
   }, [token])
   const rotationDisplaySlots = useMemo(() => (
-    visibleSlots.map((slot) => ({
+    (() => {
+      const linked = linkRotationSlotsToMatches({
+        slots: visibleSlots,
+        matches,
+        clubPlanningTeam: '',
+        linkAllGames: true,
+      })
+      return linked.slots.map((slot) => ({
       key: slot.time,
       time: slot.time,
       games: slot.games.map((game) => ({
@@ -159,10 +171,12 @@ export default function PublicPlateauPage() {
         teamB: game.B,
         teamAColor: teamColorMap.get(game.A) ?? TEAM_COLORS[0],
         teamBColor: teamColorMap.get(game.B) ?? TEAM_COLORS[1],
-        isCancelled: absentTeamLabels.has(game.A) || absentTeamLabels.has(game.B),
+        isCancelled: absentTeamLabels.has(game.A) || absentTeamLabels.has(game.B) || (game.linkedMatch ? isMatchCancelled(game.linkedMatch) : false),
       })),
     }))
-  ), [absentTeamLabels, teamColorMap, visibleSlots])
+    })()
+  ), [absentTeamLabels, matches, teamColorMap, visibleSlots])
+  const absentTeamsCount = absentTeamLabels.size
 
   useEffect(() => {
     let cancelled = false
@@ -229,6 +243,11 @@ export default function PublicPlateauPage() {
 
       {matchday && (
         <>
+          {absentTeamsCount > 0 && (
+            <div className="inline-alert" style={{ marginBottom: 8 }}>
+              Attention: {absentTeamsCount} équipe(s) absente(s) sur ce matchday. Certains matchs peuvent être annulés.
+            </div>
+          )}
           <div className="training-details-grid public-plateau-grid">
             <PlateauInfoSection
               tab={infoTab}

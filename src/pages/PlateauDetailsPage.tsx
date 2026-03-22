@@ -191,6 +191,12 @@ type PlanningTeamEntry = {
 type MatchdaySummaryModeResponse = {
   mode?: 'ROTATION' | 'MANUAL' | string
   matches?: MatchLite[]
+  rotation?: {
+    updatedAt: string
+    teams?: PlanningTeamEntry[]
+    slots: PlanningData['slots']
+    start?: string
+  } | null
 }
 
 function buildSidesPayload(match: MatchLite) {
@@ -225,6 +231,7 @@ export default function PlateauDetailsPage() {
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
   const [plateauMatches, setPlateauMatches] = useState<MatchLite[]>([])
   const [plateauPlannings, setPlateauPlannings] = useState<Planning[]>([])
+  const [summaryRotation, setSummaryRotation] = useState<MatchdaySummaryModeResponse['rotation']>(null)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [isMatchModalOpen, setIsMatchModalOpen] = useState(false)
   const [isPlanningModalOpen, setIsPlanningModalOpen] = useState(false)
@@ -284,6 +291,7 @@ export default function PlateauDetailsPage() {
     const sourceMatches = (summary?.matches && summary.matches.length > 0) ? summary.matches : matches
     setPlateauMatches(sourceMatches)
     setMatchSourceMode(detectMatchdayMode(summary?.mode, sourceMatches))
+    setSummaryRotation(summary?.rotation ?? null)
     setPlateauAttendance(extractPresentPlayerIds(attends))
     const linkedPlanningId = getPlateauPlanningLink(p.id)
     const linkedPlanning = linkedPlanningId ? plannings.find((planning) => planning.id === linkedPlanningId) ?? null : null
@@ -302,10 +310,26 @@ export default function PlateauDetailsPage() {
   )
 
   const plateauPlanning = useMemo(() => plateauPlannings[0] ?? null, [plateauPlannings])
-  const plateauPlanningData = useMemo(
-    () => (plateauPlanning?.data as PlanningData | undefined) ?? null,
-    [plateauPlanning]
-  )
+  const plateauPlanningData = useMemo(() => {
+    const fromPlanning = (plateauPlanning?.data as PlanningData | undefined) ?? null
+    if (fromPlanning?.slots?.length) return fromPlanning
+    if (!summaryRotation?.slots?.length) return null
+    const normalizedTeams = Array.isArray(summaryRotation.teams)
+      ? summaryRotation.teams.map((team, index) => ({
+        label: team.label,
+        color: team.color || TEAM_COLORS[index % TEAM_COLORS.length],
+        absent: team.absent,
+      }))
+      : undefined
+    return {
+      start: summaryRotation.start || '',
+      pitches: 0,
+      matchMin: 0,
+      breakMin: 0,
+      teams: normalizedTeams,
+      slots: summaryRotation.slots,
+    } satisfies PlanningData
+  }, [plateauPlanning, summaryRotation])
   const plateauPlanningTeams = useMemo(() => {
     if (!plateauPlanningData?.slots?.length) return [] as string[]
     const labels = new Set<string>()
@@ -818,28 +842,15 @@ export default function PlateauDetailsPage() {
 
   async function syncTeamAbsence(teamLabel: string, absent: boolean) {
     if (!writable) return
-    if (!plateauPlanning || !plateauPlanningData) return
+    if (!id || !plateauPlanningData) return
     const normalizedLabel = teamLabel.trim()
     if (!normalizedLabel) return
     setAbsentTeamsSaving((prev) => new Set(prev).add(normalizedLabel))
     try {
-      const currentEntries = Array.isArray(plateauPlanningData.teams)
-        ? (plateauPlanningData.teams as PlanningTeamEntry[])
-        : []
-      const entriesByLabel = new Map(currentEntries.map((entry) => [entry.label, entry] as const))
-      const nextTeams = plateauPlanningTeams.map((label, index) => {
-        const existing = entriesByLabel.get(label)
-        return {
-          label,
-          color: existing?.color || TEAM_COLORS[index % TEAM_COLORS.length],
-          absent: label === normalizedLabel ? absent : Boolean(existing?.absent),
-        }
-      })
-      const savedPlanning = await api.updatePlanning(plateauPlanning.id, {
-        ...plateauPlanningData,
-        teams: nextTeams,
-      })
-      setPlateauPlannings([savedPlanning])
+      await apiPost(apiRoutes.matchday.teamsAbsence(id), { teamLabel: normalizedLabel, absent })
+      const refreshed = await apiGet<MatchdaySummaryModeResponse>(apiRoutes.matchday.summary(id)).catch(() => null)
+      if (refreshed?.rotation) setSummaryRotation(refreshed.rotation)
+      if (refreshed?.matches) setPlateauMatches(refreshed.matches)
 
       const affectedMatchIds = Array.from(rotationMatchIdsByTeam.get(normalizedLabel) ?? [])
       if (!affectedMatchIds.length) return
@@ -1188,16 +1199,18 @@ export default function PlateauDetailsPage() {
                       </div>
                     </div>
                   )}
-                  {plateauPlanning ? (
+                  {plateauPlanningData?.slots?.length ? (
                     <>
                       <PlateauRotationContent
-                        updatedAtLabel={`Mise à jour le ${new Date(plateauPlanning.updatedAt).toLocaleString()}`}
+                        updatedAtLabel={plateauPlanning
+                          ? `Mise à jour le ${new Date(plateauPlanning.updatedAt).toLocaleString()}`
+                          : (summaryRotation?.updatedAt ? `Mise à jour le ${new Date(summaryRotation.updatedAt).toLocaleString()}` : undefined)}
                         filterValue={selectedPlanningTeam}
                         filterOptions={plateauPlanningTeams}
                         onFilterChange={setSelectedPlanningTeam}
                         slots={rotationDisplaySlots}
                         emptyMessage={selectedPlanningTeam ? 'Aucun créneau pour cette équipe.' : 'Aucun créneau disponible.'}
-                        topAction={writable ? (
+                        topAction={writable && plateauPlanning ? (
                           <button type="button" className="rotation-edit-link" onClick={() => openEditPlanningModal(plateauPlanning)}>
                             Modifier
                           </button>
