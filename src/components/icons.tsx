@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  AlertTriangle,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -105,4 +106,8 @@ export function SparklesIcon(props: IconProps) {
 
 export function DiceIcon(props: IconProps) {
   return renderIcon(Dice5, props)
+}
+
+export function WarningIcon(props: IconProps) {
+  return renderIcon(AlertTriangle, props)
 }

@@ -5,6 +5,7 @@ import { apiGet } from '../apiClient'
 import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { PlateauInfoSection, PlateauPageHeader, PlateauRotationContent } from '../components/PlateauSharedSections'
+import { WarningIcon } from '../components/icons'
 import { linkRotationSlotsToMatches } from '../features/rotationLinking'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchCancelled } from '../matchStatus'
@@ -244,8 +245,9 @@ export default function PublicPlateauPage() {
       {matchday && (
         <>
           {absentTeamsCount > 0 && (
-            <div className="inline-alert" style={{ marginBottom: 8 }}>
-              Attention: {absentTeamsCount} équipe(s) absente(s) sur ce matchday. Certains matchs peuvent être annulés.
+            <div className="inline-alert" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <WarningIcon size={16} />
+              <span>{absentTeamsCount > 1 ? 'Plusieurs équipes sont absentes.' : 'Une équipe est absente.'}</span>
             </div>
           )}
           <div className="training-details-grid public-plateau-grid">
