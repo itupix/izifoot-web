@@ -959,18 +959,12 @@ export default function MatchDetailsPage() {
   useEffect(() => {
     setSlotAssignments((prev) => {
       const activeMatchId = id || null
-      const shouldResyncFromDraft = (
-        slotSyncMatchIdRef.current !== activeMatchId
-        || Object.keys(prev).length === 0
-      )
-      if (!shouldResyncFromDraft) return prev
-
       const next: Record<string, string> = {}
       tacticalTokens.forEach((tokenId, index) => {
         next[tokenId] = displayedHomeStarters[index] || ''
       })
       const changed = tacticalTokens.some((tokenId) => (prev[tokenId] || '') !== (next[tokenId] || ''))
-      if (!changed && Object.keys(prev).length === tacticalTokens.length) {
+      if (!changed) {
         slotSyncMatchIdRef.current = activeMatchId
         return prev
       }
