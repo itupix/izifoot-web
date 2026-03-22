@@ -1893,9 +1893,7 @@ export default function MatchDetailsPage() {
       if (!snapshot) continue
 
       for (const player of snapshot.players) {
-        if (player?.id && presentPlayerSet.has(player.id)) {
-          playerNameByPlayerId.set(player.id, player.name)
-        }
+        if (player?.id) playerNameByPlayerId.set(player.id, player.name)
       }
 
       const isCurrentMatchScope = relevantMatchId === match.id
@@ -1907,14 +1905,7 @@ export default function MatchDetailsPage() {
       const durationMinutes = currentDurationMinutes
       plateauTotalMinutes += durationMinutes
 
-      const eligibleSet = new Set(
-        snapshot.plateauPresentPlayerIds.length > 0
-          ? snapshot.plateauPresentPlayerIds
-          : Array.from(presentPlayerSet),
-      )
-      const starters = snapshot.draft.home.starters
-        .filter((playerId) => eligibleSet.has(playerId))
-        .slice(0, tacticalTokens.length)
+      const starters = snapshot.draft.home.starters.slice(0, tacticalTokens.length)
       const onField = new Set(starters)
       const substitutions = (persisted?.events || [])
         .filter((event) => event.type === 'SUBSTITUTION')
