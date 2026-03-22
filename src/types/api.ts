@@ -31,7 +31,7 @@ export interface Training {
   teamId?: string | null
 }
 
-export interface Plateau {
+export interface Matchday {
   id: string
   date: string
   lieu: string
@@ -172,7 +172,7 @@ export interface MatchLite {
   id: string
   createdAt: string
   type: 'ENTRAINEMENT' | 'PLATEAU'
-  plateauId?: string | null
+  matchdayId?: string | null
   status?: 'PLANNED' | 'PLAYED' | 'CANCELLED' | string
   played?: boolean
   teams: MatchTeamLite[]

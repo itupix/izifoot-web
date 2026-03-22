@@ -11,7 +11,7 @@ import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert } from '../ui'
-import type { Plateau, Training } from '../types/api'
+import type { Matchday, Training } from '../types/api'
 import './TrainingsPage.css'
 
 const LAST_PLANNING_DATE_KEY = 'izifoot.planning.lastDate'
@@ -61,7 +61,7 @@ export default function TrainingsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
-  const [plateaus, setPlateaus] = useState<Plateau[]>([])
+  const [matchdays, setMatchdays] = useState<Matchday[]>([])
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [isPlateauModalOpen, setIsPlateauModalOpen] = useState(false)
   const [plateauLocation, setPlateauLocation] = useState('')
@@ -79,17 +79,17 @@ export default function TrainingsPage() {
     return new Set(me.managedTeamIds)
   }, [me])
 
-  // Load trainings + plateaus
+  // Load trainings + matchdays
   const loadTrainings = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const [ts, pls] = await Promise.all([
       apiGet<Training[]>(apiRoutes.trainings.list),
-      apiGet<Plateau[]>(apiRoutes.plateaus.list),
+      apiGet<Matchday[]>(apiRoutes.matchday.list),
     ])
     if (isCancelled()) return
     const filteredByCoachTrainings = coachManagedTeams
       ? ts.filter((training) => !training.teamId || coachManagedTeams.has(training.teamId))
       : ts
-    const filteredByCoachPlateaus = coachManagedTeams
+    const filteredByCoachMatchdays = coachManagedTeams
       ? pls.filter((plateau) => !plateau.teamId || coachManagedTeams.has(plateau.teamId))
       : pls
 
@@ -98,15 +98,15 @@ export default function TrainingsPage() {
       : selectedTeamId
         ? filteredByCoachTrainings.filter((training) => !training.teamId || training.teamId === selectedTeamId)
         : filteredByCoachTrainings
-    const filteredPlateaus = requiresSelection && !selectedTeamId
+    const filteredMatchdays = requiresSelection && !selectedTeamId
       ? []
       : selectedTeamId
-        ? filteredByCoachPlateaus.filter((plateau) => !plateau.teamId || plateau.teamId === selectedTeamId)
-        : filteredByCoachPlateaus
+        ? filteredByCoachMatchdays.filter((plateau) => !plateau.teamId || plateau.teamId === selectedTeamId)
+        : filteredByCoachMatchdays
 
     filteredTrainings.sort((a, b) => +new Date(b.date) - +new Date(a.date))
     setTrainings(filteredTrainings)
-    setPlateaus(filteredPlateaus)
+    setMatchdays(filteredMatchdays)
   }, [coachManagedTeams, requiresSelection, selectedTeamId])
 
   const { loading, error } = useAsyncLoader(loadTrainings)
@@ -142,23 +142,23 @@ export default function TrainingsPage() {
   const dayTrainings = useMemo(() => {
     return trainings.filter(t => yyyyMmDd(toDateOnly(t.date)) === selectedDayKey)
   }, [trainings, selectedDayKey])
-  const dayPlateaus = useMemo(() => {
-    return plateaus.filter(p => yyyyMmDd(toDateOnly(p.date)) === selectedDayKey)
-  }, [plateaus, selectedDayKey])
+  const dayMatchdays = useMemo(() => {
+    return matchdays.filter(p => yyyyMmDd(toDateOnly(p.date)) === selectedDayKey)
+  }, [matchdays, selectedDayKey])
   const trainingDayKeys = useMemo(() => {
     return new Set(trainings.map((t) => yyyyMmDd(toDateOnly(t.date))))
   }, [trainings])
-  const plateauDayKeys = useMemo(() => {
-    return new Set(plateaus.map((p) => yyyyMmDd(toDateOnly(p.date))))
-  }, [plateaus])
-  const plateauLocations = useMemo(() => {
+  const matchdayDayKeys = useMemo(() => {
+    return new Set(matchdays.map((p) => yyyyMmDd(toDateOnly(p.date))))
+  }, [matchdays])
+  const matchdayLocations = useMemo(() => {
     const uniqueLocations = new Set(
-      plateaus
+      matchdays
         .map((p) => p.lieu.trim())
         .filter(Boolean),
     )
     return Array.from(uniqueLocations).sort((a, b) => a.localeCompare(b, 'fr-FR'))
-  }, [plateaus])
+  }, [matchdays])
   const monthLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('fr-FR', {
@@ -194,7 +194,7 @@ export default function TrainingsPage() {
     setIsCreatingPlateau(true)
     try {
       const activeTeam = teamOptions.find((team) => team.id === selectedTeamId)
-      const created = await apiPost<Plateau>(apiRoutes.plateaus.list, {
+      const created = await apiPost<Matchday>(apiRoutes.matchday.list, {
         date: day.toISOString(),
         lieu: normalizedLieu,
         teamId: selectedTeamId || undefined,
@@ -203,10 +203,10 @@ export default function TrainingsPage() {
         activeTeamId: selectedTeamId || undefined,
         active_team_id: selectedTeamId || undefined,
       })
-      setPlateaus(prev => [created, ...prev])
+      setMatchdays(prev => [created, ...prev])
       setPlateauLocation('')
       setIsPlateauModalOpen(false)
-      navigate(`/plateau/${created.id}?date=${selectedDayKey}`)
+      navigate(`/matchday/${created.id}?date=${selectedDayKey}`)
     } catch (err: unknown) {
       uiAlert(`Erreur création plateau: ${toErrorMessage(err)}`)
     } finally {
@@ -314,13 +314,13 @@ export default function TrainingsPage() {
 
         <section className="trainings-block">
           <div className="trainings-block-title">Plateaux</div>
-          {dayPlateaus.length === 0 ? (
+          {dayMatchdays.length === 0 ? (
             <div className="trainings-empty">Aucun plateau ce jour.</div>
           ) : (
-            dayPlateaus.map((p) => (
+            dayMatchdays.map((p) => (
               <Link
                 key={p.id}
-                to={`/plateau/${p.id}?date=${selectedDayKey}`}
+                to={`/matchday/${p.id}?date=${selectedDayKey}`}
                 className="trainings-item"
               >
                 <span className="trainings-item-row">
@@ -391,7 +391,7 @@ export default function TrainingsPage() {
                 const dayKey = yyyyMmDd(candidate)
                 const isSelected = dayKey === selectedDayKey
                 const hasTraining = trainingDayKeys.has(dayKey)
-                const hasPlateau = plateauDayKeys.has(dayKey)
+                const hasMatchday = matchdayDayKeys.has(dayKey)
                 return (
                   <button
                     key={`${pickerMonth.getFullYear()}-${pickerMonth.getMonth()}-${day}`}
@@ -405,7 +405,7 @@ export default function TrainingsPage() {
                     <span>{day}</span>
                     <span className="trainings-day-dots">
                       {hasTraining && <span className="trainings-dot-training" />}
-                      {hasPlateau && <span className="trainings-dot-plateau" />}
+                      {hasMatchday && <span className="trainings-dot-plateau" />}
                     </span>
                   </button>
                 )
@@ -468,11 +468,11 @@ export default function TrainingsPage() {
                 disabled={isCreatingPlateau}
               />
 
-              {plateauLocations.length > 0 && (
+              {matchdayLocations.length > 0 && (
                 <div className="trainings-location-picker">
                   <span className="trainings-location-picker-label">Lieux déjà utilisés</span>
                   <div className="trainings-location-chips">
-                    {plateauLocations.map((location) => (
+                    {matchdayLocations.map((location) => (
                       <button
                         key={location}
                         type="button"

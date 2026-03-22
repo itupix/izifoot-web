@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPut, apiUrl } from '../apiClient'
+import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
@@ -9,7 +10,7 @@ import { buildPointsMap, buildTacticalFormations, buildTacticalTokens, type Tact
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchCancelled, isMatchNotPlayed } from '../matchStatus'
-import type { ClubMe, MatchLite, MatchTeamLite, Plateau, Player } from '../types/api'
+import type { ClubMe, MatchLite, MatchTeamLite, Matchday, Player } from '../types/api'
 import { uiAlert } from '../ui'
 import { useTeamScope } from '../useTeamScope'
 import './MatchDetailsPage.css'
@@ -19,15 +20,15 @@ type MatchDetailsData = MatchLite & {
   playersById?: Record<string, Player>
 }
 
-type PlateauConvocation = {
+type MatchdayConvocation = {
   player: Player
   status?: 'present' | 'absent' | 'convoque' | 'non_convoque'
   present?: boolean
 }
 
-type PlateauSummaryResponse = {
-  plateau: Plateau
-  convocations: PlateauConvocation[]
+type MatchdaySummaryResponse = {
+  matchday: Matchday
+  convocations: MatchdayConvocation[]
   playersById?: Record<string, Player>
   matches?: MatchLite[]
 }
@@ -425,16 +426,17 @@ export default function MatchDetailsPage() {
       apiGet<Player[]>(apiRoutes.players.list).catch(() => []),
     ])
 
-    let plateauSummary: PlateauSummaryResponse | null = null
+    let plateauSummary: MatchdaySummaryResponse | null = null
     let nextPlateauDateISO = ''
     let nextPlateauPlayerIds: string[] = []
     let nextPlateauPresentPlayerIds: string[] = []
     let nextPlateauMatchOrderIds: string[] = []
     let matchesById = new Map<string, MatchLite>([[payload.id, payload]])
     let allMatchesOfDay: MatchLite[] = []
-    if (payload.plateauId) {
-      plateauSummary = await apiGet<PlateauSummaryResponse>(apiRoutes.plateaus.summary(payload.plateauId)).catch(() => null)
-      if (plateauSummary?.plateau?.date) nextPlateauDateISO = plateauSummary.plateau.date
+    if (payload.matchdayId) {
+      const rawSummary = await apiGet(apiRoutes.matchday.summary(payload.matchdayId)).catch(() => null)
+      plateauSummary = rawSummary ? normalizeMatchdayPayload<MatchdaySummaryResponse>(rawSummary) : null
+      if (plateauSummary?.matchday?.date) nextPlateauDateISO = plateauSummary.matchday.date
       nextPlateauMatchOrderIds = (plateauSummary?.matches || []).map((matchItem) => matchItem.id).filter(Boolean)
       nextPlateauPlayerIds = Array.from(new Set(
         (plateauSummary?.convocations || [])
@@ -708,7 +710,7 @@ export default function MatchDetailsPage() {
   const viewDraft = draft ?? { home: { starters: [], subs: [] }, away: { starters: [], subs: [] }, scorers: [] }
   const playerById = useMemo(() => new Map(players.map((p) => [p.id, p] as const)), [players])
 
-  const usePlateauEligibility = Boolean(match?.plateauId)
+  const usePlateauEligibility = Boolean(match?.matchdayId)
   const compositionPlayers = useMemo(() => {
     const allowedIds = usePlateauEligibility ? plateauPlayerIds : sortedPlayers.map((player) => player.id)
     const allowedSet = new Set(allowedIds)
@@ -763,12 +765,12 @@ export default function MatchDetailsPage() {
   }, [match, matchesOfDay])
   const swipeMatchIds = useMemo(() => {
     if (!id) return [] as string[]
-    if (!match?.plateauId) return [id]
+    if (!match?.matchdayId) return [id]
     const ordered = plateauMatchOrderIds.filter((matchId) => swipeMatchById.has(matchId))
     if (!ordered.includes(id)) ordered.push(id)
     return ordered
-  }, [id, match?.plateauId, plateauMatchOrderIds, swipeMatchById])
-  const isPlateauSwipeEnabled = Boolean(match?.plateauId) && swipeMatchIds.length > 1
+  }, [id, match?.matchdayId, plateauMatchOrderIds, swipeMatchById])
+  const isPlateauSwipeEnabled = Boolean(match?.matchdayId) && swipeMatchIds.length > 1
   const activeSwipeIndex = useMemo(() => {
     if (!id) return 0
     const index = swipeMatchIds.indexOf(id)
@@ -986,7 +988,7 @@ export default function MatchDetailsPage() {
         try {
           const updated = await apiPut<MatchDetailsData>(apiRoutes.matches.byId(id), {
             type: match.type,
-            plateauId: match.plateauId ?? undefined,
+            matchdayId: match.matchdayId ?? undefined,
             sides: {
               home: {
                 starters: compositionSaveSnapshot.homeStarters,
@@ -1210,7 +1212,7 @@ export default function MatchDetailsPage() {
         .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !sanitizedStarterSet.has(playerId))
       const updated = await apiPut<MatchDetailsData>(apiRoutes.matches.byId(id), {
         type: match.type,
-        plateauId: match.plateauId ?? undefined,
+        matchdayId: match.matchdayId ?? undefined,
         sides: {
           home: { starters: sanitizedHomeStarters, subs: sanitizedHomeSubs },
           away: {
@@ -1436,7 +1438,7 @@ export default function MatchDetailsPage() {
         .filter((playerId) => eligiblePlayerIdSet.has(playerId) && !sanitizedStarterSet.has(playerId))
       const updated = await apiPut<MatchDetailsData>(apiRoutes.matches.byId(id), {
         type: match.type,
-        plateauId: match.plateauId ?? undefined,
+        matchdayId: match.matchdayId ?? undefined,
         sides: {
           home: {
             starters: sanitizedHomeStarters,
@@ -1489,8 +1491,9 @@ export default function MatchDetailsPage() {
     setAutoComposing(true)
     try {
       let otherMatches = matchesOfDay
-      if (match.plateauId) {
-        const summary = await apiGet<PlateauSummaryResponse>(apiRoutes.plateaus.summary(match.plateauId)).catch(() => null)
+      if (match.matchdayId) {
+        const rawSummary = await apiGet(apiRoutes.matchday.summary(match.matchdayId)).catch(() => null)
+        const summary = rawSummary ? normalizeMatchdayPayload<MatchdaySummaryResponse>(rawSummary) : null
         if (summary?.matches) {
           otherMatches = summary.matches.filter((matchItem) => matchItem.id !== match.id)
         }
@@ -1818,7 +1821,7 @@ export default function MatchDetailsPage() {
   if (!canRenderCurrentRoute && !isPlateauSwipeEnabled) return <div style={{ padding: 20 }}>Chargement…</div>
 
   const playtimeRows = (() => {
-    if (!match?.plateauId) return [] as PlayerPlaytimeRow[]
+    if (!match?.matchdayId) return [] as PlayerPlaytimeRow[]
 
     const persistedByMatchId = readLiveMatchStateMap()
     const totalMinutesByPlayerId = new Map<string, number>()
@@ -1942,7 +1945,7 @@ export default function MatchDetailsPage() {
         return a.name.localeCompare(b.name)
       })
   })()
-  const showPlaytimeDock = Boolean(match?.plateauId)
+  const showPlaytimeDock = Boolean(match?.matchdayId)
 
   const activeMatchView = (
     <>

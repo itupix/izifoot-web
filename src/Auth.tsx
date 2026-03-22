@@ -11,7 +11,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const location = useLocation();
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
-  const isPublicPlateauRoute = location.pathname.startsWith('/plateau/public/');
+  const isPublicPlateauRoute = location.pathname.startsWith('/matchday/public/');
 
   const refresh = async () => {
     try {

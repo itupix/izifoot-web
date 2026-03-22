@@ -40,14 +40,19 @@ export const apiRoutes = {
     drillById: (trainingId: string, trainingDrillId: string) =>
       `/trainings/${enc(trainingId)}/drills/${enc(trainingDrillId)}`,
   },
-  plateaus: {
-    list: '/plateaus',
-    byId: (id: string) => `/plateaus/${enc(id)}`,
-    share: (id: string) => `/plateaus/${enc(id)}/share`,
-    summary: (id: string) => `/plateaus/${enc(id)}/summary`,
+  matchday: {
+    list: '/matchday',
+    byId: (id: string) => `/matchday/${enc(id)}`,
+    share: (id: string) => `/matchday/${enc(id)}/share`,
+    summary: (id: string) => `/matchday/${enc(id)}/summary`,
+    teamsAbsence: (id: string) => `/matchday/${enc(id)}/teams/absence`,
   },
   public: {
-    plateauByToken: (token: string) => `/public/plateaus/${enc(token)}`,
+    matchdayByToken: (token: string) => `/public/matchday/${enc(token)}`,
+  },
+  player: {
+    matchday: '/player/matchday',
+    summary: (id: string) => `/player/matchday/${enc(id)}/summary`,
   },
   drills: {
     list: '/drills',
@@ -65,7 +70,7 @@ export const apiRoutes = {
   matches: {
     list: '/matches',
     byId: (id: string) => `/matches/${enc(id)}`,
-    byPlateau: (plateauId: string) => `/matches?plateauId=${enc(plateauId)}`,
+    byMatchday: (matchdayId: string) => `/matches?matchdayId=${enc(matchdayId)}`,
   },
   attendance: {
     list: '/attendance',

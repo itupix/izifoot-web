@@ -56,7 +56,7 @@ export default function App() {
   const needsClubSetup = Boolean(me?.role === 'DIRECTION' && requiresSelection && !teamLoading && !selectedTeamId)
 
   const isHome = location.pathname === '/'
-  const isPublicPlateau = location.pathname.startsWith('/plateau/public/')
+  const isPublicPlateau = location.pathname.startsWith('/matchday/public/')
   const isInviteAccept = location.pathname.startsWith('/invite/accept')
   const showSidebarShell = !isHome && !isPublicPlateau && !isInviteAccept
   const [menuOpen, setMenuOpen] = React.useState(false)
@@ -210,7 +210,7 @@ export default function App() {
         <div style={{ width: '100%', maxWidth: pageWidth }}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/plateau/public/:token" element={<PublicPlateauPage />} />
+            <Route path="/matchday/public/:token" element={<PublicPlateauPage />} />
             <Route path="/invite/accept" element={<InviteAcceptPage />} />
 
             <Route
@@ -256,7 +256,7 @@ export default function App() {
               }
             />
             <Route
-              path="/plateau/:id"
+              path="/matchday/:id"
               element={
                 <RequireAuth>
                   <PlateauDetailsPage />

@@ -26,7 +26,7 @@ import {
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
-import type { AttendanceRow, ClubMe, MatchLite, Plateau, Player } from '../types/api'
+import type { AttendanceRow, ClubMe, MatchLite, Matchday, Player } from '../types/api'
 import './TrainingDetailsPage.css'
 
 const TEAM_COLORS = [
@@ -36,17 +36,29 @@ const TEAM_COLORS = [
   '#b45309', '#6d28d9', '#0e7490', '#b91c1c', '#4338ca',
 ]
 
-const PLATEAU_PLANNING_MAP_KEY = 'izifoot.plateauPlanningMap'
-const PLATEAU_ROTATION_TEAM_FILTER_KEY = 'izifoot.plateauRotationTeamFilter'
+const MATCHDAY_PLANNING_MAP_KEY = 'izifoot.matchdayPlanningMap'
+const MATCHDAY_ROTATION_TEAM_FILTER_KEY = 'izifoot.matchdayRotationTeamFilter'
+const LEGACY_PLATEAU_PLANNING_MAP_KEY = 'izifoot.plateauPlanningMap'
+const LEGACY_PLATEAU_ROTATION_TEAM_FILTER_KEY = 'izifoot.plateauRotationTeamFilter'
 
 function readPlateauPlanningMap() {
   if (typeof window === 'undefined') return {} as Record<string, string>
   try {
-    const raw = window.localStorage.getItem(PLATEAU_PLANNING_MAP_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return {}
-    return parsed as Record<string, string>
+    const parseMap = (raw: string | null) => {
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object') return null
+      return parsed as Record<string, string>
+    }
+    const nextMap = parseMap(window.localStorage.getItem(MATCHDAY_PLANNING_MAP_KEY))
+    if (nextMap) return nextMap
+    const legacyMap = parseMap(window.localStorage.getItem(LEGACY_PLATEAU_PLANNING_MAP_KEY))
+    if (legacyMap) {
+      window.localStorage.setItem(MATCHDAY_PLANNING_MAP_KEY, JSON.stringify(legacyMap))
+      window.localStorage.removeItem(LEGACY_PLATEAU_PLANNING_MAP_KEY)
+      return legacyMap
+    }
+    return {}
   } catch {
     return {}
   }
@@ -54,35 +66,46 @@ function readPlateauPlanningMap() {
 
 function writePlateauPlanningMap(next: Record<string, string>) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(PLATEAU_PLANNING_MAP_KEY, JSON.stringify(next))
+  window.localStorage.setItem(MATCHDAY_PLANNING_MAP_KEY, JSON.stringify(next))
+  window.localStorage.removeItem(LEGACY_PLATEAU_PLANNING_MAP_KEY)
 }
 
-function setPlateauPlanningLink(plateauId: string, planningId: string) {
+function setPlateauPlanningLink(matchdayId: string, planningId: string) {
   const current = readPlateauPlanningMap()
-  writePlateauPlanningMap({ ...current, [plateauId]: planningId })
+  writePlateauPlanningMap({ ...current, [matchdayId]: planningId })
 }
 
-function getPlateauPlanningLink(plateauId: string) {
+function getPlateauPlanningLink(matchdayId: string) {
   const current = readPlateauPlanningMap()
-  return current[plateauId] || ''
+  return current[matchdayId] || ''
 }
 
-function clearPlateauPlanningLink(plateauId: string) {
+function clearPlateauPlanningLink(matchdayId: string) {
   const current = readPlateauPlanningMap()
-  if (!current[plateauId]) return
+  if (!current[matchdayId]) return
   const rest = { ...current }
-  delete rest[plateauId]
+  delete rest[matchdayId]
   writePlateauPlanningMap(rest)
 }
 
 function readPlateauRotationTeamFilterMap() {
   if (typeof window === 'undefined') return {} as Record<string, string>
   try {
-    const raw = window.localStorage.getItem(PLATEAU_ROTATION_TEAM_FILTER_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return {}
-    return parsed as Record<string, string>
+    const parseMap = (raw: string | null) => {
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object') return null
+      return parsed as Record<string, string>
+    }
+    const nextMap = parseMap(window.localStorage.getItem(MATCHDAY_ROTATION_TEAM_FILTER_KEY))
+    if (nextMap) return nextMap
+    const legacyMap = parseMap(window.localStorage.getItem(LEGACY_PLATEAU_ROTATION_TEAM_FILTER_KEY))
+    if (legacyMap) {
+      window.localStorage.setItem(MATCHDAY_ROTATION_TEAM_FILTER_KEY, JSON.stringify(legacyMap))
+      window.localStorage.removeItem(LEGACY_PLATEAU_ROTATION_TEAM_FILTER_KEY)
+      return legacyMap
+    }
+    return {}
   } catch {
     return {}
   }
@@ -90,17 +113,18 @@ function readPlateauRotationTeamFilterMap() {
 
 function writePlateauRotationTeamFilterMap(next: Record<string, string>) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(PLATEAU_ROTATION_TEAM_FILTER_KEY, JSON.stringify(next))
+  window.localStorage.setItem(MATCHDAY_ROTATION_TEAM_FILTER_KEY, JSON.stringify(next))
+  window.localStorage.removeItem(LEGACY_PLATEAU_ROTATION_TEAM_FILTER_KEY)
 }
 
-function getPlateauRotationTeamFilter(plateauId: string) {
+function getPlateauRotationTeamFilter(matchdayId: string) {
   const current = readPlateauRotationTeamFilterMap()
-  return current[plateauId] || ''
+  return current[matchdayId] || ''
 }
 
-function setPlateauRotationTeamFilter(plateauId: string, teamLabel: string) {
+function setPlateauRotationTeamFilter(matchdayId: string, teamLabel: string) {
   const current = readPlateauRotationTeamFilterMap()
-  writePlateauRotationTeamFilterMap({ ...current, [plateauId]: teamLabel })
+  writePlateauRotationTeamFilterMap({ ...current, [matchdayId]: teamLabel })
 }
 
 function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
@@ -174,7 +198,7 @@ export default function PlateauDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [plateau, setPlateau] = useState<Plateau | null>(null)
+  const [plateau, setPlateau] = useState<Matchday | null>(null)
   const [clubName, setClubName] = useState('')
   const [players, setPlayers] = useState<Player[]>([])
   const [plateauAttendance, setPlateauAttendance] = useState<Set<string>>(new Set())
@@ -224,9 +248,9 @@ export default function PlateauDetailsPage() {
   const loadPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
     const [p, ps, matches, attends, plannings, club] = await Promise.all([
-      apiGet<Plateau>(apiRoutes.plateaus.byId(id)),
+      apiGet<Matchday>(apiRoutes.matchday.byId(id)),
       apiGet<Player[]>(apiRoutes.players.list),
-      apiGet<MatchLite[]>(apiRoutes.matches.byPlateau(id)),
+      apiGet<MatchLite[]>(apiRoutes.matches.byMatchday(id)),
       apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', id)),
       api.listPlannings(),
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
@@ -553,7 +577,7 @@ export default function PlateauDetailsPage() {
     if (!id) return
     setDeletingPlateau(true)
     try {
-      await apiDelete(apiRoutes.plateaus.byId(id))
+      await apiDelete(apiRoutes.matchday.byId(id))
       navigate(backToPlanningUrl)
     } catch (err: unknown) {
       uiAlert(`Erreur suppression plateau: ${toErrorMessage(err)}`)
@@ -635,7 +659,7 @@ export default function PlateauDetailsPage() {
     if (!id || !plateau || !writable) return
     setSavingInfo(true)
     try {
-      const updated = await apiPut<Plateau>(apiRoutes.plateaus.byId(id), patch)
+      const updated = await apiPut<Matchday>(apiRoutes.matchday.byId(id), patch)
       setPlateau(updated)
       setInfoModal(null)
     } catch (err: unknown) {
@@ -668,8 +692,8 @@ export default function PlateauDetailsPage() {
     setShareLoading(true)
     setIsShareModalOpen(true)
     try {
-      const data = await apiPost<{ token: string; url?: string }>(apiRoutes.plateaus.share(id), {})
-      const fallbackUrl = `${window.location.origin}/plateau/public/${encodeURIComponent(data.token)}`
+      const data = await apiPost<{ token: string; url?: string }>(apiRoutes.matchday.share(id), {})
+      const fallbackUrl = `${window.location.origin}/matchday/public/${encodeURIComponent(data.token)}`
       setSharedPublicUrl(data.url || fallbackUrl)
     } catch (err: unknown) {
       setSharedPublicUrl('')
@@ -762,7 +786,7 @@ export default function PlateauDetailsPage() {
         if (!source) return null
         const payload = {
           type: source.type,
-          plateauId: source.plateauId ?? undefined,
+          matchdayId: source.matchdayId ?? undefined,
           sides: buildSidesPayload(source),
           score: {
             home: source.teams.find((team) => team.side === 'home')?.score ?? 0,
@@ -841,7 +865,7 @@ export default function PlateauDetailsPage() {
         generated.map((matchItem) =>
           apiPost<MatchLite>(apiRoutes.matches.list, {
             type: 'PLATEAU' as const,
-            plateauId: id,
+            matchdayId: id,
             sides: {
               home: { starters: [], subs: [] },
               away: { starters: [], subs: [] },
@@ -923,7 +947,7 @@ export default function PlateauDetailsPage() {
     try {
       const payload = {
         type: 'PLATEAU' as const,
-        plateauId: id,
+        matchdayId: id,
         sides: {
           home: { starters: [], subs: [] },
           away: { starters: [], subs: [] },

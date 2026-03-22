@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { apiGet } from '../apiClient'
+import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { PlateauInfoSection, PlateauPageHeader, PlateauRotationContent } from '../components/PlateauSharedSections'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import type { Plateau } from '../types/api'
+import type { Matchday } from '../types/api'
 import './TrainingDetailsPage.css'
 
 type RotationGame = {
@@ -26,7 +27,7 @@ type RotationTeam = {
 }
 
 type PublicPlateauResponse = {
-  plateau: Plateau
+  matchday: Matchday
   rotation: {
     updatedAt: string
     teams?: RotationTeam[]
@@ -43,7 +44,7 @@ const TEAM_COLORS = [
 
 export default function PublicPlateauPage() {
   const { token } = useParams<{ token: string }>()
-  const [plateau, setPlateau] = useState<Plateau | null>(null)
+  const [matchday, setMatchday] = useState<Matchday | null>(null)
   const [rotation, setRotation] = useState<PublicPlateauResponse['rotation']>(null)
   const [selectedTeam, setSelectedTeam] = useState('')
   const [infoTab, setInfoTab] = useState<'LIEU' | 'HORAIRES'>('LIEU')
@@ -54,23 +55,23 @@ export default function PublicPlateauPage() {
 
   const loadPublicPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!token) return
-    const data = await apiGet<PublicPlateauResponse>(apiRoutes.public.plateauByToken(token))
+    const data = normalizeMatchdayPayload<PublicPlateauResponse>(await apiGet(apiRoutes.public.matchdayByToken(token)))
     if (isCancelled()) return
-    setPlateau(data.plateau)
+    setMatchday(data.matchday)
     setRotation(data.rotation)
   }, [token])
 
   const { loading, error } = useAsyncLoader(loadPublicPlateau)
 
   const dateLabel = useMemo(() => {
-    if (!plateau?.date) return ''
-    return new Date(plateau.date).toLocaleDateString('fr-FR', {
+    if (!matchday?.date) return ''
+    return new Date(matchday.date).toLocaleDateString('fr-FR', {
       weekday: 'long',
       day: '2-digit',
       month: 'long',
       year: 'numeric',
     })
-  }, [plateau])
+  }, [matchday])
 
   const teamLabels = useMemo(() => {
     if (!rotation?.slots?.length) return [] as string[]
@@ -116,22 +117,22 @@ export default function PublicPlateauPage() {
     )
   }, [rotation?.teams])
   const plateauStartTimeLabel = useMemo(() => {
-    if (plateau?.startTime) return plateau.startTime
+    if (matchday?.startTime) return matchday.startTime
     if (rotation?.slots?.[0]?.time) return rotation.slots[0].time
-    if (!plateau?.date) return 'À définir'
-    const date = new Date(plateau.date)
+    if (!matchday?.date) return 'À définir'
+    const date = new Date(matchday.date)
     if (Number.isNaN(date.getTime())) return 'À définir'
     const hh = String(date.getHours()).padStart(2, '0')
     const mm = String(date.getMinutes()).padStart(2, '0')
     if (hh === '00' && mm === '00') return 'À définir'
     return `${hh}:${mm}`
-  }, [plateau?.date, plateau?.startTime, rotation?.slots])
+  }, [matchday?.date, matchday?.startTime, rotation?.slots])
   const plateauAddressLabel = useMemo(
-    () => plateau?.address?.trim() || plateau?.lieu || 'À définir',
-    [plateau?.address, plateau?.lieu]
+    () => matchday?.address?.trim() || matchday?.lieu || 'À définir',
+    [matchday?.address, matchday?.lieu]
   )
   const rendezVousTimeLabel = useMemo(() => {
-    if (plateau?.meetingTime) return plateau.meetingTime
+    if (matchday?.meetingTime) return matchday.meetingTime
     const source = plateauStartTimeLabel
     const match = source.match(/^(\d{2}):(\d{2})$/)
     if (!match) return 'À définir'
@@ -141,11 +142,11 @@ export default function PublicPlateauPage() {
     const hh = String(Math.floor(total / 60)).padStart(2, '0')
     const mm = String(total % 60).padStart(2, '0')
     return `${hh}:${mm}`
-  }, [plateau?.meetingTime, plateauStartTimeLabel])
+  }, [matchday?.meetingTime, plateauStartTimeLabel])
   const publicPlateauUrl = useMemo(() => {
     if (!token) return ''
     if (typeof window === 'undefined') return ''
-    return `${window.location.origin}/plateau/public/${encodeURIComponent(token)}`
+    return `${window.location.origin}/matchday/public/${encodeURIComponent(token)}`
   }, [token])
   const rotationDisplaySlots = useMemo(() => (
     visibleSlots.map((slot) => ({
@@ -224,9 +225,9 @@ export default function PublicPlateauPage() {
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}
-      {!loading && !error && !plateau && <p className="error-text">Plateau introuvable.</p>}
+      {!loading && !error && !matchday && <p className="error-text">Plateau introuvable.</p>}
 
-      {plateau && (
+      {matchday && (
         <>
           <div className="training-details-grid public-plateau-grid">
             <PlateauInfoSection

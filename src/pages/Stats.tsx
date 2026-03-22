@@ -5,7 +5,7 @@ import { apiGet } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchNotPlayed } from '../matchStatus'
-import type { AttendanceRow, MatchLite, Plateau, Player } from '../types/api'
+import type { AttendanceRow, MatchLite, Matchday, Player } from '../types/api'
 
 // ---- Helpers ----
 function sortByDateAsc<T extends { createdAt: string }>(arr: T[]) { return arr.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) }
@@ -31,7 +31,7 @@ function prettyAvg(v: number) { return (Math.round(v * 100) / 100).toFixed(2) }
 export default function StatsPage() {
   const [matches, setMatches] = useState<MatchLite[]>([])
   const [players, setPlayers] = useState<Player[]>([])
-  const [plateaus, setPlateaus] = useState<Plateau[]>([])
+  const [matchdays, setMatchdays] = useState<Matchday[]>([])
   const [attendance, setAttendance] = useState<AttendanceRow[]>([])
   const [viewMode, setViewMode] = useState<'match' | 'plateau'>('match')
   const [rankTab, setRankTab] = useState<'buteurs' | 'entrainements' | 'plateaux'>('buteurs')
@@ -40,32 +40,32 @@ export default function StatsPage() {
     const [rows, plist, plats, attends] = await Promise.all([
       apiGet<MatchLite[]>(apiRoutes.matches.list),
       apiGet<Player[]>(apiRoutes.players.list),
-      apiGet<Plateau[]>(apiRoutes.plateaus.list),
+      apiGet<Matchday[]>(apiRoutes.matchday.list),
       apiGet<AttendanceRow[]>(apiRoutes.attendance.list)
     ])
     if (isCancelled()) return
     setMatches(rows)
     setPlayers(plist)
-    setPlateaus(plats)
+    setMatchdays(plats)
     setAttendance(attends)
   }, [])
 
   const { loading, error } = useAsyncLoader(loadStats)
 
   const ordered = useMemo(() => sortByDateAsc(matches), [matches])
-  const plateauDateById = useMemo(() => new Map(plateaus.map((p) => [p.id, p.date] as const)), [plateaus])
+  const plateauDateById = useMemo(() => new Map(matchdays.map((p) => [p.id, p.date] as const)), [matchdays])
   const playedMatches = useMemo(
-    () => ordered.filter((m) => !isMatchNotPlayed(m, { referenceDate: m.plateauId ? (plateauDateById.get(m.plateauId) ?? null) : null })),
+    () => ordered.filter((m) => !isMatchNotPlayed(m, { referenceDate: m.matchdayId ? (plateauDateById.get(m.matchdayId) ?? null) : null })),
     [ordered, plateauDateById]
   )
 
   // Group matches by plateau (only type PLATEAU) and order groups by earliest createdAt, with plateau label
   const plateauGroups = useMemo(() => {
-    const plateauById = new Map(plateaus.map(p => [p.id, p]))
+    const plateauById = new Map(matchdays.map(p => [p.id, p]))
     const byId = new Map<string, { id: string; createdAt: number; matches: MatchLite[]; label: string }>()
     for (const m of playedMatches) {
       if (m.type !== 'PLATEAU') continue
-      const pid = m.plateauId ?? undefined
+      const pid = m.matchdayId ?? undefined
       const key = pid || `__no_plateau__:${m.id}`
       const label = pid ? (plateauById.get(pid)?.lieu || 'Plateau') : 'Plateau'
       const rec = byId.get(key) || { id: key, createdAt: new Date(m.createdAt).getTime(), matches: [], label }
@@ -74,7 +74,7 @@ export default function StatsPage() {
       rec.createdAt = Math.min(rec.createdAt, new Date(m.createdAt).getTime())
     }
     return Array.from(byId.values()).sort((a, b) => a.createdAt - b.createdAt)
-  }, [playedMatches, plateaus])
+  }, [playedMatches, matchdays])
   const plateauBands = useMemo(() => {
     const palette = ['#fef3c7', '#e0f2fe', '#e9d5ff', '#dcfce7', '#ffe4e6']
     return plateauGroups.map((g, i) => ({ index: i + 1, label: g.label, color: palette[i % palette.length] }))

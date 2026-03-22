@@ -4,10 +4,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { apiUrl } from '../apiClient'
+import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
 import { uiAlert } from '../ui'
-import type { Plateau, Player } from '../types/api'
+import type { Matchday, Player } from '../types/api'
 function useQuery() {
   const { search } = useLocation()
   return useMemo(() => new URLSearchParams(search), [search])
@@ -38,7 +39,7 @@ interface Match {
 }
 
 interface SummaryResponse {
-  plateau: Plateau
+  matchday: Matchday
   convocations: Convocation[]
   matches: Match[]
   playersById?: Record<string, Player>
@@ -77,7 +78,7 @@ export default function MatchDay() {
   async function genLinksFor(playerId: string, withEmail = true) {
     if (!id) return
     const player = data?.playersById?.[playerId]
-    const body: { plateauId: string; email?: string } = { plateauId: id }
+    const body: { matchdayId: string; email?: string } = { matchdayId: id }
     if (withEmail && player?.email) body.email = player.email
     const resp = await fetch(apiUrl(apiRoutes.players.invite(playerId)), {
       method: 'POST',
@@ -105,7 +106,7 @@ export default function MatchDay() {
     if (!id) return
     for (const pid of ids) {
       const player = data?.convocations.find(c => c.player.id === pid)?.player
-      const body: { plateauId: string; email?: string } = { plateauId: id }
+      const body: { matchdayId: string; email?: string } = { matchdayId: id }
       if (withEmail && player?.email) body.email = player.email
       const resp = await fetch(apiUrl(apiRoutes.players.invite(pid)), {
         method: 'POST',
@@ -141,12 +142,12 @@ export default function MatchDay() {
       try {
         setLoading(true)
         setError(null)
-        const resp = await fetch(apiUrl(apiRoutes.plateaus.summary(id)), {
+        const resp = await fetch(apiUrl(apiRoutes.matchday.summary(id)), {
           credentials: 'include',
           signal: abort.signal
         })
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-        const json = await resp.json()
+        const json = normalizeMatchdayPayload<SummaryResponse>(await resp.json())
         setData(json)
       } catch (err: unknown) {
         const isAbort = err instanceof DOMException && err.name === 'AbortError'
@@ -160,11 +161,11 @@ export default function MatchDay() {
   }, [id])
 
   const dateLabel = useMemo(() => {
-    if (!data?.plateau?.date) return ''
+    if (!data?.matchday?.date) return ''
     try {
-      return new Date(data.plateau.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+      return new Date(data.matchday.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     } catch {
-      return String(data?.plateau?.date ?? '')
+      return String(data?.matchday?.date ?? '')
     }
   }, [data])
 
@@ -172,7 +173,7 @@ export default function MatchDay() {
   if (error) return <div style={{ padding: 24, color: 'crimson' }}>Erreur: {error}</div>
   if (!data) return <div style={{ padding: 24 }}>Aucune donnée</div>
 
-  const { plateau, convocations, matches } = data
+  const { matchday, convocations, matches } = data
 
   // Helper to format sides (normalize side)
   const getSideLabel = (side: string, m: Match) => {
@@ -194,7 +195,7 @@ export default function MatchDay() {
         <p className="page-subtitle">Convocations, RSVP et résultats des matchs du plateau.</p>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div><strong>Date:</strong> {dateLabel}</div>
-          <div><strong>Lieu:</strong> {plateau.lieu}</div>
+          <div><strong>Lieu:</strong> {matchday.lieu}</div>
           {/* <div><strong>Adresse:</strong> {plateau.adresse || '—'}</div> */}
         </div>
       </header>
