@@ -15,6 +15,7 @@ import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { applyAttendanceValue, extractPresentPlayerIds, persistAttendanceToggle } from '../features/attendance'
 import { readDefaultTactic } from '../features/defaultTactic'
+import { detectMatchdayMode } from '../features/matchdayMode'
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import {
@@ -172,6 +173,11 @@ type PlanningTeamEntry = {
   absent?: boolean
 }
 
+type MatchdaySummaryModeResponse = {
+  mode?: 'ROTATION' | 'MANUAL' | string
+  matches?: MatchLite[]
+}
+
 function buildSidesPayload(match: MatchLite) {
   const toPayload = (side: 'home' | 'away') => {
     const rows = match.teams.find((team) => team.side === side)?.players ?? []
@@ -247,19 +253,22 @@ export default function PlateauDetailsPage() {
 
   const loadPlateau = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
-    const [p, ps, matches, attends, plannings, club] = await Promise.all([
+    const [p, ps, matches, attends, plannings, club, summary] = await Promise.all([
       apiGet<Matchday>(apiRoutes.matchday.byId(id)),
       apiGet<Player[]>(apiRoutes.players.list),
       apiGet<MatchLite[]>(apiRoutes.matches.byMatchday(id)),
       apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', id)),
       api.listPlannings(),
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
+      apiGet<MatchdaySummaryModeResponse>(apiRoutes.matchday.summary(id)).catch(() => null),
     ])
     if (isCancelled()) return
     setPlateau(p)
     setClubName(club?.name?.trim() || '')
     setPlayers(ps)
     setPlateauMatches(matches)
+    const sourceMatches = (summary?.matches && summary.matches.length > 0) ? summary.matches : matches
+    setMatchSourceMode(detectMatchdayMode(summary?.mode, sourceMatches))
     setPlateauAttendance(extractPresentPlayerIds(attends))
     const linkedPlanningId = getPlateauPlanningLink(p.id)
     const linkedPlanning = linkedPlanningId ? plannings.find((planning) => planning.id === linkedPlanningId) ?? null : null
@@ -518,10 +527,6 @@ export default function PlateauDetailsPage() {
   }, [plateau?.date, plateau?.meetingTime, plateauPlanningData?.start])
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
-
-  useEffect(() => {
-    setMatchSourceMode(plateauPlanning ? 'ROTATION' : 'MANUAL')
-  }, [plateauPlanning?.id])
 
   useEffect(() => {
     let cancelled = false

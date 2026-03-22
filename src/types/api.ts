@@ -173,6 +173,7 @@ export interface MatchLite {
   createdAt: string
   type: 'ENTRAINEMENT' | 'PLATEAU'
   matchdayId?: string | null
+  rotationGameKey?: string | null
   status?: 'PLANNED' | 'PLAYED' | 'CANCELLED' | string
   played?: boolean
   teams: MatchTeamLite[]
