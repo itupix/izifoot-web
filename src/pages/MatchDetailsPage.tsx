@@ -711,11 +711,14 @@ export default function MatchDetailsPage() {
   const playerById = useMemo(() => new Map(players.map((p) => [p.id, p] as const)), [players])
 
   const usePlateauEligibility = Boolean(match?.matchdayId)
+  const hasPlateauEligibilityIds = plateauPlayerIds.length > 0
   const compositionPlayers = useMemo(() => {
-    const allowedIds = usePlateauEligibility ? plateauPlayerIds : sortedPlayers.map((player) => player.id)
+    const allowedIds = (usePlateauEligibility && hasPlateauEligibilityIds)
+      ? plateauPlayerIds
+      : sortedPlayers.map((player) => player.id)
     const allowedSet = new Set(allowedIds)
     return sortedPlayers.filter((player) => allowedSet.has(player.id))
-  }, [usePlateauEligibility, plateauPlayerIds, sortedPlayers])
+  }, [hasPlateauEligibilityIds, usePlateauEligibility, plateauPlayerIds, sortedPlayers])
   const eligiblePlayerIds = useMemo(
     () => compositionPlayers.map((player) => player.id),
     [compositionPlayers],
@@ -726,7 +729,9 @@ export default function MatchDetailsPage() {
   )
 
   const compositionPlayerIds = useMemo(() => {
-    const ids = usePlateauEligibility ? plateauPlayerIds : sortedPlayers.map((player) => player.id)
+    const ids = (usePlateauEligibility && hasPlateauEligibilityIds)
+      ? plateauPlayerIds
+      : sortedPlayers.map((player) => player.id)
     const unique = new Set(ids)
     for (const playerId of [...viewDraft.home.starters, ...viewDraft.home.subs]) {
       unique.add(playerId)
@@ -735,14 +740,14 @@ export default function MatchDetailsPage() {
       if (playerId) unique.add(playerId)
     }
     return Array.from(unique)
-  }, [usePlateauEligibility, plateauPlayerIds, slotAssignments, sortedPlayers, viewDraft.home.starters, viewDraft.home.subs])
+  }, [hasPlateauEligibilityIds, usePlateauEligibility, plateauPlayerIds, slotAssignments, sortedPlayers, viewDraft.home.starters, viewDraft.home.subs])
   const displayedHomeStarters = useMemo(
     () => (
-      usePlateauEligibility
+      (usePlateauEligibility && hasPlateauEligibilityIds)
         ? viewDraft.home.starters.filter((playerId) => eligiblePlayerIdSet.has(playerId)).slice(0, tacticalTokens.length)
         : viewDraft.home.starters.slice(0, tacticalTokens.length)
     ),
-    [eligiblePlayerIdSet, tacticalTokens.length, usePlateauEligibility, viewDraft.home.starters],
+    [eligiblePlayerIdSet, hasPlateauEligibilityIds, tacticalTokens.length, usePlateauEligibility, viewDraft.home.starters],
   )
   const heroHomeScorers = useMemo(
     () => viewDraft.scorers
@@ -1236,6 +1241,21 @@ export default function MatchDetailsPage() {
       })
       setMatch(updated)
       setDraft(buildDraft(updated))
+      // Keep persisted live events as historical data for playtime computation.
+      setPersistedLiveMatchState(id, {
+        isOpen: false,
+        phase: 'ended',
+        durationMinutes: Math.max(1, playDurationMinutes),
+        remainingSeconds: 0,
+        homeScore: playHomeScore,
+        awayScore: playAwayScore,
+        events: liveEvents,
+        slotAssignments,
+        homeStarters: sanitizedHomeStarters,
+        homeSubs: sanitizedHomeSubs,
+        scorers: draft.scorers,
+        savedAt: Date.now(),
+      })
     } catch (err: unknown) {
       uiAlert(`Erreur mise à jour du match: ${toErrorMessage(err)}`)
       return
@@ -1244,7 +1264,6 @@ export default function MatchDetailsPage() {
     }
     setIsLiveQuitConfirmOpen(false)
     setIsPlayOverlayOpen(false)
-    clearPersistedLiveMatchState(id)
   }
 
   function handleLiveCloseAction() {
