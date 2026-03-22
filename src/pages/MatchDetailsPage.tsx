@@ -9,7 +9,7 @@ import { toErrorMessage } from '../errors'
 import { buildPointsMap, buildTacticalFormations, buildTacticalTokens, type TacticalPoint } from '../features/tactical'
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
-import { isMatchCancelled, isMatchNotPlayed } from '../matchStatus'
+import { getStoredCancelledMatchIds, isMatchCancelled, isMatchNotPlayed } from '../matchStatus'
 import type { ClubMe, MatchLite, MatchTeamLite, Matchday, Player } from '../types/api'
 import { uiAlert } from '../ui'
 import { useTeamScope } from '../useTeamScope'
@@ -1839,6 +1839,7 @@ export default function MatchDetailsPage() {
     const persistedByMatchId = readLiveMatchStateMap()
     const totalMinutesByPlayerId = new Map<string, number>()
     const playerNameByPlayerId = new Map<string, string>()
+    const cancelledIds = getStoredCancelledMatchIds()
 
     const activeMatchSnapshot: MatchPageSnapshot = {
       match,
@@ -1885,6 +1886,7 @@ export default function MatchDetailsPage() {
           : null
       )
       if (!snapshot) continue
+      if (isMatchCancelled(snapshot.match, { localCancelledIds: cancelledIds })) continue
 
       for (const player of snapshot.players) {
         if (player?.id) playerNameByPlayerId.set(player.id, player.name)
