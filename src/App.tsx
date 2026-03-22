@@ -2,7 +2,7 @@
 import React from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { BarChart3, Building2, CalendarRange, Dumbbell, Users } from 'lucide-react'
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import style from './App.module.css'
 import { getDefaultRouteByRole, type AccountRole } from './authz'
 import { CloseIcon, MenuIcon } from './components/icons'
@@ -48,6 +48,11 @@ function RoleAwareFallback() {
   return <Navigate to={me ? getDefaultRouteByRole(me.role) : '/'} replace />
 }
 
+function LegacyPublicMatchdayRedirect() {
+  const { token } = useParams<{ token: string }>()
+  return <Navigate to={`/matchday/public/${encodeURIComponent(token || '')}`} replace />
+}
+
 export default function App() {
   const { me, logout } = useAuth()
   const { selectedTeamId, setSelectedTeamId, teamOptions, loading: teamLoading, canSelectTeam, requiresSelection } = useTeamScope()
@@ -56,7 +61,11 @@ export default function App() {
   const needsClubSetup = Boolean(me?.role === 'DIRECTION' && requiresSelection && !teamLoading && !selectedTeamId)
 
   const isHome = location.pathname === '/'
-  const isPublicPlateau = location.pathname.startsWith('/matchday/public/')
+  const isPublicPlateau = (
+    location.pathname.startsWith('/matchday/public/')
+    || location.pathname.startsWith('/plateau/public/')
+    || location.pathname.startsWith('/public/matchday/')
+  )
   const isInviteAccept = location.pathname.startsWith('/invite/accept')
   const showSidebarShell = !isHome && !isPublicPlateau && !isInviteAccept
   const [menuOpen, setMenuOpen] = React.useState(false)
@@ -211,6 +220,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/matchday/public/:token" element={<PublicPlateauPage />} />
+            <Route path="/plateau/public/:token" element={<LegacyPublicMatchdayRedirect />} />
+            <Route path="/public/matchday/:token" element={<LegacyPublicMatchdayRedirect />} />
             <Route path="/invite/accept" element={<InviteAcceptPage />} />
 
             <Route

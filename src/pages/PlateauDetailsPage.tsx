@@ -145,6 +145,20 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   return '/planning'
 }
 
+function normalizePublicMatchdayUrl(rawUrl: string | undefined, token: string) {
+  if (typeof window === 'undefined') return `/matchday/public/${encodeURIComponent(token)}`
+  const fallbackUrl = `${window.location.origin}/matchday/public/${encodeURIComponent(token)}`
+  if (!rawUrl || !rawUrl.trim()) return fallbackUrl
+  try {
+    const parsed = new URL(rawUrl, window.location.origin)
+    const match = parsed.pathname.match(/^\/(?:matchday\/public|public\/matchday|plateau\/public|public\/plateaus)\/([^/]+)$/)
+    if (!match?.[1]) return rawUrl
+    return `${window.location.origin}/matchday/public/${encodeURIComponent(decodeURIComponent(match[1]))}`
+  } catch {
+    return fallbackUrl
+  }
+}
+
 function normalizeTeamLabel(value: string) {
   return value
     .normalize('NFD')
@@ -742,8 +756,7 @@ export default function PlateauDetailsPage() {
     setIsShareModalOpen(true)
     try {
       const data = await apiPost<{ token: string; url?: string }>(apiRoutes.matchday.share(id), {})
-      const fallbackUrl = `${window.location.origin}/matchday/public/${encodeURIComponent(data.token)}`
-      setSharedPublicUrl(data.url || fallbackUrl)
+      setSharedPublicUrl(normalizePublicMatchdayUrl(data.url, data.token))
     } catch (err: unknown) {
       setSharedPublicUrl('')
       uiAlert(`Erreur génération du lien public: ${toErrorMessage(err)}`)
