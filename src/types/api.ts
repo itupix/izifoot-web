@@ -1,3 +1,14 @@
+export interface PaginationMeta {
+  limit: number
+  offset: number
+  returned: number
+}
+
+export interface PaginatedResponse<T> {
+  items: T[]
+  pagination: PaginationMeta
+}
+
 export interface Player {
   id: string
   name: string
@@ -102,6 +113,7 @@ export interface DrillsResponse {
   items: Drill[]
   categories: string[]
   tags: string[]
+  pagination?: PaginationMeta
 }
 
 export interface TrainingDrill {
@@ -151,7 +163,7 @@ export interface GenerateTrainingDrillsResponse {
 export interface MatchTeamPlayer {
   playerId?: string
   role?: 'starter' | 'sub'
-  player: Player
+  player?: Player
 }
 
 export interface MatchTeamLite {
