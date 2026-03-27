@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FloatingPlusButton from '../components/FloatingPlusButton'
 import SearchInput from '../components/SearchInput'
+import { canLoadMore, mergeById, nextOffset, normalizePaginatedResponse, withPagination } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
@@ -19,6 +20,7 @@ import './PlayersPage.css'
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
 const POSITION_UNDEFINED = 'NON DEFINI'
 const POSITION_FILTERS = [POSITION_UNDEFINED, ...POSITIONS] as const
+const PLAYERS_PAGE_LIMIT = 50
 
 type SortKey = 'name' | 'position'
 type TeamTab = 'EFFECTIF' | 'TACTIQUE'
@@ -172,6 +174,8 @@ export default function PlayersPage() {
   const defaultFormation = tacticalFormations[0]
 
   const [players, setPlayers] = useState<Player[]>([])
+  const [playersPagination, setPlayersPagination] = useState({ limit: PLAYERS_PAGE_LIMIT, offset: 0, returned: 0 })
+  const [loadingMorePlayers, setLoadingMorePlayers] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<TeamTab>('EFFECTIF')
   const [tacticalFormation, setTacticalFormation] = useState<string>(defaultFormation?.key || '')
@@ -205,11 +209,31 @@ export default function PlayersPage() {
   const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
 
   const loadPlayers = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
-    const list = await apiGet<Player[]>(apiRoutes.players.list)
-    if (!isCancelled()) setPlayers(list)
+    const raw = await apiGet<unknown>(withPagination(apiRoutes.players.list, { limit: PLAYERS_PAGE_LIMIT, offset: 0 }))
+    const page = normalizePaginatedResponse<Player>(raw, { limit: PLAYERS_PAGE_LIMIT, offset: 0 })
+    if (isCancelled()) return
+    setPlayers(page.items)
+    setPlayersPagination(page.pagination)
   }, [])
 
   const { loading, error } = useAsyncLoader(loadPlayers)
+  const canLoadMorePlayers = useMemo(() => canLoadMore(playersPagination), [playersPagination])
+
+  async function loadMorePlayers() {
+    if (loadingMorePlayers || !canLoadMorePlayers) return
+    const offset = nextOffset(playersPagination)
+    setLoadingMorePlayers(true)
+    try {
+      const raw = await apiGet<unknown>(withPagination(apiRoutes.players.list, { limit: PLAYERS_PAGE_LIMIT, offset }))
+      const page = normalizePaginatedResponse<Player>(raw, { limit: PLAYERS_PAGE_LIMIT, offset })
+      setPlayers((prev) => mergeById(prev, page.items))
+      setPlayersPagination(page.pagination)
+    } catch (err: unknown) {
+      uiAlert(`Erreur chargement joueurs: ${toErrorMessage(err)}`)
+    } finally {
+      setLoadingMorePlayers(false)
+    }
+  }
 
   const filtered = useMemo(() => {
     let items = requiresSelection && !selectedTeamId
@@ -601,7 +625,7 @@ export default function PlayersPage() {
                     Reinitialiser les filtres
                   </button>
                 )}
-                {loading && <div className="players-loading">Chargement...</div>}
+                {(loading || loadingMorePlayers) && <div className="players-loading">Chargement...</div>}
               </div>
             </div>
 
@@ -683,6 +707,18 @@ export default function PlayersPage() {
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+            {canLoadMorePlayers && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="players-secondary-btn"
+                  onClick={() => { void loadMorePlayers() }}
+                  disabled={loadingMorePlayers || loading}
+                >
+                  {loadingMorePlayers ? 'Chargement...' : 'Charger plus'}
+                </button>
               </div>
             )}
           </section>

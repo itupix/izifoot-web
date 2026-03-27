@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { canLoadMore, mergeById, nextOffset, normalizePaginatedResponse, withPagination } from '../adapters/pagination'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
@@ -15,6 +16,8 @@ import type { Matchday, Training } from '../types/api'
 import './TrainingsPage.css'
 
 const LAST_PLANNING_DATE_KEY = 'izifoot.planning.lastDate'
+const TRAININGS_PAGE_LIMIT = 30
+const MATCHDAYS_PAGE_LIMIT = 30
 
 function yyyyMmDd(d: Date) {
   const y = d.getFullYear()
@@ -62,6 +65,10 @@ export default function TrainingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
   const [matchdays, setMatchdays] = useState<Matchday[]>([])
+  const [trainingsPagination, setTrainingsPagination] = useState({ limit: TRAININGS_PAGE_LIMIT, offset: 0, returned: 0 })
+  const [matchdaysPagination, setMatchdaysPagination] = useState({ limit: MATCHDAYS_PAGE_LIMIT, offset: 0, returned: 0 })
+  const [loadingMoreTrainings, setLoadingMoreTrainings] = useState(false)
+  const [loadingMoreMatchdays, setLoadingMoreMatchdays] = useState(false)
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [isPlateauModalOpen, setIsPlateauModalOpen] = useState(false)
   const [plateauLocation, setPlateauLocation] = useState('')
@@ -78,20 +85,24 @@ export default function TrainingsPage() {
     if (!me || me.role !== 'COACH') return null
     return new Set(me.managedTeamIds)
   }, [me])
+  const canLoadMoreTrainings = useMemo(() => canLoadMore(trainingsPagination), [trainingsPagination])
+  const canLoadMoreMatchdays = useMemo(() => canLoadMore(matchdaysPagination), [matchdaysPagination])
 
   // Load trainings + matchdays
   const loadTrainings = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
-    const [ts, pls] = await Promise.all([
-      apiGet<Training[]>(apiRoutes.trainings.list),
-      apiGet<Matchday[]>(apiRoutes.matchday.list),
+    const [rawTrainings, rawMatchdays] = await Promise.all([
+      apiGet<unknown>(withPagination(apiRoutes.trainings.list, { limit: TRAININGS_PAGE_LIMIT, offset: 0 })),
+      apiGet<unknown>(withPagination(apiRoutes.matchday.list, { limit: MATCHDAYS_PAGE_LIMIT, offset: 0 })),
     ])
+    const trainingsPage = normalizePaginatedResponse<Training>(rawTrainings, { limit: TRAININGS_PAGE_LIMIT, offset: 0 })
+    const matchdaysPage = normalizePaginatedResponse<Matchday>(rawMatchdays, { limit: MATCHDAYS_PAGE_LIMIT, offset: 0 })
     if (isCancelled()) return
     const filteredByCoachTrainings = coachManagedTeams
-      ? ts.filter((training) => !training.teamId || coachManagedTeams.has(training.teamId))
-      : ts
+      ? trainingsPage.items.filter((training) => !training.teamId || coachManagedTeams.has(training.teamId))
+      : trainingsPage.items
     const filteredByCoachMatchdays = coachManagedTeams
-      ? pls.filter((plateau) => !plateau.teamId || coachManagedTeams.has(plateau.teamId))
-      : pls
+      ? matchdaysPage.items.filter((plateau) => !plateau.teamId || coachManagedTeams.has(plateau.teamId))
+      : matchdaysPage.items
 
     const filteredTrainings = requiresSelection && !selectedTeamId
       ? []
@@ -107,6 +118,8 @@ export default function TrainingsPage() {
     filteredTrainings.sort((a, b) => +new Date(b.date) - +new Date(a.date))
     setTrainings(filteredTrainings)
     setMatchdays(filteredMatchdays)
+    setTrainingsPagination(trainingsPage.pagination)
+    setMatchdaysPagination(matchdaysPage.pagination)
   }, [coachManagedTeams, requiresSelection, selectedTeamId])
 
   const { loading, error } = useAsyncLoader(loadTrainings)
@@ -137,6 +150,57 @@ export default function TrainingsPage() {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('date', nextDayKey)
     setSearchParams(nextParams)
+  }
+
+  async function loadMoreTrainingsList() {
+    if (loadingMoreTrainings || !canLoadMoreTrainings) return
+    const offset = nextOffset(trainingsPagination)
+    setLoadingMoreTrainings(true)
+    try {
+      const raw = await apiGet<unknown>(withPagination(apiRoutes.trainings.list, { limit: TRAININGS_PAGE_LIMIT, offset }))
+      const page = normalizePaginatedResponse<Training>(raw, { limit: TRAININGS_PAGE_LIMIT, offset })
+      const byCoach = coachManagedTeams
+        ? page.items.filter((training) => !training.teamId || coachManagedTeams.has(training.teamId))
+        : page.items
+      const scoped = requiresSelection && !selectedTeamId
+        ? []
+        : selectedTeamId
+          ? byCoach.filter((training) => !training.teamId || training.teamId === selectedTeamId)
+          : byCoach
+      setTrainings((prev) => {
+        const merged = mergeById(prev, scoped)
+        return merged.sort((a, b) => +new Date(b.date) - +new Date(a.date))
+      })
+      setTrainingsPagination(page.pagination)
+    } catch (err: unknown) {
+      uiAlert(`Erreur chargement entraînements: ${toErrorMessage(err)}`)
+    } finally {
+      setLoadingMoreTrainings(false)
+    }
+  }
+
+  async function loadMoreMatchdaysList() {
+    if (loadingMoreMatchdays || !canLoadMoreMatchdays) return
+    const offset = nextOffset(matchdaysPagination)
+    setLoadingMoreMatchdays(true)
+    try {
+      const raw = await apiGet<unknown>(withPagination(apiRoutes.matchday.list, { limit: MATCHDAYS_PAGE_LIMIT, offset }))
+      const page = normalizePaginatedResponse<Matchday>(raw, { limit: MATCHDAYS_PAGE_LIMIT, offset })
+      const byCoach = coachManagedTeams
+        ? page.items.filter((plateau) => !plateau.teamId || coachManagedTeams.has(plateau.teamId))
+        : page.items
+      const scoped = requiresSelection && !selectedTeamId
+        ? []
+        : selectedTeamId
+          ? byCoach.filter((plateau) => !plateau.teamId || plateau.teamId === selectedTeamId)
+          : byCoach
+      setMatchdays((prev) => mergeById(prev, scoped))
+      setMatchdaysPagination(page.pagination)
+    } catch (err: unknown) {
+      uiAlert(`Erreur chargement plateaux: ${toErrorMessage(err)}`)
+    } finally {
+      setLoadingMoreMatchdays(false)
+    }
   }
 
   const dayTrainings = useMemo(() => {
@@ -303,11 +367,23 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          {teamScopedWritable && (
-            <div className="trainings-block-footer">
-              <CtaButton onClick={() => createTrainingForDay(selectedDate)}>
-                Ajouter un entraînement
-              </CtaButton>
+          {(teamScopedWritable || canLoadMoreTrainings) && (
+            <div className="trainings-block-footer" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {teamScopedWritable && (
+                <CtaButton onClick={() => createTrainingForDay(selectedDate)}>
+                  Ajouter un entraînement
+                </CtaButton>
+              )}
+              {canLoadMoreTrainings && (
+                <button
+                  type="button"
+                  onClick={() => { void loadMoreTrainingsList() }}
+                  disabled={loading || loadingMoreTrainings}
+                  style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #dbe3ef', background: '#fff', cursor: 'pointer' }}
+                >
+                  {loadingMoreTrainings ? 'Chargement...' : 'Charger plus'}
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -342,18 +418,30 @@ export default function TrainingsPage() {
               </Link>
             ))
           )}
-          {teamScopedWritable && (
-            <div className="trainings-block-footer">
-              <CtaButton onClick={openPlateauModal}>
-                Ajouter un plateau
-              </CtaButton>
+          {(teamScopedWritable || canLoadMoreMatchdays) && (
+            <div className="trainings-block-footer" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {teamScopedWritable && (
+                <CtaButton onClick={openPlateauModal}>
+                  Ajouter un plateau
+                </CtaButton>
+              )}
+              {canLoadMoreMatchdays && (
+                <button
+                  type="button"
+                  onClick={() => { void loadMoreMatchdaysList() }}
+                  disabled={loading || loadingMoreMatchdays}
+                  style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #dbe3ef', background: '#fff', cursor: 'pointer' }}
+                >
+                  {loadingMoreMatchdays ? 'Chargement...' : 'Charger plus'}
+                </button>
+              )}
             </div>
           )}
         </section>
       </div>
 
       <aside>
-        {loading && <p>Chargement…</p>}
+        {(loading || loadingMoreTrainings || loadingMoreMatchdays) && <p>Chargement…</p>}
         {error && <p className="trainings-aside-error">{error}</p>}
       </aside>
 

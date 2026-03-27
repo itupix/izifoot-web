@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { canLoadMore, mergeById, nextOffset, normalizeDrillsResponse, withPagination } from '../adapters/pagination'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
@@ -14,11 +15,15 @@ import { useTeamScope } from '../useTeamScope'
 import type { Drill, DrillsResponse } from '../types/api'
 import './Drills.css'
 
+const DRILLS_PAGE_LIMIT = 40
+
 export default function DrillsPage() {
   const { me } = useAuth()
   const { selectedTeamId, requiresSelection } = useTeamScope()
   const navigate = useNavigate()
   const [data, setData] = useState<DrillsResponse>({ items: [], categories: [], tags: [] })
+  const [drillsPagination, setDrillsPagination] = useState({ limit: DRILLS_PAGE_LIMIT, offset: 0, returned: 0 })
+  const [loadingMoreDrills, setLoadingMoreDrills] = useState(false)
   const [q, setQ] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -35,11 +40,15 @@ export default function DrillsPage() {
   const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
 
   const loadDrills = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
-    const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
-    if (!isCancelled()) setData(res)
+    const raw = await apiGet<unknown>(withPagination(apiRoutes.drills.list, { limit: DRILLS_PAGE_LIMIT, offset: 0 }))
+    const res = normalizeDrillsResponse(raw, { limit: DRILLS_PAGE_LIMIT, offset: 0 })
+    if (isCancelled()) return
+    setData(res)
+    setDrillsPagination(res.pagination)
   }, [])
 
   const { loading, error } = useAsyncLoader(loadDrills)
+  const canLoadMoreDrills = useMemo(() => canLoadMore(drillsPagination), [drillsPagination])
 
   const filtered = useMemo(() => {
     let items = requiresSelection && !selectedTeamId
@@ -96,8 +105,10 @@ export default function DrillsPage() {
           data: newDiagramData,
         })
       }
-      const res = await apiGet<DrillsResponse>(apiRoutes.drills.list)
+      const raw = await apiGet<unknown>(withPagination(apiRoutes.drills.list, { limit: DRILLS_PAGE_LIMIT, offset: 0 }))
+      const res = normalizeDrillsResponse(raw, { limit: DRILLS_PAGE_LIMIT, offset: 0 })
       setData(res)
+      setDrillsPagination(res.pagination)
       setNewTitle('')
       setNewCategory('')
       setNewDescription('')
@@ -108,6 +119,26 @@ export default function DrillsPage() {
       setCreateErr(toErrorMessage(err))
     } finally {
       setCreating(false)
+    }
+  }
+
+  async function loadMoreDrills() {
+    if (loadingMoreDrills || !canLoadMoreDrills) return
+    const offset = nextOffset(drillsPagination)
+    setLoadingMoreDrills(true)
+    try {
+      const raw = await apiGet<unknown>(withPagination(apiRoutes.drills.list, { limit: DRILLS_PAGE_LIMIT, offset }))
+      const next = normalizeDrillsResponse(raw, { limit: DRILLS_PAGE_LIMIT, offset })
+      setData((prev) => ({
+        items: mergeById(prev.items, next.items),
+        categories: next.categories.length ? next.categories : prev.categories,
+        tags: next.tags.length ? next.tags : prev.tags,
+      }))
+      setDrillsPagination(next.pagination)
+    } catch (err: unknown) {
+      setCreateErr(toErrorMessage(err))
+    } finally {
+      setLoadingMoreDrills(false)
     }
   }
 
@@ -156,7 +187,7 @@ export default function DrillsPage() {
           <h3 className="panel-title">Liste</h3>
           <p className="panel-note">{filtered.length} exercice(s)</p>
         </div>
-        {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
+        {(loading || loadingMoreDrills) && <div style={{ color: '#9ca3af' }}>Chargement…</div>}
         {error && <div className="inline-alert error">{error}</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
         {filtered.map(d => (
@@ -176,6 +207,16 @@ export default function DrillsPage() {
         ))}
         {filtered.length === 0 && <div className="panel-note">Aucun exercice trouvé avec ces filtres.</div>}
         </div>
+        {canLoadMoreDrills && (
+          <button
+            type="button"
+            onClick={() => { void loadMoreDrills() }}
+            disabled={loading || loadingMoreDrills}
+            style={{ width: 'fit-content', padding: '8px 12px', borderRadius: 8, border: '1px solid #dbe3ef', background: '#fff', cursor: 'pointer' }}
+          >
+            {loadingMoreDrills ? 'Chargement...' : 'Charger plus'}
+          </button>
+        )}
       </section>
       {teamScopedWritable && (
         <FloatingPlusButton ariaLabel="Nouvel exercice" zIndex={20} onClick={() => {
