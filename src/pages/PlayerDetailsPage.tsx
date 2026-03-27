@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarCheck2, IdCard, Mail, Phone, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { HttpError } from '../api'
+import { API_BASE, HttpError } from '../api'
 import { apiGetAllItems } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
@@ -109,6 +109,13 @@ type PlayerInvitationStatusResponse = {
   lastInvitationAt?: string | null
   invitationId?: string | null
 }
+type PlayerInviteResponse = {
+  status: InvitationStatusValue
+  invitationId?: string | null
+  sentAt?: string | null
+  expiresAt?: string | null
+  inviteUrl?: string | null
+}
 
 function normalizeInvitationStatus(value: unknown): InvitationStatusValue {
   const normalized = typeof value === 'string' ? value.trim().toUpperCase() : ''
@@ -135,6 +142,8 @@ export default function PlayerDetailsPage() {
   const [invitationStatus, setInvitationStatus] = useState<InvitationStatusValue | null>(null)
   const [invitationLoading, setInvitationLoading] = useState(false)
   const [invitationStatusError, setInvitationStatusError] = useState<string | null>(null)
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [inviteModalOpen, setInviteModalOpen] = useState(false)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -172,6 +181,7 @@ export default function PlayerDetailsPage() {
       setError(null)
       setInvitationStatus(null)
       setInvitationStatusError(null)
+      setInviteUrl(null)
       try {
         const [playerData, matchData, attendanceData, trainingData] = await Promise.all([
           apiGet<Player>(apiRoutes.players.byId(id)),
@@ -340,9 +350,15 @@ export default function PlayerDetailsPage() {
     setInviteSending(true)
     try {
       const isResend = invitationStatus === 'PENDING'
-      await apiPost(apiRoutes.players.invite(player.id), {})
+      const response = await apiPost<PlayerInviteResponse>(apiRoutes.players.invite(player.id), {})
       await refreshInvitationStatus(player.id)
-      uiAlert(isResend ? 'Invitation renvoyée.' : 'Invitation envoyée.')
+      const nextInviteUrl = typeof response?.inviteUrl === 'string' ? response.inviteUrl.trim() : ''
+      if (nextInviteUrl) {
+        setInviteUrl(nextInviteUrl)
+        setInviteModalOpen(true)
+      } else {
+        uiAlert(isResend ? 'Invitation renvoyée.' : 'Invitation envoyée.')
+      }
     } catch (err: unknown) {
       if (err instanceof HttpError && err.status === 409) {
         uiAlert('Compte déjà activé.')
@@ -590,6 +606,44 @@ export default function PlayerDetailsPage() {
               <button type="button" className="players-secondary-btn" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>Annuler</button>
               <button type="button" className="players-danger-btn" onClick={() => { void deletePlayer() }} disabled={deleting}>
                 {deleting ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {inviteModalOpen && player && inviteUrl && (
+        <>
+          <div className="player-modal-overlay" onClick={() => setInviteModalOpen(false)} />
+          <div className="player-modal player-modal--invite" role="dialog" aria-modal="true" aria-label="Invitation joueur">
+            <div className="player-modal-head">
+              <h3>Invitation prête</h3>
+              <button type="button" onClick={() => setInviteModalOpen(false)}>x</button>
+            </div>
+            <p>Partagez ce lien avec {playerName}. Le QR code ouvre la même page d&apos;activation.</p>
+            <div className="player-invite-qr-wrap">
+              <img src={`${API_BASE}${apiRoutes.players.inviteQr(player.id)}`} alt="QR code d'invitation joueur" />
+            </div>
+            <div className="player-invite-link-row">
+              <input className="players-input" value={inviteUrl} readOnly />
+            </div>
+            <div className="player-modal-actions">
+              <button
+                type="button"
+                className="players-secondary-btn"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(inviteUrl)
+                    uiAlert('Lien copié.')
+                  } catch {
+                    uiAlert('Impossible de copier automatiquement le lien.')
+                  }
+                }}
+              >
+                Copier le lien
+              </button>
+              <button type="button" className="players-primary-btn" onClick={() => setInviteModalOpen(false)}>
+                Fermer
               </button>
             </div>
           </div>

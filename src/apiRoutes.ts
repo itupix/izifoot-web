@@ -9,6 +9,7 @@ export const apiRoutes = {
     acceptInvitation: '/auth/invitations/accept',
   },
   me: '/me',
+  meProfile: '/me/profile',
   clubs: {
     me: '/clubs/me',
   },
@@ -29,6 +30,7 @@ export const apiRoutes = {
     list: '/players',
     byId: (id: string) => `/players/${enc(id)}`,
     invite: (id: string) => `/players/${enc(id)}/invite`,
+    inviteQr: (id: string) => `/players/${enc(id)}/invite/qr`,
     invitationStatus: (id: string) => `/players/${enc(id)}/invitation-status`,
   },
   trainings: {

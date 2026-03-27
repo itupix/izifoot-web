@@ -375,6 +375,30 @@
   gap: 10px;
 }
 
+.player-modal--invite {
+  width: min(520px, 92vw);
+}
+
+.player-invite-qr-wrap {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.player-invite-qr-wrap img {
+  width: min(300px, 100%);
+  height: auto;
+  display: block;
+}
+
+.player-invite-link-row {
+  display: grid;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   .player-details-title {
     font-size: 30px;

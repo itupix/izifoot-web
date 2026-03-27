@@ -35,6 +35,9 @@ export const API_BASE = resolveApiBase()
 export type Me = {
   id: string
   email: string
+  firstName: string | null
+  lastName: string | null
+  phone: string | null
   isPremium: boolean
   planningCount?: number
   role: AccountRole
@@ -58,6 +61,9 @@ function normalizeMe(input: unknown): Me {
   return {
     id: typeof raw.id === 'string' ? raw.id : '',
     email: typeof raw.email === 'string' ? raw.email : '',
+    firstName: normalizeString(raw.firstName),
+    lastName: normalizeString(raw.lastName),
+    phone: normalizeString(raw.phone),
     isPremium: Boolean(raw.isPremium),
     planningCount: typeof raw.planningCount === 'number' ? raw.planningCount : undefined,
     role: normalizeRole(raw.role),
