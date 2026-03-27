@@ -1,7 +1,7 @@
 
 
 import { useCallback, useMemo, useState } from 'react'
-import { apiGet } from '../apiClient'
+import { apiGetAllItems } from '../adapters/pagination'
 import { apiRoutes } from '../apiRoutes'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchNotPlayed } from '../matchStatus'
@@ -38,10 +38,10 @@ export default function StatsPage() {
 
   const loadStats = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const [rows, plist, plats, attends] = await Promise.all([
-      apiGet<MatchLite[]>(apiRoutes.matches.list),
-      apiGet<Player[]>(apiRoutes.players.list),
-      apiGet<Matchday[]>(apiRoutes.matchday.list),
-      apiGet<AttendanceRow[]>(apiRoutes.attendance.list)
+      apiGetAllItems<MatchLite>(apiRoutes.matches.list),
+      apiGetAllItems<Player>(apiRoutes.players.list),
+      apiGetAllItems<Matchday>(apiRoutes.matchday.list),
+      apiGetAllItems<AttendanceRow>(apiRoutes.attendance.list),
     ])
     if (isCancelled()) return
     setMatches(rows)

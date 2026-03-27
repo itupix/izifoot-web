@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { HttpError } from '../api'
+import { apiGetAllItems } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
@@ -166,17 +167,17 @@ export default function TrainingDetailsPage() {
     rolesHydratedRef.current = false
     const [t, ps, dr, ds, att, roles] = await Promise.all([
       apiGet<Training>(apiRoutes.trainings.byId(id)),
-      apiGet<Player[]>(apiRoutes.players.list),
-      apiGet<{ items: Drill[] }>(apiRoutes.drills.list),
+      apiGetAllItems<Player>(apiRoutes.players.list),
+      apiGetAllItems<Drill>(apiRoutes.drills.list),
       apiGet<TrainingDrill[]>(apiRoutes.trainings.drills(id)),
-      apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('TRAINING', id)),
+      apiGetAllItems<AttendanceRow>(apiRoutes.attendance.bySession('TRAINING', id)),
       apiGet<TrainingRolesResponse>(apiRoutes.trainings.roles(id)),
     ])
 
     if (isCancelled()) return
     setTraining(t)
     setPlayers(ps)
-    setCatalog(dr.items)
+    setCatalog(dr)
     setDrills(sortTrainingDrills(ds))
     setAttendance(extractPresentPlayerIds(att))
     const initialRoleLines = ensureTrailingEmptyRoleLine(

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarCheck2, IdCard, Mail, Phone, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { HttpError } from '../api'
+import { apiGetAllItems } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
@@ -174,9 +175,9 @@ export default function PlayerDetailsPage() {
       try {
         const [playerData, matchData, attendanceData, trainingData] = await Promise.all([
           apiGet<Player>(apiRoutes.players.byId(id)),
-          apiGet<MatchLite[]>(apiRoutes.matches.list).catch(() => []),
-          apiGet<AttendanceRow[]>(apiRoutes.attendance.list).catch(() => []),
-          apiGet<Training[]>(apiRoutes.trainings.list).catch(() => []),
+          apiGetAllItems<MatchLite>(apiRoutes.matches.list).catch(() => []),
+          apiGetAllItems<AttendanceRow>(apiRoutes.attendance.list).catch(() => []),
+          apiGetAllItems<Training>(apiRoutes.trainings.list).catch(() => []),
         ])
         if (!cancelled) {
           setPlayer(playerData)
@@ -221,6 +222,10 @@ export default function PlayerDetailsPage() {
       return sum + (isPresent ? 1 : 0)
     }, 0)
   ), [id, matches])
+  const canComputeMatchesPlayed = useMemo(
+    () => matches.some((match) => (match.teams || []).some((team) => Array.isArray(team.players) && team.players.length > 0)),
+    [matches],
+  )
   const totalActiveTrainings = useMemo(
     () => trainings.filter((training) => training.status !== 'CANCELLED').length,
     [trainings],
@@ -460,7 +465,7 @@ export default function PlayerDetailsPage() {
           <div className="player-profile-stats-grid">
             <article className="player-stat-card">
               <strong>Matchs joués</strong>
-              <p>{matchesPlayed}</p>
+              <p>{canComputeMatchesPlayed ? matchesPlayed : '—'}</p>
             </article>
             <article className="player-stat-card">
               <strong>Buts marqués</strong>

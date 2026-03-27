@@ -4,6 +4,7 @@ import DiagramComposer from '../components/DiagramComposer'
 import DiagramPlayer from '../components/DiagramPlayer'
 import { ChevronLeftIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
+import { apiGetAllItems } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/diagramShared'
@@ -133,11 +134,11 @@ export default function DrillDetailsPage() {
       ? apiRoutes.trainingDrills.diagrams(fromTrainingDrillId)
       : apiRoutes.drills.diagrams(drillId)
     const [rows, diagramRows] = await Promise.all([
-      apiGet<{ items: Drill[] }>(apiRoutes.drills.list),
+      apiGetAllItems<Drill>(apiRoutes.drills.list),
       apiGet<unknown>(diagramsPath).catch(() => []),
     ])
     if (isCancelled()) return
-    const found = rows.items.find((item) => item.id === drillId) ?? null
+    const found = rows.find((item) => item.id === drillId) ?? null
     setDrill(found)
     const diagrams = normalizeDiagramList(diagramRows)
     setDiagram(diagrams[0] ?? null)

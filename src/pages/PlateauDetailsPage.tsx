@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { api, type Planning } from '../api'
+import { apiGetAllItems } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
@@ -277,9 +278,9 @@ export default function PlateauDetailsPage() {
     if (!id) return
     const [p, ps, matches, attends, plannings, club, summary] = await Promise.all([
       apiGet<Matchday>(apiRoutes.matchday.byId(id)),
-      apiGet<Player[]>(apiRoutes.players.list),
-      apiGet<MatchLite[]>(apiRoutes.matches.byMatchday(id)),
-      apiGet<AttendanceRow[]>(apiRoutes.attendance.bySession('PLATEAU', id)),
+      apiGetAllItems<Player>(apiRoutes.players.list),
+      apiGetAllItems<MatchLite>(apiRoutes.matches.byMatchday(id)),
+      apiGetAllItems<AttendanceRow>(apiRoutes.attendance.bySession('PLATEAU', id)),
       api.listPlannings(),
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
       apiGet<MatchdaySummaryModeResponse>(apiRoutes.matchday.summary(id)).catch(() => null),

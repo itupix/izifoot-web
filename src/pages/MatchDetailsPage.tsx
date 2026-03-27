@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiDelete, apiGet, apiPut, apiUrl } from '../apiClient'
+import { apiGetAllItems, appendQueryParams } from '../adapters/pagination'
 import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
@@ -423,7 +424,7 @@ export default function MatchDetailsPage() {
     const [payload, club, roster] = await Promise.all([
       apiGet<MatchDetailsData>(apiRoutes.matches.byId(id)),
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
-      apiGet<Player[]>(apiRoutes.players.list).catch(() => []),
+      apiGetAllItems<Player>(apiRoutes.players.list).catch(() => []),
     ])
 
     let plateauSummary: MatchdaySummaryResponse | null = null
@@ -431,10 +432,12 @@ export default function MatchDetailsPage() {
     let nextPlateauPlayerIds: string[] = []
     let nextPlateauPresentPlayerIds: string[] = []
     let nextPlateauMatchOrderIds: string[] = []
-    let matchesById = new Map<string, MatchLite>([[payload.id, payload]])
+    const matchesById = new Map<string, MatchLite>([[payload.id, payload]])
     let allMatchesOfDay: MatchLite[] = []
     if (payload.matchdayId) {
-      const rawSummary = await apiGet(apiRoutes.matchday.summary(payload.matchdayId)).catch(() => null)
+      const rawSummary = await apiGet(
+        appendQueryParams(apiRoutes.matchday.summary(payload.matchdayId), { includeAllPlayers: true }),
+      ).catch(() => null)
       plateauSummary = rawSummary ? normalizeMatchdayPayload<MatchdaySummaryResponse>(rawSummary) : null
       if (plateauSummary?.matchday?.date) nextPlateauDateISO = plateauSummary.matchday.date
       nextPlateauMatchOrderIds = (plateauSummary?.matches || []).map((matchItem) => matchItem.id).filter(Boolean)
@@ -470,7 +473,7 @@ export default function MatchDetailsPage() {
         }
       }
     } else {
-      const allMatches = await apiGet<MatchLite[]>(apiRoutes.matches.list).catch(() => [])
+      const allMatches = await apiGetAllItems<MatchLite>(apiRoutes.matches.list).catch(() => [])
       const dayKey = toDayKey(payload.createdAt)
       allMatchesOfDay = allMatches.filter((matchItem) => toDayKey(matchItem.createdAt) === dayKey)
       for (const matchItem of allMatchesOfDay) {
@@ -1505,13 +1508,15 @@ export default function MatchDetailsPage() {
     try {
       let otherMatches = matchesOfDay
       if (match.matchdayId) {
-        const rawSummary = await apiGet(apiRoutes.matchday.summary(match.matchdayId)).catch(() => null)
+        const rawSummary = await apiGet(
+          appendQueryParams(apiRoutes.matchday.summary(match.matchdayId), { includeAllPlayers: true }),
+        ).catch(() => null)
         const summary = rawSummary ? normalizeMatchdayPayload<MatchdaySummaryResponse>(rawSummary) : null
         if (summary?.matches) {
           otherMatches = summary.matches.filter((matchItem) => matchItem.id !== match.id)
         }
       } else {
-        const allMatches = await apiGet<MatchLite[]>(apiRoutes.matches.list).catch(() => [])
+        const allMatches = await apiGetAllItems<MatchLite>(apiRoutes.matches.list).catch(() => [])
         const dayKey = toDayKey(match.createdAt)
         otherMatches = allMatches.filter((matchItem) => matchItem.id !== match.id && toDayKey(matchItem.createdAt) === dayKey)
       }

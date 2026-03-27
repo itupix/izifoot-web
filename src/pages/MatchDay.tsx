@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useLocation } from 'react-router-dom'
 import { apiUrl } from '../apiClient'
+import { appendQueryParams } from '../adapters/pagination'
 import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
@@ -25,8 +26,8 @@ interface Convocation {
   present?: boolean
 }
 
-interface MatchTeamPlayer { playerId: string; role: 'starter' | 'sub'; player: Player }
-interface MatchTeam { id: string; side: string; score: number; players: MatchTeamPlayer[] }
+interface MatchTeamPlayer { playerId?: string; role?: 'starter' | 'sub'; player?: Player }
+interface MatchTeam { id: string; side: string; score: number; players?: MatchTeamPlayer[] }
 interface Scorer { id: string; playerId: string; side: string; playerName?: string }
 
 interface Match {
@@ -142,7 +143,7 @@ export default function MatchDay() {
       try {
         setLoading(true)
         setError(null)
-        const resp = await fetch(apiUrl(apiRoutes.matchday.summary(id)), {
+        const resp = await fetch(apiUrl(appendQueryParams(apiRoutes.matchday.summary(id), { includeAllPlayers: true })), {
           credentials: 'include',
           signal: abort.signal
         })
@@ -342,16 +343,16 @@ export default function MatchDay() {
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{homeLabel}</div>
                       <ul style={{ margin: 0, paddingLeft: 18 }}>
-                        {home?.players.map(p => (
-                          <li key={p.playerId}>{p.player?.name || p.playerId}{isSub(p.role) ? ' (remp.)' : ''}</li>
+                        {(home?.players || []).map((p, index) => (
+                          <li key={p.playerId || `home-${index}`}>{p.player?.name || p.playerId || 'Joueur'}{isSub(p.role) ? ' (remp.)' : ''}</li>
                         ))}
                       </ul>
                     </div>
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{awayLabel}</div>
                       <ul style={{ margin: 0, paddingLeft: 18 }}>
-                        {away?.players.map(p => (
-                          <li key={p.playerId}>{p.player?.name || p.playerId}{isSub(p.role) ? ' (remp.)' : ''}</li>
+                        {(away?.players || []).map((p, index) => (
+                          <li key={p.playerId || `away-${index}`}>{p.player?.name || p.playerId || 'Joueur'}{isSub(p.role) ? ' (remp.)' : ''}</li>
                         ))}
                       </ul>
                     </div>
