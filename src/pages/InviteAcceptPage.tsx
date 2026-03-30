@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
 import { useAuth } from '../useAuth'
 import type { InvitationDetails } from '../types/api'
+import whistleImg from '../assets/whistle.png'
+import './InviteAcceptPage.css'
 
 type InviteState = 'loading' | 'ready' | 'invalid' | 'expired' | 'conflict' | 'error'
 
@@ -25,7 +27,9 @@ export default function InviteAcceptPage() {
   const [details, setDetails] = useState<InvitationDetails | null>(null)
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  const [apiErrorMessage, setApiErrorMessage] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordConfirmError, setPasswordConfirmError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const loadInvitation = useCallback(async () => {
@@ -35,7 +39,7 @@ export default function InviteAcceptPage() {
     }
 
     setState('loading')
-    setErrorMessage('')
+    setApiErrorMessage('')
 
     try {
       const invitation = await apiGet<InvitationDetails>(apiRoutes.auth.invitationByToken(token))
@@ -56,7 +60,7 @@ export default function InviteAcceptPage() {
         return
       }
       setState('error')
-      setErrorMessage(toErrorMessage(err, 'Impossible de charger l’invitation.'))
+      setApiErrorMessage(toErrorMessage(err, 'Impossible de charger l’invitation.'))
     }
   }, [token])
 
@@ -68,14 +72,16 @@ export default function InviteAcceptPage() {
     e.preventDefault()
     if (!token) return
 
-    setErrorMessage('')
+    setApiErrorMessage('')
+    setPasswordError('')
+    setPasswordConfirmError('')
 
     if (password.length < 6) {
-      setErrorMessage('Le mot de passe doit contenir au moins 6 caractères.')
+      setPasswordError('Le mot de passe doit contenir au moins 6 caractères.')
       return
     }
     if (password !== passwordConfirm) {
-      setErrorMessage('Les mots de passe ne correspondent pas.')
+      setPasswordConfirmError('Les mots de passe ne correspondent pas.')
       return
     }
 
@@ -87,7 +93,7 @@ export default function InviteAcceptPage() {
     } catch (err: unknown) {
       const status = extractStatusCode(err)
       if (status === 400) {
-        setErrorMessage(toErrorMessage(err, 'Données invalides.'))
+        setApiErrorMessage(toErrorMessage(err, 'Données invalides.'))
         return
       }
       if (status === 404) {
@@ -102,117 +108,94 @@ export default function InviteAcceptPage() {
         setState('conflict')
         return
       }
-      setErrorMessage(toErrorMessage(err, 'Erreur lors de la finalisation du compte.'))
+      setApiErrorMessage(toErrorMessage(err, 'Erreur lors de l’inscription.'))
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div style={wrapperStyle}>
-      <div className="panel" style={cardStyle}>
-        <h2 style={{ marginTop: 0, marginBottom: 4 }}>Finaliser mon compte</h2>
-        <p className="page-subtitle" style={{ marginBottom: 12 }}>Validation de l’invitation et création du mot de passe.</p>
+    <div className="invite-accept-page">
+      <div className="panel invite-accept-card">
+        <div className="invite-accept-brand">
+          <img src={whistleImg} alt="Izifoot" />
+          <span>izifoot</span>
+        </div>
+        <h2 className="invite-accept-title">Rejoindre Izifoot</h2>
+        <p className="invite-accept-subtitle">
+          Izifoot est l&apos;application des clubs pour suivre le planning de l&apos;équipe, les séances et les matchs.
+        </p>
+        <p className="invite-accept-subtitle">
+          Créez votre mot de passe pour accéder à votre espace.
+        </p>
 
-        {state === 'loading' && <p>Vérification de l’invitation…</p>}
+        {state === 'loading' && <p>Vérification de votre invitation…</p>}
 
         {state === 'invalid' && (
-          <div>
-            <p style={errorTextStyle}>Lien d’invitation invalide.</p>
+          <div className="invite-accept-message-block">
+            <p className="invite-accept-error">Lien d’invitation invalide.</p>
             <p>Vérifiez le lien reçu ou contactez votre club.</p>
           </div>
         )}
 
         {state === 'expired' && (
-          <div>
-            <p style={errorTextStyle}>Cette invitation a expiré.</p>
+          <div className="invite-accept-message-block">
+            <p className="invite-accept-error">Cette invitation a expiré.</p>
             <p>Demandez une nouvelle invitation à la direction.</p>
           </div>
         )}
 
         {state === 'conflict' && (
-          <div>
-            <p style={errorTextStyle}>Cette invitation est déjà utilisée ou annulée.</p>
+          <div className="invite-accept-message-block">
+            <p className="invite-accept-error">Cette invitation est déjà utilisée ou annulée.</p>
             <p>Contactez la direction si besoin.</p>
           </div>
         )}
 
-        {state === 'error' && <p style={errorTextStyle}>{errorMessage || 'Erreur inconnue.'}</p>}
+        {state === 'error' && <p className="invite-accept-error">{apiErrorMessage || 'Erreur inconnue.'}</p>}
 
         {state === 'ready' && details && (
-          <form onSubmit={acceptInvitation} style={{ display: 'grid', gap: 10 }}>
-            <div style={metaStyle}><strong>Email:</strong> {details.email}</div>
-            <div style={metaStyle}><strong>Rôle:</strong> {details.role}</div>
-            <label style={labelStyle}>Mot de passe</label>
+          <form onSubmit={acceptInvitation} className="invite-accept-form" noValidate>
+            <div className="invite-accept-meta"><strong>Email:</strong> {details.email}</div>
+            <label className="invite-accept-label" htmlFor="invite-password">Mot de passe</label>
             <input
+              id="invite-password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (passwordError) setPasswordError('')
+              }}
               minLength={6}
               required
-              style={inputStyle}
+              className={`invite-accept-input ${passwordError ? 'is-error' : ''}`}
+              aria-invalid={Boolean(passwordError)}
+              aria-describedby={passwordError ? 'invite-password-error' : undefined}
             />
-            <label style={labelStyle}>Confirmer le mot de passe</label>
+            {passwordError && <p id="invite-password-error" className="invite-accept-error">{passwordError}</p>}
+            <label className="invite-accept-label" htmlFor="invite-password-confirm">Confirmer le mot de passe</label>
             <input
+              id="invite-password-confirm"
               type="password"
               value={passwordConfirm}
-              onChange={(e) => setPasswordConfirm(e.target.value)}
+              onChange={(e) => {
+                setPasswordConfirm(e.target.value)
+                if (passwordConfirmError) setPasswordConfirmError('')
+              }}
               minLength={6}
               required
-              style={inputStyle}
+              className={`invite-accept-input ${passwordConfirmError ? 'is-error' : ''}`}
+              aria-invalid={Boolean(passwordConfirmError)}
+              aria-describedby={passwordConfirmError ? 'invite-password-confirm-error' : undefined}
             />
-            {errorMessage && <p style={errorTextStyle}>{errorMessage}</p>}
-            <button type="submit" disabled={submitting} style={buttonStyle}>
-              {submitting ? 'Validation…' : 'Finaliser le compte'}
+            {passwordConfirmError && <p id="invite-password-confirm-error" className="invite-accept-error">{passwordConfirmError}</p>}
+            {apiErrorMessage && <p className="invite-accept-error">{apiErrorMessage}</p>}
+            <button type="submit" disabled={submitting} className="invite-accept-submit">
+              {submitting ? 'Inscription…' : 'Rejoindre Izifoot'}
             </button>
           </form>
         )}
       </div>
     </div>
   )
-}
-
-const wrapperStyle: CSSProperties = {
-  minHeight: '100dvh',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  padding: 16,
-}
-
-const cardStyle: CSSProperties = {
-  width: '100%',
-  maxWidth: 420,
-  padding: 16,
-}
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: 8,
-  border: '1px solid #cbd5e1',
-}
-
-const labelStyle: CSSProperties = {
-  fontSize: 12,
-  color: '#64748b',
-}
-
-const metaStyle: CSSProperties = {
-  fontSize: 14,
-  color: '#334155',
-}
-
-const buttonStyle: CSSProperties = {
-  border: '1px solid #1d4ed8',
-  background: '#2563eb',
-  color: '#fff',
-  borderRadius: 8,
-  padding: '10px 12px',
-  cursor: 'pointer',
-}
-
-const errorTextStyle: CSSProperties = {
-  margin: 0,
-  color: '#b91c1c',
 }

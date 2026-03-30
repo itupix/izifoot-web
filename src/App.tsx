@@ -1,9 +1,11 @@
 // src/App.tsx
 import React from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { BarChart3, Building2, CalendarRange, Dumbbell, Users } from 'lucide-react'
+import { BarChart3, Building2, CalendarRange, Dumbbell, MessageSquare, Users } from 'lucide-react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import style from './App.module.css'
+import { apiGet } from './apiClient'
+import { apiRoutes } from './apiRoutes'
 import { getDefaultRouteByRole, type AccountRole } from './authz'
 import { CloseIcon, MenuIcon } from './components/icons'
 import RoundIconButton from './components/RoundIconButton'
@@ -19,6 +21,7 @@ import DrillsPage from './pages/Drills'
 import Home from './pages/Home'
 import MatchDay from './pages/MatchDay'
 import MatchDetailsPage from './pages/MatchDetailsPage'
+import MessagesPage from './pages/MessagesPage'
 import PlateauDetailsPage from './pages/PlateauDetailsPage'
 import PlayerDetailsPage from './pages/PlayerDetailsPage'
 import PlayersPage from './pages/PlayersPage'
@@ -38,6 +41,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { to: '/club', label: 'Mon club', roles: ['DIRECTION'], icon: Building2 },
   { to: '/planning', label: 'Planning', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: CalendarRange },
+  { to: '/messages', label: 'Messages', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: MessageSquare },
   { to: '/exercices', label: 'Exercices', roles: ['DIRECTION', 'COACH'], icon: Dumbbell },
   { to: '/effectif', label: 'Mon équipe', roles: ['DIRECTION', 'COACH'], icon: Users },
   { to: '/stats', label: 'Stats', roles: ['DIRECTION', 'COACH'], icon: BarChart3 },
@@ -69,6 +73,7 @@ export default function App() {
   const isInviteAccept = location.pathname.startsWith('/invite/accept')
   const showSidebarShell = !isHome && !isPublicPlateau && !isInviteAccept
   const [menuOpen, setMenuOpen] = React.useState(false)
+  const [messageUnreadCount, setMessageUnreadCount] = React.useState(0)
   const headerHeight = 64
   const pageWidth = 980
 
@@ -91,6 +96,30 @@ export default function App() {
     if (location.pathname === '/club') return
     navigate('/club', { replace: true })
   }, [location.pathname, navigate, needsClubSetup])
+
+  React.useEffect(() => {
+    async function refreshUnreadCount() {
+      if (!me) {
+        setMessageUnreadCount(0)
+        return
+      }
+      try {
+        const payload = await apiGet<{ count: number }>(apiRoutes.teamMessages.unreadCount)
+        setMessageUnreadCount(Math.max(0, Number(payload.count) || 0))
+      } catch {
+        setMessageUnreadCount(0)
+      }
+    }
+
+    void refreshUnreadCount()
+    const timerId = window.setInterval(() => { void refreshUnreadCount() }, 30000)
+    const onUnreadUpdate = () => { void refreshUnreadCount() }
+    window.addEventListener('izifoot:messages-unread-updated', onUnreadUpdate)
+    return () => {
+      window.clearInterval(timerId)
+      window.removeEventListener('izifoot:messages-unread-updated', onUnreadUpdate)
+    }
+  }, [me])
 
   return (
     <>
@@ -176,7 +205,24 @@ export default function App() {
                     className={`${style.sidebarLink} ${isActivePath(item.to) ? style.sidebarLinkActive : ''}`.trim()}
                   >
                     <item.icon size={16} />
-                    {item.label}
+                    <span>{item.label}</span>
+                    {item.to === '/messages' && messageUnreadCount > 0 ? (
+                      <span
+                        style={{
+                          marginLeft: 'auto',
+                          background: '#dc2626',
+                          color: '#fff',
+                          borderRadius: 999,
+                          minWidth: 22,
+                          padding: '1px 7px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+                      </span>
+                    ) : null}
                   </Link>
                 ))}
               </nav>
@@ -271,6 +317,15 @@ export default function App() {
               element={
                 <RequireAuth>
                   <PlateauDetailsPage />
+                </RequireAuth>
+              }
+            />
+
+            <Route
+              path="/messages"
+              element={
+                <RequireAuth>
+                  <MessagesPage />
                 </RequireAuth>
               }
             />

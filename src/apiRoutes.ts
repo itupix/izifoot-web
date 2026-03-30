@@ -79,4 +79,9 @@ export const apiRoutes = {
     bySession: (sessionType: 'TRAINING' | 'PLATEAU', sessionId: string) =>
       `/attendance?session_type=${sessionType}&session_id=${enc(sessionId)}`,
   },
+  teamMessages: {
+    list: '/team-messages',
+    unreadCount: '/team-messages/unread-count',
+    like: (id: string) => `/team-messages/${enc(id)}/reactions/like`,
+  },
 } as const

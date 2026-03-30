@@ -1,0 +1,141 @@
+.invite-accept-page {
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+}
+
+.invite-accept-card {
+  width: 100%;
+  max-width: 440px;
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dbe5f1;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.invite-accept-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+}
+
+.invite-accept-brand img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.invite-accept-brand span {
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  text-transform: lowercase;
+  color: transparent;
+  background: linear-gradient(90deg, #2563eb, #1d4ed8) text;
+}
+
+.invite-accept-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.invite-accept-subtitle {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+}
+
+.invite-accept-message-block p {
+  margin: 0;
+}
+
+.invite-accept-message-block {
+  display: grid;
+  gap: 8px;
+}
+
+.invite-accept-form {
+  display: grid;
+  gap: 8px;
+}
+
+.invite-accept-meta {
+  font-size: 14px;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.invite-accept-label {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.invite-accept-input {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+}
+
+.invite-accept-input:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.24);
+  border-color: #60a5fa;
+}
+
+.invite-accept-input.is-error {
+  border-color: #ef4444;
+  background: #fff8f8;
+}
+
+.invite-accept-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.invite-accept-submit {
+  margin-top: 4px;
+  border: 1px solid #1d4ed8;
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+  color: #fff;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(29, 78, 216, 0.18);
+}
+
+.invite-accept-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (max-width: 520px) {
+  .invite-accept-page {
+    padding: 12px;
+    align-items: stretch;
+  }
+
+  .invite-accept-card {
+    max-width: none;
+    align-self: center;
+    padding: 14px;
+  }
+
+  .invite-accept-title {
+    font-size: 24px;
+  }
+}
