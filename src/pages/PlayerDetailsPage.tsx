@@ -144,6 +144,9 @@ export default function PlayerDetailsPage() {
   const [invitationStatusError, setInvitationStatusError] = useState<string | null>(null)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
+  const [inviteParentModalOpen, setInviteParentModalOpen] = useState(false)
+  const [inviteParentEmail, setInviteParentEmail] = useState('')
+  const [inviteParentPhone, setInviteParentPhone] = useState('')
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -345,20 +348,15 @@ export default function PlayerDetailsPage() {
     }
   }
 
-  async function sendPlayerInvitation() {
+  async function sendPlayerInvitation(payloadOverride?: { email?: string; phone?: string }) {
     if (!player?.id) return
     setInviteSending(true)
     try {
       const isResend = invitationStatus === 'PENDING'
-      let payload: { email?: string; phone?: string } = {}
-      if (isChildPlayer(player)) {
-        const parentEmail = window.prompt('E-mail du parent à inviter ?')?.trim() || ''
-        const parentPhone = window.prompt('Téléphone du parent à inviter ?')?.trim() || ''
-        if (!parentEmail || !parentPhone) {
-          uiAlert('Merci de renseigner e-mail et téléphone du parent.')
-          return
-        }
-        payload = { email: parentEmail, phone: parentPhone }
+      const payload: { email?: string; phone?: string } = payloadOverride || {}
+      if (isChildPlayer(player) && !payloadOverride) {
+        setInviteParentModalOpen(true)
+        return
       }
       const response = await apiPost<PlayerInviteResponse>(apiRoutes.players.invite(player.id), payload)
       await refreshInvitationStatus(player.id)
@@ -376,13 +374,28 @@ export default function PlayerDetailsPage() {
         return
       }
       if (err instanceof HttpError && err.status === 400) {
-        uiAlert(toErrorMessage(err, 'Adresse e-mail requise pour inviter ce joueur.'))
+        uiAlert(toErrorMessage(err, 'Coordonnée parent requise (e-mail ou téléphone).'))
         return
       }
       uiAlert(`Erreur invitation joueur: ${toErrorMessage(err)}`)
     } finally {
       setInviteSending(false)
     }
+  }
+
+  function submitParentInviteModal(event: React.FormEvent) {
+    event.preventDefault()
+    const normalizedEmail = inviteParentEmail.trim()
+    const normalizedPhone = inviteParentPhone.trim()
+    if (!normalizedEmail && !normalizedPhone) {
+      uiAlert('Merci de renseigner au moins un e-mail ou un téléphone parent.')
+      return
+    }
+    setInviteParentModalOpen(false)
+    void sendPlayerInvitation({
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
+      ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+    })
   }
 
   if (!id) return <div className="page-shell">Joueur introuvable.</div>
@@ -622,6 +635,33 @@ export default function PlayerDetailsPage() {
                 {deleting ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
+          </div>
+        </>
+      )}
+
+      {inviteParentModalOpen && player && (
+        <>
+          <div className="player-modal-overlay" onClick={() => setInviteParentModalOpen(false)} />
+          <div className="player-modal" role="dialog" aria-modal="true" aria-label="Coordonnées du parent">
+            <div className="player-modal-head">
+              <h3>Inviter un parent</h3>
+              <button type="button" onClick={() => setInviteParentModalOpen(false)}>x</button>
+            </div>
+            <form onSubmit={submitParentInviteModal} className="player-form-grid">
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="parent-invite-email">Adresse e-mail du parent</label>
+                <input id="parent-invite-email" className="players-input" type="email" value={inviteParentEmail} onChange={(event) => setInviteParentEmail(event.target.value)} />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="parent-invite-phone">Téléphone du parent</label>
+                <input id="parent-invite-phone" className="players-input" value={inviteParentPhone} onChange={(event) => setInviteParentPhone(event.target.value)} />
+              </div>
+              <p style={{ margin: 0, color: '#475569', fontSize: 13 }}>Au moins un des deux champs est requis.</p>
+              <div className="player-modal-actions">
+                <button type="button" className="players-secondary-btn" onClick={() => setInviteParentModalOpen(false)}>Annuler</button>
+                <button type="submit" className="players-primary-btn">Continuer</button>
+              </div>
+            </form>
           </div>
         </>
       )}
