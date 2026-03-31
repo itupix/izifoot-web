@@ -30,6 +30,7 @@ export const apiRoutes = {
   players: {
     list: '/players',
     byId: (id: string) => `/players/${enc(id)}`,
+    parentById: (id: string, parentId: string) => `/players/${enc(id)}/parents/${enc(parentId)}`,
     invite: (id: string) => `/players/${enc(id)}/invite`,
     inviteQr: (id: string) => `/players/${enc(id)}/invite/qr`,
     invitationStatus: (id: string) => `/players/${enc(id)}/invitation-status`,

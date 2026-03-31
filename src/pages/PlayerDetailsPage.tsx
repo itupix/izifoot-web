@@ -147,6 +147,7 @@ export default function PlayerDetailsPage() {
   const [inviteParentModalOpen, setInviteParentModalOpen] = useState(false)
   const [inviteParentEmail, setInviteParentEmail] = useState('')
   const [inviteParentPhone, setInviteParentPhone] = useState('')
+  const [deletingParentId, setDeletingParentId] = useState<string | null>(null)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -222,7 +223,8 @@ export default function PlayerDetailsPage() {
       const fullName = `${firstName} ${lastName}`.trim() || 'Parent'
       const email = (contact?.email || '').trim()
       const phone = (contact?.phone || '').trim()
-      return { fullName, email, phone, firstName, lastName }
+      const parentId = typeof contact?.parentId === 'string' ? contact.parentId : ''
+      return { parentId, fullName, email, phone, firstName, lastName }
     })
   }, [player])
   const hasLicence = useMemo(() => Boolean(player && getLicence(player)), [player])
@@ -404,6 +406,27 @@ export default function PlayerDetailsPage() {
     })
   }
 
+  async function deleteParentLink(parentId: string, parentName: string) {
+    if (!player?.id) return
+    if (!parentId) {
+      uiAlert('Impossible de supprimer ce parent (lien incomplet).')
+      return
+    }
+    const ok = window.confirm(`Supprimer le lien parent-enfant pour ${parentName} ?`)
+    if (!ok) return
+    setDeletingParentId(parentId)
+    try {
+      await apiDelete(apiRoutes.players.parentById(player.id, parentId))
+      const refreshed = await apiGet<Player>(apiRoutes.players.byId(player.id))
+      setPlayer(refreshed)
+      uiAlert('Parent retiré.')
+    } catch (err: unknown) {
+      uiAlert(`Erreur suppression parent: ${toErrorMessage(err)}`)
+    } finally {
+      setDeletingParentId(null)
+    }
+  }
+
   if (!id) return <div className="page-shell">Joueur introuvable.</div>
 
   return (
@@ -535,7 +558,17 @@ export default function PlayerDetailsPage() {
                   <div className="player-parent-list">
                     {parentContacts.map((contact, index) => (
                       <div key={`${contact.fullName}-${contact.email}-${contact.phone}-${index}`} className="player-parent-item">
-                        <strong>{`Parent ${index + 1}`}</strong>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <strong>{`Parent ${index + 1}`}</strong>
+                          <button
+                            type="button"
+                            className="players-danger-btn"
+                            onClick={() => { void deleteParentLink(contact.parentId, contact.fullName) }}
+                            disabled={!contact.parentId || deletingParentId === contact.parentId}
+                          >
+                            {deletingParentId === contact.parentId ? 'Suppression...' : 'Supprimer'}
+                          </button>
+                        </div>
                         <p><span>Prénom:</span> {contact.firstName || '—'}</p>
                         <p><span>Nom:</span> {contact.lastName || '—'}</p>
                         <p><span>E-mail:</span> {contact.email || '—'}</p>

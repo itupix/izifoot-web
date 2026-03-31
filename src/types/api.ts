@@ -33,6 +33,8 @@ export interface Player {
   parent_last_name?: string | null
   parentNom?: string | null
   parentContacts?: {
+    parentId?: string | null
+    parentUserId?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null

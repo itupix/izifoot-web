@@ -97,19 +97,20 @@ export default function AccountPage() {
     const normalizedEmail = email.trim()
     const normalizedPhone = phone.trim()
 
-    if (!normalizedFirstName || !normalizedLastName || !normalizedEmail || !normalizedPhone) {
-      uiAlert('Merci de renseigner prénom, nom, e-mail et téléphone.')
+    if (!normalizedFirstName || !normalizedLastName || (!normalizedEmail && !normalizedPhone)) {
+      uiAlert('Merci de renseigner prénom, nom et au moins un contact (e-mail ou téléphone).')
       return
     }
 
     setSaving(true)
     try {
-      await apiPut(apiRoutes.meProfile, {
+      const payload: Record<string, unknown> = {
         firstName: normalizedFirstName,
         lastName: normalizedLastName,
-        email: normalizedEmail,
-        phone: normalizedPhone,
-      })
+        phone: normalizedPhone || null,
+      }
+      if (normalizedEmail) payload.email = normalizedEmail
+      await apiPut(apiRoutes.meProfile, payload)
       await refresh()
       setIsEditOpen(false)
       uiAlert('Profil mis à jour.')
