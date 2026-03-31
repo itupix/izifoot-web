@@ -373,8 +373,8 @@ export default function PlayersPage() {
     const normalizedParentLastName = parentLastName.trim()
     const normalizedLicence = licence.trim()
 
-    if (!normalizedFirstName || !normalizedLastName || !normalizedEmail || !normalizedPhone) {
-      uiAlert('Merci de renseigner prénom, nom, e-mail et téléphone.')
+    if (!normalizedFirstName || !normalizedLastName || (!isChild && (!normalizedEmail || !normalizedPhone))) {
+      uiAlert(isChild ? 'Merci de renseigner prénom et nom.' : 'Merci de renseigner prénom, nom, e-mail et téléphone.')
       return
     }
     if (isChild && (!normalizedParentFirstName || !normalizedParentLastName)) {
@@ -414,8 +414,8 @@ export default function PlayersPage() {
         last_name: normalizedLastName,
         nom: normalizedLastName,
         primary_position: (primary || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED,
-        email: normalizedEmail,
-        phone: normalizedPhone,
+        email: isChild ? '' : normalizedEmail,
+        phone: isChild ? '' : normalizedPhone,
         isChild,
         enfant: isChild,
         teamId: selectedTeamId || undefined,

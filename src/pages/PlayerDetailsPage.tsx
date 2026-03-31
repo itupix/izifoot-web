@@ -276,8 +276,8 @@ export default function PlayerDetailsPage() {
     const normalizedParentLastName = parentLastName.trim()
     const normalizedLicence = licence.trim()
 
-    if (!normalizedFirstName || !normalizedLastName || !normalizedEmail || !normalizedPhone) {
-      uiAlert('Merci de renseigner prénom, nom, e-mail et téléphone.')
+    if (!normalizedFirstName || !normalizedLastName || (!isChild && (!normalizedEmail || !normalizedPhone))) {
+      uiAlert(isChild ? 'Merci de renseigner prénom et nom.' : 'Merci de renseigner prénom, nom, e-mail et téléphone.')
       return
     }
     if (isChild && (!normalizedParentFirstName || !normalizedParentLastName)) {
@@ -295,8 +295,8 @@ export default function PlayerDetailsPage() {
         lastName: normalizedLastName,
         last_name: normalizedLastName,
         nom: normalizedLastName,
-        email: normalizedEmail,
-        phone: normalizedPhone,
+        email: isChild ? '' : normalizedEmail,
+        phone: isChild ? '' : normalizedPhone,
         primary_position: (primaryPosition || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED,
         isChild,
         enfant: isChild,
@@ -350,7 +350,17 @@ export default function PlayerDetailsPage() {
     setInviteSending(true)
     try {
       const isResend = invitationStatus === 'PENDING'
-      const response = await apiPost<PlayerInviteResponse>(apiRoutes.players.invite(player.id), {})
+      let payload: { email?: string; phone?: string } = {}
+      if (isChildPlayer(player)) {
+        const parentEmail = window.prompt('E-mail du parent à inviter ?')?.trim() || ''
+        const parentPhone = window.prompt('Téléphone du parent à inviter ?')?.trim() || ''
+        if (!parentEmail || !parentPhone) {
+          uiAlert('Merci de renseigner e-mail et téléphone du parent.')
+          return
+        }
+        payload = { email: parentEmail, phone: parentPhone }
+      }
+      const response = await apiPost<PlayerInviteResponse>(apiRoutes.players.invite(player.id), payload)
       await refreshInvitationStatus(player.id)
       const nextInviteUrl = typeof response?.inviteUrl === 'string' ? response.inviteUrl.trim() : ''
       if (nextInviteUrl) {
@@ -560,14 +570,18 @@ export default function PlayerDetailsPage() {
                   </div>
                 </>
               )}
-              <div className="players-form-field">
-                <label className="players-field-label" htmlFor="player-edit-phone">Numéro de téléphone</label>
-                <input id="player-edit-phone" className="players-input" value={phone} onChange={(e) => setPhone(e.target.value)} required />
-              </div>
-              <div className="players-form-field">
-                <label className="players-field-label" htmlFor="player-edit-email">Adresse e-mail</label>
-                <input id="player-edit-email" className="players-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
+              {!isChild && (
+                <>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-edit-phone">Numéro de téléphone</label>
+                    <input id="player-edit-phone" className="players-input" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                  </div>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-edit-email">Adresse e-mail</label>
+                    <input id="player-edit-email" className="players-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  </div>
+                </>
+              )}
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-edit-licence">Licence</label>
                 <input id="player-edit-licence" className="players-input" value={licence} onChange={(e) => setLicence(e.target.value)} />
