@@ -85,18 +85,6 @@ function isChildPlayer(player: Player): boolean {
   return false
 }
 
-function getParentNames(player: Player): { parentFirstName: string; parentLastName: string } {
-  const parentFirstName =
-    (typeof player.parentFirstName === 'string' ? player.parentFirstName : '') ||
-    (typeof player.parent_first_name === 'string' ? player.parent_first_name : '') ||
-    (typeof player.parentPrenom === 'string' ? player.parentPrenom : '')
-  const parentLastName =
-    (typeof player.parentLastName === 'string' ? player.parentLastName : '') ||
-    (typeof player.parent_last_name === 'string' ? player.parent_last_name : '') ||
-    (typeof player.parentNom === 'string' ? player.parentNom : '')
-  return { parentFirstName: parentFirstName.trim(), parentLastName: parentLastName.trim() }
-}
-
 function getLicence(player: Player): string {
   const raw = (typeof player.licence === 'string' ? player.licence : '') || (typeof player.license === 'string' ? player.license : '')
   return raw.trim()
@@ -154,8 +142,6 @@ export default function PlayerDetailsPage() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [isChild, setIsChild] = useState(false)
-  const [parentFirstName, setParentFirstName] = useState('')
-  const [parentLastName, setParentLastName] = useState('')
   const [licence, setLicence] = useState('')
   const [primaryPosition, setPrimaryPosition] = useState(POSITION_UNDEFINED)
 
@@ -262,14 +248,11 @@ export default function PlayerDetailsPage() {
   function openEditModal() {
     if (!player) return
     const names = getPlayerNames(player)
-    const parentNames = getParentNames(player)
     setFirstName(names.firstName)
     setLastName(names.lastName)
     setEmail((player.email || '').trim())
     setPhone((player.phone || '').trim())
     setIsChild(isChildPlayer(player))
-    setParentFirstName(parentNames.parentFirstName)
-    setParentLastName(parentNames.parentLastName)
     setLicence(getLicence(player))
     setPrimaryPosition((player.primary_position || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED)
     setEditModalOpen(true)
@@ -283,19 +266,12 @@ export default function PlayerDetailsPage() {
     const normalizedLastName = lastName.trim()
     const normalizedEmail = email.trim()
     const normalizedPhone = phone.trim()
-    const normalizedParentFirstName = parentFirstName.trim()
-    const normalizedParentLastName = parentLastName.trim()
     const normalizedLicence = licence.trim()
 
     if (!normalizedFirstName || !normalizedLastName || (!isChild && (!normalizedEmail || !normalizedPhone))) {
       uiAlert(isChild ? 'Merci de renseigner prénom et nom.' : 'Merci de renseigner prénom, nom, e-mail et téléphone.')
       return
     }
-    if (isChild && (!normalizedParentFirstName || !normalizedParentLastName)) {
-      uiAlert('Merci de renseigner le prénom et le nom du parent.')
-      return
-    }
-
     setSaving(true)
     try {
       const body: Record<string, unknown> = {
@@ -316,21 +292,12 @@ export default function PlayerDetailsPage() {
         body.licence = normalizedLicence
         body.license = normalizedLicence
       }
-      if (isChild) {
-        body.parentFirstName = normalizedParentFirstName
-        body.parent_first_name = normalizedParentFirstName
-        body.parentPrenom = normalizedParentFirstName
-        body.parentLastName = normalizedParentLastName
-        body.parent_last_name = normalizedParentLastName
-        body.parentNom = normalizedParentLastName
-      } else {
-        body.parentFirstName = null
-        body.parent_first_name = null
-        body.parentPrenom = null
-        body.parentLastName = null
-        body.parent_last_name = null
-        body.parentNom = null
-      }
+      body.parentFirstName = null
+      body.parent_first_name = null
+      body.parentPrenom = null
+      body.parentLastName = null
+      body.parent_last_name = null
+      body.parentNom = null
 
       const updated = await apiPut<Player>(apiRoutes.players.byId(player.id), body)
       setPlayer(updated)
@@ -628,18 +595,6 @@ export default function PlayerDetailsPage() {
                   <span>Enfant</span>
                 </label>
               </div>
-              {isChild && (
-                <>
-                  <div className="players-form-field">
-                    <label className="players-field-label" htmlFor="player-edit-parent-last-name">Nom du parent</label>
-                    <input id="player-edit-parent-last-name" className="players-input" value={parentLastName} onChange={(e) => setParentLastName(e.target.value)} required />
-                  </div>
-                  <div className="players-form-field">
-                    <label className="players-field-label" htmlFor="player-edit-parent-first-name">Prénom du parent</label>
-                    <input id="player-edit-parent-first-name" className="players-input" value={parentFirstName} onChange={(e) => setParentFirstName(e.target.value)} required />
-                  </div>
-                </>
-              )}
               {!isChild && (
                 <>
                   <div className="players-form-field">

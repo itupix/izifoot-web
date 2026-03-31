@@ -196,8 +196,6 @@ export default function PlayersPage() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [isChild, setIsChild] = useState(false)
-  const [parentFirstName, setParentFirstName] = useState('')
-  const [parentLastName, setParentLastName] = useState('')
   const [licence, setLicence] = useState('')
 
   const [q, setQ] = useState('')
@@ -369,19 +367,12 @@ export default function PlayersPage() {
     const normalizedLastName = lastName.trim()
     const normalizedEmail = email.trim()
     const normalizedPhone = phone.trim()
-    const normalizedParentFirstName = parentFirstName.trim()
-    const normalizedParentLastName = parentLastName.trim()
     const normalizedLicence = licence.trim()
 
     if (!normalizedFirstName || !normalizedLastName || (!isChild && (!normalizedEmail || !normalizedPhone))) {
       uiAlert(isChild ? 'Merci de renseigner prénom et nom.' : 'Merci de renseigner prénom, nom, e-mail et téléphone.')
       return
     }
-    if (isChild && (!normalizedParentFirstName || !normalizedParentLastName)) {
-      uiAlert('Merci de renseigner le prénom et le nom du parent.')
-      return
-    }
-
     try {
       const body: {
         name: string
@@ -398,12 +389,6 @@ export default function PlayersPage() {
         license?: string
         isChild: boolean
         enfant: boolean
-        parentFirstName?: string
-        parent_first_name?: string
-        parentPrenom?: string
-        parentLastName?: string
-        parent_last_name?: string
-        parentNom?: string
         teamId?: string
       } = {
         name: `${normalizedFirstName} ${normalizedLastName}`.trim(),
@@ -424,14 +409,6 @@ export default function PlayersPage() {
         body.licence = normalizedLicence
         body.license = normalizedLicence
       }
-      if (isChild) {
-        body.parentFirstName = normalizedParentFirstName
-        body.parent_first_name = normalizedParentFirstName
-        body.parentPrenom = normalizedParentFirstName
-        body.parentLastName = normalizedParentLastName
-        body.parent_last_name = normalizedParentLastName
-        body.parentNom = normalizedParentLastName
-      }
       const created = await apiPost<Player>(apiRoutes.players.list, body)
       setPlayers((prev) => [...prev, created].sort((a, b) => getPlayerDisplayName(a).localeCompare(getPlayerDisplayName(b), 'fr', { sensitivity: 'base' })))
       setFirstName('')
@@ -440,8 +417,6 @@ export default function PlayersPage() {
       setEmail('')
       setPhone('')
       setIsChild(false)
-      setParentFirstName('')
-      setParentLastName('')
       setLicence('')
       setModalOpen(false)
     } catch (err: unknown) {
@@ -829,30 +804,6 @@ export default function PlayersPage() {
                   <span>Enfant</span>
                 </label>
               </div>
-              {isChild && (
-                <>
-                  <div className="players-form-field">
-                    <label className="players-field-label" htmlFor="player-parent-last-name-input">Nom du parent</label>
-                    <input
-                      id="player-parent-last-name-input"
-                      className="players-input"
-                      value={parentLastName}
-                      onChange={(e) => setParentLastName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="players-form-field">
-                    <label className="players-field-label" htmlFor="player-parent-first-name-input">Prénom du parent</label>
-                    <input
-                      id="player-parent-first-name-input"
-                      className="players-input"
-                      value={parentFirstName}
-                      onChange={(e) => setParentFirstName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </>
-              )}
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-phone-input">Numéro de téléphone</label>
                 <input
