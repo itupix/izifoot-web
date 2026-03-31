@@ -421,7 +421,7 @@ export default function PlayerDetailsPage() {
                     </button>
                   </div>
                 )}
-                {!invitationLoading && !invitationStatusError && invitationStatus && invitationStatus !== 'ACCEPTED' && (
+                {!invitationLoading && !invitationStatusError && invitationStatus && (invitationStatus !== 'ACCEPTED' || isChildPlayer(player)) && (
                   <div className="player-invite-row">
                     {invitationStatus === 'PENDING' ? <span className="player-invite-label">Invité</span> : null}
                     <button
@@ -430,7 +430,7 @@ export default function PlayerDetailsPage() {
                       onClick={() => { void sendPlayerInvitation() }}
                       disabled={inviteSending}
                     >
-                      {inviteSending ? 'Envoi...' : invitationStatus === 'PENDING' ? 'Renvoyer l’invitation' : 'Inviter'}
+                      {inviteSending ? 'Envoi...' : invitationStatus === 'PENDING' ? 'Renvoyer l’invitation' : (isChildPlayer(player) ? 'Inviter un parent' : 'Inviter')}
                     </button>
                   </div>
                 )}
