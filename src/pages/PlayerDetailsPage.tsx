@@ -213,11 +213,17 @@ export default function PlayerDetailsPage() {
 
   const playerName = useMemo(() => (player ? getPlayerDisplayName(player) : 'Joueur'), [player])
   const playerPosition = useMemo(() => formatPositionLabel(player?.primary_position || POSITION_UNDEFINED), [player])
-  const parentDisplayName = useMemo(() => {
-    if (!player) return '—'
-    const names = getParentNames(player)
-    const fullName = `${names.parentFirstName} ${names.parentLastName}`.trim()
-    return fullName || '—'
+  const parentContacts = useMemo(() => {
+    if (!player) return []
+    const contacts = Array.isArray(player.parentContacts) ? player.parentContacts : []
+    return contacts.map((contact) => {
+      const firstName = (contact?.firstName || '').trim()
+      const lastName = (contact?.lastName || '').trim()
+      const fullName = `${firstName} ${lastName}`.trim() || 'Parent'
+      const email = (contact?.email || '').trim()
+      const phone = (contact?.phone || '').trim()
+      return { fullName, email, phone }
+    })
   }, [player])
   const hasLicence = useMemo(() => Boolean(player && getLicence(player)), [player])
   const playerGoals = useMemo(() => (
@@ -525,7 +531,18 @@ export default function PlayerDetailsPage() {
               <div className="player-details-parent-card">
                 <span className="player-info-icon"><Users size={15} /></span>
                 <strong>Parents</strong>
-                <p>{parentDisplayName}</p>
+                {parentContacts.length > 0 ? (
+                  <div className="player-parent-list">
+                    {parentContacts.map((contact, index) => (
+                      <div key={`${contact.fullName}-${contact.email}-${contact.phone}-${index}`} className="player-parent-item">
+                        <p>{contact.fullName}</p>
+                        <p>{contact.email || contact.phone || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>—</p>
+                )}
               </div>
             )}
             <div>

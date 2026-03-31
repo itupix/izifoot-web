@@ -301,6 +301,20 @@
   grid-column: 1 / -1;
 }
 
+.player-parent-list {
+  display: grid;
+  gap: 8px;
+}
+
+.player-parent-item {
+  display: grid;
+  gap: 2px;
+}
+
+.player-parent-item p:first-child {
+  font-weight: 700;
+}
+
 .player-info-icon {
   color: #2563eb;
   display: inline-flex;
