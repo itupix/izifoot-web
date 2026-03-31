@@ -201,11 +201,11 @@ export default function AccountPage() {
               </label>
               <label style={{ display: 'grid', gap: 4 }}>
                 <span>E-mail</span>
-                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
               </label>
               <label style={{ display: 'grid', gap: 4 }}>
                 <span>Téléphone</span>
-                <input value={phone} onChange={(event) => setPhone(event.target.value)} required />
+                <input value={phone} onChange={(event) => setPhone(event.target.value)} />
               </label>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button type="submit" disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</button>

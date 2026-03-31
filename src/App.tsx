@@ -1,7 +1,7 @@
 // src/App.tsx
 import React from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { BarChart3, Building2, CalendarRange, Dumbbell, MessageSquare, Users } from 'lucide-react'
+import { BarChart3, Building2, CalendarRange, Dumbbell, MessageSquare, UserCircle2, Users } from 'lucide-react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import style from './App.module.css'
 import { apiGet } from './apiClient'
@@ -42,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/club', label: 'Mon club', roles: ['DIRECTION'], icon: Building2 },
   { to: '/planning', label: 'Planning', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: CalendarRange },
   { to: '/messages', label: 'Messages', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: MessageSquare },
+  { to: '/account', label: 'Mon compte', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: UserCircle2 },
   { to: '/exercices', label: 'Exercices', roles: ['DIRECTION', 'COACH'], icon: Dumbbell },
   { to: '/effectif', label: 'Mon équipe', roles: ['DIRECTION', 'COACH'], icon: Users },
   { to: '/stats', label: 'Stats', roles: ['DIRECTION', 'COACH'], icon: BarChart3 },
