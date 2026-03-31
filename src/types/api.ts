@@ -91,6 +91,8 @@ export interface AccountInvitation {
 export interface InvitationDetails {
   id: string
   email: string
+  firstName?: string | null
+  lastName?: string | null
   role: 'DIRECTION' | 'COACH' | 'PLAYER' | 'PARENT'
   status: InvitationStatus
   expiresAt?: string

@@ -308,11 +308,25 @@
 
 .player-parent-item {
   display: grid;
-  gap: 2px;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
 }
 
-.player-parent-item p:first-child {
+.player-parent-item strong {
   font-weight: 700;
+  color: #0f172a;
+}
+
+.player-parent-item p {
+  margin: 0;
+}
+
+.player-parent-item p span {
+  color: #64748b;
+  font-weight: 600;
 }
 
 .player-info-icon {

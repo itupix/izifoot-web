@@ -222,7 +222,7 @@ export default function PlayerDetailsPage() {
       const fullName = `${firstName} ${lastName}`.trim() || 'Parent'
       const email = (contact?.email || '').trim()
       const phone = (contact?.phone || '').trim()
-      return { fullName, email, phone }
+      return { fullName, email, phone, firstName, lastName }
     })
   }, [player])
   const hasLicence = useMemo(() => Boolean(player && getLicence(player)), [player])
@@ -535,8 +535,11 @@ export default function PlayerDetailsPage() {
                   <div className="player-parent-list">
                     {parentContacts.map((contact, index) => (
                       <div key={`${contact.fullName}-${contact.email}-${contact.phone}-${index}`} className="player-parent-item">
-                        <p>{contact.fullName}</p>
-                        <p>{contact.email || contact.phone || '—'}</p>
+                        <strong>{`Parent ${index + 1}`}</strong>
+                        <p><span>Prénom:</span> {contact.firstName || '—'}</p>
+                        <p><span>Nom:</span> {contact.lastName || '—'}</p>
+                        <p><span>E-mail:</span> {contact.email || '—'}</p>
+                        <p><span>Téléphone:</span> {contact.phone || '—'}</p>
                       </div>
                     ))}
                   </div>
@@ -545,16 +548,20 @@ export default function PlayerDetailsPage() {
                 )}
               </div>
             )}
-            <div>
-              <span className="player-info-icon"><Phone size={15} /></span>
-              <strong>Numéro de téléphone</strong>
-              <p>{player.phone || '—'}</p>
-            </div>
-            <div>
-              <span className="player-info-icon"><Mail size={15} /></span>
-              <strong>Adresse e-mail</strong>
-              <p>{player.email || '—'}</p>
-            </div>
+            {!isChildPlayer(player) && (
+              <div>
+                <span className="player-info-icon"><Phone size={15} /></span>
+                <strong>Numéro de téléphone</strong>
+                <p>{player.phone || '—'}</p>
+              </div>
+            )}
+            {!isChildPlayer(player) && (
+              <div>
+                <span className="player-info-icon"><Mail size={15} /></span>
+                <strong>Adresse e-mail</strong>
+                <p>{player.email || '—'}</p>
+              </div>
+            )}
             <div>
               <span className="player-info-icon"><IdCard size={15} /></span>
               <strong>Licence</strong>

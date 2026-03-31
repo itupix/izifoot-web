@@ -25,9 +25,13 @@ export default function InviteAcceptPage() {
 
   const [state, setState] = useState<InviteState>('loading')
   const [details, setDetails] = useState<InvitationDetails | null>(null)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [apiErrorMessage, setApiErrorMessage] = useState('')
+  const [firstNameError, setFirstNameError] = useState('')
+  const [lastNameError, setLastNameError] = useState('')
   const [passwordError, setPasswordError] = useState('')
   const [passwordConfirmError, setPasswordConfirmError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -44,6 +48,8 @@ export default function InviteAcceptPage() {
     try {
       const invitation = await apiGet<InvitationDetails>(apiRoutes.auth.invitationByToken(token))
       setDetails(invitation)
+      setFirstName((invitation.firstName || '').trim())
+      setLastName((invitation.lastName || '').trim())
       setState('ready')
     } catch (err: unknown) {
       const status = extractStatusCode(err)
@@ -73,8 +79,23 @@ export default function InviteAcceptPage() {
     if (!token) return
 
     setApiErrorMessage('')
+    setFirstNameError('')
+    setLastNameError('')
     setPasswordError('')
     setPasswordConfirmError('')
+
+    const parentFirstName = firstName.trim()
+    const parentLastName = lastName.trim()
+    if (details?.role === 'PARENT') {
+      if (!parentFirstName) {
+        setFirstNameError('Le prénom du parent est requis.')
+        return
+      }
+      if (!parentLastName) {
+        setLastNameError('Le nom du parent est requis.')
+        return
+      }
+    }
 
     if (password.length < 6) {
       setPasswordError('Le mot de passe doit contenir au moins 6 caractères.')
@@ -87,7 +108,11 @@ export default function InviteAcceptPage() {
 
     setSubmitting(true)
     try {
-      await apiPost(apiRoutes.auth.acceptInvitation, { token, password })
+      await apiPost(apiRoutes.auth.acceptInvitation, {
+        token,
+        password,
+        ...(details?.role === 'PARENT' ? { firstName: parentFirstName, lastName: parentLastName } : {}),
+      })
       await refresh().catch(() => undefined)
       navigate('/planning', { replace: true })
     } catch (err: unknown) {
@@ -157,6 +182,39 @@ export default function InviteAcceptPage() {
         {state === 'ready' && details && (
           <form onSubmit={acceptInvitation} className="invite-accept-form" noValidate>
             <div className="invite-accept-meta"><strong>Email:</strong> {details.email}</div>
+            {details.role === 'PARENT' && (
+              <>
+                <label className="invite-accept-label" htmlFor="invite-parent-first-name">Prénom du parent</label>
+                <input
+                  id="invite-parent-first-name"
+                  value={firstName}
+                  onChange={(e) => {
+                    setFirstName(e.target.value)
+                    if (firstNameError) setFirstNameError('')
+                  }}
+                  required
+                  className={`invite-accept-input ${firstNameError ? 'is-error' : ''}`}
+                  aria-invalid={Boolean(firstNameError)}
+                  aria-describedby={firstNameError ? 'invite-parent-first-name-error' : undefined}
+                />
+                {firstNameError && <p id="invite-parent-first-name-error" className="invite-accept-error">{firstNameError}</p>}
+
+                <label className="invite-accept-label" htmlFor="invite-parent-last-name">Nom du parent</label>
+                <input
+                  id="invite-parent-last-name"
+                  value={lastName}
+                  onChange={(e) => {
+                    setLastName(e.target.value)
+                    if (lastNameError) setLastNameError('')
+                  }}
+                  required
+                  className={`invite-accept-input ${lastNameError ? 'is-error' : ''}`}
+                  aria-invalid={Boolean(lastNameError)}
+                  aria-describedby={lastNameError ? 'invite-parent-last-name-error' : undefined}
+                />
+                {lastNameError && <p id="invite-parent-last-name-error" className="invite-accept-error">{lastNameError}</p>}
+              </>
+            )}
             <label className="invite-accept-label" htmlFor="invite-password">Mot de passe</label>
             <input
               id="invite-password"
