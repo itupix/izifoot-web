@@ -12,8 +12,7 @@ type LinkedChild = {
   name: string | null
   firstName: string | null
   lastName: string | null
-  email: string | null
-  phone: string | null
+  licence: string | null
   teamId: string | null
   teamName: string | null
 }
@@ -155,8 +154,7 @@ export default function AccountPage() {
             <>
               <div><strong>Prénom:</strong> {linkedChild.firstName || '—'}</div>
               <div><strong>Nom:</strong> {linkedChild.lastName || linkedChild.name || '—'}</div>
-              <div><strong>Email:</strong> {linkedChild.email || '—'}</div>
-              <div><strong>Téléphone:</strong> {linkedChild.phone || '—'}</div>
+              <div><strong>Licence:</strong> {linkedChild.licence || '—'}</div>
               <div><strong>Équipe:</strong> {linkedChild.teamName || linkedChild.teamId || '—'}</div>
             </>
           ) : (
