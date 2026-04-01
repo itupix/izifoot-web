@@ -5,6 +5,7 @@ import SelectionModal from './SelectionModal'
 type PlayersPresenceSectionProps = {
   players: Player[]
   presentPlayerIds: Set<string>
+  intentByPlayerId?: Record<string, 'PRESENT' | 'ABSENT' | 'UNKNOWN'>
   onTogglePresence: (playerId: string, present: boolean) => void | Promise<void>
   cardDisabled?: boolean
   selectionDisabled?: boolean
@@ -42,6 +43,7 @@ function getAvatarUrl(player: Player) {
 export default function PlayersPresenceSection({
   players,
   presentPlayerIds,
+  intentByPlayerId,
   onTogglePresence,
   cardDisabled = false,
   selectionDisabled = false,
@@ -107,9 +109,15 @@ export default function PlayersPresenceSection({
       >
         {players.map((player) => {
           const present = presentPlayerIds.has(player.id)
+          const intent = intentByPlayerId?.[player.id] ?? 'UNKNOWN'
           return (
             <label key={player.id} className="attendance-row">
-              <span>{getFirstName(player.name)}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                {getFirstName(player.name)}
+                <span className={`intent-badge intent-badge--${intent.toLowerCase()}`}>
+                  {intent === 'PRESENT' ? '✓' : intent === 'ABSENT' ? '✕' : '?'}
+                </span>
+              </span>
               <input
                 type="checkbox"
                 className="players-selection-checkbox"

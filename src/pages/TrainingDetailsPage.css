@@ -220,6 +220,36 @@
   gap: 8px;
 }
 
+.intent-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.intent-badge--present {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #166534;
+}
+
+.intent-badge--absent {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+
+.intent-badge--unknown {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #475569;
+}
+
 .match-source-toggle {
   position: relative;
   display: grid;

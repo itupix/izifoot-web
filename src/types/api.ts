@@ -49,6 +49,14 @@ export interface Training {
   date: string
   status: string
   teamId?: string | null
+  intentSummary?: {
+    presentCount: number
+    absentCount: number
+    unknownCount: number
+    totalPlayers: number
+  } | null
+  myTrainingIntent?: 'PRESENT' | 'ABSENT' | null
+  canSetTrainingIntent?: boolean
 }
 
 export interface Matchday {

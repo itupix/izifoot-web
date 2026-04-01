@@ -108,6 +108,19 @@ type TrainingRoleLine = {
   playerId: string
 }
 
+type TrainingIntentResponse = {
+  trainingId: string
+  summary: {
+    presentCount: number
+    absentCount: number
+    unknownCount: number
+    totalPlayers: number
+  }
+  myIntent: 'PRESENT' | 'ABSENT' | null
+  canRespond: boolean
+  items?: Array<{ playerId: string; intent: 'PRESENT' | 'ABSENT' | 'UNKNOWN' }>
+}
+
 function makeRoleLine(role = '', playerId = ''): TrainingRoleLine {
   return { id: `role-${Math.random().toString(36).slice(2, 10)}`, role, playerId }
 }
@@ -146,6 +159,7 @@ export default function TrainingDetailsPage() {
   const [roleLines, setRoleLines] = useState<TrainingRoleLine[]>([])
   const [savingRoles, setSavingRoles] = useState(false)
   const [rolesError, setRolesError] = useState<string | null>(null)
+  const [intentByPlayerId, setIntentByPlayerId] = useState<Record<string, 'PRESENT' | 'ABSENT' | 'UNKNOWN'>>({})
   const [roleModalOpen, setRoleModalOpen] = useState(false)
   const [roleModalMode, setRoleModalMode] = useState<'add' | 'edit'>('add')
   const [roleEditLineId, setRoleEditLineId] = useState<string | null>(null)
@@ -165,13 +179,14 @@ export default function TrainingDetailsPage() {
   const loadTraining = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     if (!id) return
     rolesHydratedRef.current = false
-    const [t, ps, dr, ds, att, roles] = await Promise.all([
+    const [t, ps, dr, ds, att, roles, intents] = await Promise.all([
       apiGet<Training>(apiRoutes.trainings.byId(id)),
       apiGetAllItems<Player>(apiRoutes.players.list),
       apiGetAllItems<Drill>(apiRoutes.drills.list),
       apiGet<TrainingDrill[]>(apiRoutes.trainings.drills(id)),
       apiGetAllItems<AttendanceRow>(apiRoutes.attendance.bySession('TRAINING', id)),
       apiGet<TrainingRolesResponse>(apiRoutes.trainings.roles(id)),
+      apiGet<TrainingIntentResponse>(apiRoutes.trainings.intent(id)).catch(() => null),
     ])
 
     if (isCancelled()) return
@@ -180,6 +195,11 @@ export default function TrainingDetailsPage() {
     setCatalog(dr)
     setDrills(sortTrainingDrills(ds))
     setAttendance(extractPresentPlayerIds(att))
+    const nextIntentByPlayerId: Record<string, 'PRESENT' | 'ABSENT' | 'UNKNOWN'> = {}
+    for (const item of intents?.items ?? []) {
+      nextIntentByPlayerId[item.playerId] = item.intent
+    }
+    setIntentByPlayerId(nextIntentByPlayerId)
     const initialRoleLines = ensureTrailingEmptyRoleLine(
       roles.items.map((item) => makeRoleLine(item.role, item.playerId)),
     )
@@ -658,6 +678,7 @@ export default function TrainingDetailsPage() {
           <PlayersPresenceSection
             players={players}
             presentPlayerIds={attendance}
+            intentByPlayerId={intentByPlayerId}
             onTogglePresence={togglePresence}
             cardDisabled={isCancelled || !writable}
             selectionDisabled={isCancelled || !writable}

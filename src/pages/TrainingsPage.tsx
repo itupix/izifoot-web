@@ -69,6 +69,7 @@ export default function TrainingsPage() {
   const [matchdaysPagination, setMatchdaysPagination] = useState({ limit: MATCHDAYS_PAGE_LIMIT, offset: 0, returned: 0 })
   const [loadingMoreTrainings, setLoadingMoreTrainings] = useState(false)
   const [loadingMoreMatchdays, setLoadingMoreMatchdays] = useState(false)
+  const [updatingIntentTrainingIds, setUpdatingIntentTrainingIds] = useState<Set<string>>(new Set())
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [isPlateauModalOpen, setIsPlateauModalOpen] = useState(false)
   const [plateauLocation, setPlateauLocation] = useState('')
@@ -79,6 +80,7 @@ export default function TrainingsPage() {
   })
 
   const writable = me ? canWrite(me.role) : false
+  const isReadOnlyPlanningRole = me?.role === 'PLAYER' || me?.role === 'PARENT'
   const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
   const teamNameById = useMemo(() => new Map(teamOptions.map((team) => [team.id, team.name])), [teamOptions])
   const coachManagedTeams = useMemo(() => {
@@ -298,6 +300,42 @@ export default function TrainingsPage() {
     }
   }
 
+  async function setTrainingIntent(trainingId: string, present: boolean) {
+    setUpdatingIntentTrainingIds((prev) => new Set(prev).add(trainingId))
+    const previousTrainings = trainings
+    setTrainings((prev) => prev.map((training) => {
+      if (training.id !== trainingId) return training
+      const previousIntent = training.myTrainingIntent ?? null
+      const previousSummary = training.intentSummary ?? null
+      const nextIntent: Training['myTrainingIntent'] = present ? 'PRESENT' : 'ABSENT'
+      let nextSummary = previousSummary
+      if (previousSummary) {
+        let presentCount = previousSummary.presentCount
+        let absentCount = previousSummary.absentCount
+        if (previousIntent === 'PRESENT') presentCount = Math.max(0, presentCount - 1)
+        if (previousIntent === 'ABSENT') absentCount = Math.max(0, absentCount - 1)
+        if (nextIntent === 'PRESENT') presentCount += 1
+        if (nextIntent === 'ABSENT') absentCount += 1
+        const unknownCount = Math.max(0, previousSummary.totalPlayers - presentCount - absentCount)
+        nextSummary = { ...previousSummary, presentCount, absentCount, unknownCount }
+      }
+      return { ...training, myTrainingIntent: nextIntent, intentSummary: nextSummary }
+    }))
+
+    try {
+      await apiPost(apiRoutes.trainings.intent(trainingId), { present })
+    } catch (err: unknown) {
+      setTrainings(previousTrainings)
+      uiAlert(`Erreur intention de présence: ${toErrorMessage(err)}`)
+    } finally {
+      setUpdatingIntentTrainingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(trainingId)
+        return next
+      })
+    }
+  }
+
   return (
     <div className="trainings-page">
       <div className="trainings-main">
@@ -353,6 +391,11 @@ export default function TrainingsPage() {
                     {t.status === 'CANCELLED' ? <span style={{ fontSize: 24 }}>❌</span> : <SoccerBallIcon size={24} />}
                     <span style={{ display: 'grid', gap: 2 }}>
                       <span>Entraînement</span>
+                      {(me?.role === 'COACH' || me?.role === 'DIRECTION') && t.intentSummary && (
+                        <small style={{ color: '#64748b' }}>
+                          Intentions: {t.intentSummary.presentCount}/{t.intentSummary.totalPlayers} présents
+                        </small>
+                      )}
                       {me?.role === 'DIRECTION' && (
                         <small style={{ color: '#64748b' }}>
                           Équipe: {t.teamId ? (teamNameById.get(t.teamId) || t.teamId) : 'Non renseignée'}
@@ -366,6 +409,51 @@ export default function TrainingsPage() {
                 </span>
               </Link>
             ))
+          )}
+          {isReadOnlyPlanningRole && dayTrainings.length > 0 && (
+            <div className="trainings-block-footer" style={{ display: 'grid', gap: 8 }}>
+              {dayTrainings.map((training) => {
+                const isLoadingIntent = updatingIntentTrainingIds.has(training.id)
+                const canSetIntent = Boolean(training.canSetTrainingIntent)
+                return (
+                  <div key={`intent-${training.id}`} style={{ display: 'grid', gap: 6 }}>
+                    <div style={{ fontSize: 13, color: '#64748b' }}>
+                      Intention de présence
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        disabled={!canSetIntent || isLoadingIntent}
+                        onClick={() => { void setTrainingIntent(training.id, true) }}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 10,
+                          border: training.myTrainingIntent === 'PRESENT' ? '1px solid #16a34a' : '1px solid #d1d5db',
+                          background: training.myTrainingIntent === 'PRESENT' ? '#dcfce7' : '#fff',
+                          cursor: canSetIntent ? 'pointer' : 'not-allowed',
+                        }}
+                      >
+                        Présent
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canSetIntent || isLoadingIntent}
+                        onClick={() => { void setTrainingIntent(training.id, false) }}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 10,
+                          border: training.myTrainingIntent === 'ABSENT' ? '1px solid #dc2626' : '1px solid #d1d5db',
+                          background: training.myTrainingIntent === 'ABSENT' ? '#fee2e2' : '#fff',
+                          cursor: canSetIntent ? 'pointer' : 'not-allowed',
+                        }}
+                      >
+                        Absent
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
           {(teamScopedWritable || canLoadMoreTrainings) && (
             <div className="trainings-block-footer" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

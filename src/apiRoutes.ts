@@ -38,6 +38,7 @@ export const apiRoutes = {
   trainings: {
     list: '/trainings',
     byId: (id: string) => `/trainings/${enc(id)}`,
+    intent: (id: string) => `/trainings/${enc(id)}/intent`,
     drills: (trainingId: string) => `/trainings/${enc(trainingId)}/drills`,
     roles: (trainingId: string) => `/trainings/${enc(trainingId)}/roles`,
     generateAiDrills: (trainingId: string) => `/trainings/${enc(trainingId)}/drills/generate-ai`,
