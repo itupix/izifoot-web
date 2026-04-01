@@ -177,6 +177,7 @@ export default function TrainingDetailsPage() {
   const [trainingObjective, setTrainingObjective] = useState('')
   const [sendingObjective, setSendingObjective] = useState(false)
   const [trainingTime, setTrainingTime] = useState('')
+  const [trainingEndTime, setTrainingEndTime] = useState('')
   const [savingTrainingInfo, setSavingTrainingInfo] = useState(false)
   const [updatingCatalogDrillIds, setUpdatingCatalogDrillIds] = useState<Set<string>>(new Set())
   const [roleLines, setRoleLines] = useState<TrainingRoleLine[]>([])
@@ -238,7 +239,8 @@ export default function TrainingDetailsPage() {
 
   useEffect(() => {
     setTrainingTime(formatTrainingTimeInput(training?.date || null))
-  }, [training?.date])
+    setTrainingEndTime(training?.endTime || '')
+  }, [training?.date, training?.endTime])
 
   const trainingDateLabel = useMemo(() => {
     if (!training?.date) return ''
@@ -401,6 +403,7 @@ export default function TrainingDetailsPage() {
     try {
       const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
         date: nextDateISO,
+        endTime: trainingEndTime || null,
       })
       setTraining(updated)
     } catch (err: unknown) {
@@ -737,6 +740,15 @@ export default function TrainingDetailsPage() {
                     disabled={isCancelled || savingTrainingInfo}
                   />
                 </label>
+                <label style={{ display: 'grid', gap: 4 }}>
+                  <span style={{ fontSize: 13, color: '#64748b' }}>Heure de fin</span>
+                  <input
+                    type="time"
+                    value={trainingEndTime}
+                    onChange={(event) => setTrainingEndTime(event.target.value)}
+                    disabled={isCancelled || savingTrainingInfo}
+                  />
+                </label>
                 <div>
                   <button
                     type="button"
@@ -749,7 +761,9 @@ export default function TrainingDetailsPage() {
                 </div>
               </div>
             ) : (
-              <p className="muted-line">Horaire: {formatTrainingTimeInput(training.date) || '—'}</p>
+              <p className="muted-line">
+                Horaire: {formatTrainingTimeInput(training.date) || '—'}{training.endTime ? ` - ${training.endTime}` : ''}
+              </p>
             )}
           </section>
 

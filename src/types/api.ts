@@ -47,6 +47,7 @@ export interface Player {
 export interface Training {
   id: string
   date: string
+  endTime?: string | null
   status: string
   teamId?: string | null
   intentSummary?: {

@@ -67,6 +67,13 @@ function formatTrainingTimeLabel(dateISO: string) {
   }).format(date)
 }
 
+function formatTrainingTimeRange(dateISO: string, endTime?: string | null) {
+  const startTime = formatTrainingTimeLabel(dateISO)
+  if (!startTime) return null
+  if (!endTime) return startTime
+  return `${startTime} - ${endTime}`
+}
+
 export default function TrainingsPage() {
   const { me } = useAuth()
   const { selectedTeamId, requiresSelection, teamOptions } = useTeamScope()
@@ -400,9 +407,9 @@ export default function TrainingsPage() {
                     {t.status === 'CANCELLED' ? <span style={{ fontSize: 24 }}>❌</span> : <SoccerBallIcon size={24} />}
                     <span style={{ display: 'grid', gap: 2 }}>
                       <span>Entraînement</span>
-                      {formatTrainingTimeLabel(t.date) && (
+                      {formatTrainingTimeRange(t.date, t.endTime) && (
                         <small style={{ color: '#64748b' }}>
-                          Horaire: {formatTrainingTimeLabel(t.date)}
+                          Horaire: {formatTrainingTimeRange(t.date, t.endTime)}
                         </small>
                       )}
                       {(me?.role === 'COACH' || me?.role === 'DIRECTION') && t.intentSummary && (
