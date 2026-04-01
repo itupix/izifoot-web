@@ -36,6 +36,27 @@ function toPlanningUrl(dateISO?: string | null, fallbackDate?: string | null) {
   return '/planning'
 }
 
+function formatTrainingTimeInput(dateISO?: string | null) {
+  if (!dateISO) return ''
+  const date = new Date(dateISO)
+  if (Number.isNaN(date.getTime())) return ''
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+function mergeTrainingDateAndTime(dateISO: string, timeHHMM: string) {
+  const [hoursRaw, minutesRaw] = timeHHMM.split(':')
+  const hours = Number(hoursRaw)
+  const minutes = Number(minutesRaw)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
+
+  const date = new Date(dateISO)
+  if (Number.isNaN(date.getTime())) return null
+  date.setHours(hours, minutes, 0, 0)
+  return date.toISOString()
+}
+
 function sortTrainingDrills(items: TrainingDrill[]) {
   return [...items].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 }
@@ -155,6 +176,8 @@ export default function TrainingDetailsPage() {
   const [savingDrillOrder, setSavingDrillOrder] = useState(false)
   const [trainingObjective, setTrainingObjective] = useState('')
   const [sendingObjective, setSendingObjective] = useState(false)
+  const [trainingTime, setTrainingTime] = useState('')
+  const [savingTrainingInfo, setSavingTrainingInfo] = useState(false)
   const [updatingCatalogDrillIds, setUpdatingCatalogDrillIds] = useState<Set<string>>(new Set())
   const [roleLines, setRoleLines] = useState<TrainingRoleLine[]>([])
   const [savingRoles, setSavingRoles] = useState(false)
@@ -212,6 +235,10 @@ export default function TrainingDetailsPage() {
   }, [id])
 
   const { loading, error } = useAsyncLoader(loadTraining)
+
+  useEffect(() => {
+    setTrainingTime(formatTrainingTimeInput(training?.date || null))
+  }, [training?.date])
 
   const trainingDateLabel = useMemo(() => {
     if (!training?.date) return ''
@@ -360,6 +387,26 @@ export default function TrainingDetailsPage() {
     } catch (err: unknown) {
       setAttendance((prev) => applyAttendanceValue(prev, playerId, previousPresent))
       uiAlert(`Erreur présence: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    }
+  }
+
+  async function saveTrainingInfo() {
+    if (!writable || !training || !trainingTime) return
+    const nextDateISO = mergeTrainingDateAndTime(training.date, trainingTime)
+    if (!nextDateISO) {
+      uiAlert('Horaire invalide.')
+      return
+    }
+    setSavingTrainingInfo(true)
+    try {
+      const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
+        date: nextDateISO,
+      })
+      setTraining(updated)
+    } catch (err: unknown) {
+      uiAlert(`Erreur mise à jour horaire: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setSavingTrainingInfo(false)
     }
   }
 
@@ -675,6 +722,37 @@ export default function TrainingDetailsPage() {
 
       {training && (
         <div className="training-details-grid">
+          <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
+            <div className="card-head">
+              <h3>Informations</h3>
+            </div>
+            {writable ? (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <label style={{ display: 'grid', gap: 4 }}>
+                  <span style={{ fontSize: 13, color: '#64748b' }}>Horaire</span>
+                  <input
+                    type="time"
+                    value={trainingTime}
+                    onChange={(event) => setTrainingTime(event.target.value)}
+                    disabled={isCancelled || savingTrainingInfo}
+                  />
+                </label>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => { void saveTrainingInfo() }}
+                    disabled={isCancelled || savingTrainingInfo || !trainingTime}
+                    style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #dbe3ef', background: '#fff' }}
+                  >
+                    {savingTrainingInfo ? 'Enregistrement…' : 'Enregistrer'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="muted-line">Horaire: {formatTrainingTimeInput(training.date) || '—'}</p>
+            )}
+          </section>
+
           <PlayersPresenceSection
             players={players}
             presentPlayerIds={attendance}
