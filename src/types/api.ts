@@ -68,6 +68,9 @@ export interface Matchday {
   startTime?: string | null
   meetingTime?: string | null
   teamId?: string | null
+  competitionType?: 'PLATEAU' | 'MATCH' | 'TOURNOI' | null
+  tournamentHasGroupStage?: boolean | null
+  tournamentKnockoutMode?: 'NONE' | 'SINGLE' | 'HOME_AWAY' | null
 }
 
 export interface ClubMe {
@@ -203,7 +206,7 @@ export interface MatchScorer {
 export interface MatchLite {
   id: string
   createdAt: string
-  type: 'ENTRAINEMENT' | 'PLATEAU'
+  type: 'ENTRAINEMENT' | 'PLATEAU' | 'MATCH' | 'TOURNOI'
   matchdayId?: string | null
   rotationGameKey?: string | null
   status?: 'PLANNED' | 'PLAYED' | 'CANCELLED' | string

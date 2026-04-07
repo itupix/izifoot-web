@@ -74,6 +74,12 @@ function formatTrainingTimeRange(dateISO: string, endTime?: string | null) {
   return `${startTime} - ${endTime}`
 }
 
+function competitionTypeLabel(type?: string | null) {
+  if (type === 'MATCH') return 'Match'
+  if (type === 'TOURNOI') return 'Tournoi'
+  return 'Plateau'
+}
+
 export default function TrainingsPage() {
   const { me } = useAuth()
   const { selectedTeamId, requiresSelection, teamOptions } = useTeamScope()
@@ -87,9 +93,12 @@ export default function TrainingsPage() {
   const [loadingMoreMatchdays, setLoadingMoreMatchdays] = useState(false)
   const [updatingIntentTrainingIds, setUpdatingIntentTrainingIds] = useState<Set<string>>(new Set())
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
-  const [isPlateauModalOpen, setIsPlateauModalOpen] = useState(false)
-  const [plateauLocation, setPlateauLocation] = useState('')
-  const [isCreatingPlateau, setIsCreatingPlateau] = useState(false)
+  const [isCompetitionModalOpen, setIsCompetitionModalOpen] = useState(false)
+  const [competitionLocation, setCompetitionLocation] = useState('')
+  const [competitionType, setCompetitionType] = useState<'PLATEAU' | 'MATCH' | 'TOURNOI'>('PLATEAU')
+  const [tournamentHasGroupStage, setTournamentHasGroupStage] = useState(true)
+  const [tournamentKnockoutMode, setTournamentKnockoutMode] = useState<'NONE' | 'SINGLE' | 'HOME_AWAY'>('SINGLE')
+  const [isCreatingCompetition, setIsCreatingCompetition] = useState(false)
   const [pickerMonth, setPickerMonth] = useState<Date>(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -258,27 +267,33 @@ export default function TrainingsPage() {
 
   // Auto-select not needed (details now on dedicated page)
 
-  function openPlateauModal() {
-    setPlateauLocation('')
-    setIsPlateauModalOpen(true)
+  function openCompetitionModal() {
+    setCompetitionType('PLATEAU')
+    setCompetitionLocation('')
+    setTournamentHasGroupStage(true)
+    setTournamentKnockoutMode('SINGLE')
+    setIsCompetitionModalOpen(true)
   }
 
-  function closePlateauModal() {
-    if (isCreatingPlateau) return
-    setPlateauLocation('')
-    setIsPlateauModalOpen(false)
+  function closeCompetitionModal() {
+    if (isCreatingCompetition) return
+    setCompetitionLocation('')
+    setIsCompetitionModalOpen(false)
   }
 
-  async function createPlateauForDay(day: Date, lieu: string) {
+  async function createCompetitionForDay(day: Date, lieu: string) {
     if (!teamScopedWritable) return
     const normalizedLieu = lieu.trim()
     if (!normalizedLieu) return
-    setIsCreatingPlateau(true)
+    setIsCreatingCompetition(true)
     try {
       const activeTeam = teamOptions.find((team) => team.id === selectedTeamId)
       const created = await apiPost<Matchday>(apiRoutes.matchday.list, {
         date: day.toISOString(),
         lieu: normalizedLieu,
+        competitionType,
+        tournamentHasGroupStage: competitionType === 'TOURNOI' ? tournamentHasGroupStage : null,
+        tournamentKnockoutMode: competitionType === 'TOURNOI' ? tournamentKnockoutMode : null,
         teamId: selectedTeamId || undefined,
         team_id: selectedTeamId || undefined,
         teamName: activeTeam?.name || undefined,
@@ -286,13 +301,13 @@ export default function TrainingsPage() {
         active_team_id: selectedTeamId || undefined,
       })
       setMatchdays(prev => [created, ...prev])
-      setPlateauLocation('')
-      setIsPlateauModalOpen(false)
+      setCompetitionLocation('')
+      setIsCompetitionModalOpen(false)
       navigate(`/matchday/${created.id}?date=${selectedDayKey}`)
     } catch (err: unknown) {
-      uiAlert(`Erreur création plateau: ${toErrorMessage(err)}`)
+      uiAlert(`Erreur création compétition: ${toErrorMessage(err)}`)
     } finally {
-      setIsCreatingPlateau(false)
+      setIsCreatingCompetition(false)
     }
   }
 
@@ -498,9 +513,9 @@ export default function TrainingsPage() {
         </section>
 
         <section className="trainings-block">
-          <div className="trainings-block-title">Plateaux</div>
+          <div className="trainings-block-title">Compétitions</div>
           {dayMatchdays.length === 0 ? (
-            <div className="trainings-empty">Aucun plateau ce jour.</div>
+            <div className="trainings-empty">Aucune compétition ce jour.</div>
           ) : (
             dayMatchdays.map((p) => (
               <Link
@@ -512,7 +527,7 @@ export default function TrainingsPage() {
                   <span className="trainings-item-left">
                     <TrophyIcon size={24} />
                     <span style={{ display: 'grid', gap: 2 }}>
-                      <span>Plateau — {p.lieu}</span>
+                      <span>{competitionTypeLabel(p.competitionType)} — {p.lieu}</span>
                       {me?.role === 'DIRECTION' && (
                         <small style={{ color: '#64748b' }}>
                           Équipe: {p.teamId ? (teamNameById.get(p.teamId) || p.teamId) : 'Non renseignée'}
@@ -530,8 +545,8 @@ export default function TrainingsPage() {
           {(teamScopedWritable || canLoadMoreMatchdays) && (
             <div className="trainings-block-footer" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {teamScopedWritable && (
-                <CtaButton onClick={openPlateauModal}>
-                  Ajouter un plateau
+                <CtaButton onClick={openCompetitionModal}>
+                  Ajouter une compétition
                 </CtaButton>
               )}
               {canLoadMoreMatchdays && (
@@ -616,15 +631,15 @@ export default function TrainingsPage() {
               </span>
               <span className="trainings-legend-item">
                 <span className="trainings-legend-dot-plateau" />
-                Plateau
+                Compétition
               </span>
             </div>
           </div>
         </div>
       )}
 
-      {teamScopedWritable && isPlateauModalOpen && (
-        <div onClick={closePlateauModal} className="trainings-overlay">
+      {teamScopedWritable && isCompetitionModalOpen && (
+        <div onClick={closeCompetitionModal} className="trainings-overlay">
           <div
             onClick={(e) => e.stopPropagation()}
             className="trainings-plateau-modal"
@@ -633,13 +648,13 @@ export default function TrainingsPage() {
             aria-labelledby="plateau-modal-title"
           >
             <div className="trainings-plateau-modal-head">
-              <strong id="plateau-modal-title">Créer un plateau</strong>
+              <strong id="plateau-modal-title">Créer une compétition</strong>
               <button
                 type="button"
-                onClick={closePlateauModal}
+                onClick={closeCompetitionModal}
                 className="trainings-modal-close"
                 aria-label="Fermer"
-                disabled={isCreatingPlateau}
+                disabled={isCreatingCompetition}
               >
                 ✕
               </button>
@@ -648,22 +663,65 @@ export default function TrainingsPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                void createPlateauForDay(selectedDate, plateauLocation)
+                void createCompetitionForDay(selectedDate, competitionLocation)
               }}
               className="trainings-plateau-form"
             >
+              <label htmlFor="competition-type" className="trainings-field-label">
+                Type de compétition
+              </label>
+              <select
+                id="competition-type"
+                value={competitionType}
+                onChange={(e) => setCompetitionType(e.target.value as 'PLATEAU' | 'MATCH' | 'TOURNOI')}
+                className="trainings-text-input"
+                disabled={isCreatingCompetition}
+              >
+                <option value="PLATEAU">Plateau</option>
+                <option value="MATCH">Match</option>
+                <option value="TOURNOI">Tournoi</option>
+              </select>
+
               <label htmlFor="plateau-location" className="trainings-field-label">
-                Lieu du plateau
+                {competitionType === 'MATCH' ? 'Lieu du match' : competitionType === 'TOURNOI' ? 'Lieu du tournoi' : 'Lieu du plateau'}
               </label>
               <input
                 id="plateau-location"
-                value={plateauLocation}
-                onChange={(e) => setPlateauLocation(e.target.value)}
+                value={competitionLocation}
+                onChange={(e) => setCompetitionLocation(e.target.value)}
                 placeholder="Ex. Stade municipal"
                 className="trainings-text-input"
                 autoFocus
-                disabled={isCreatingPlateau}
+                disabled={isCreatingCompetition}
               />
+
+              {competitionType === 'TOURNOI' && (
+                <>
+                  <label className="trainings-field-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={tournamentHasGroupStage}
+                      onChange={(e) => setTournamentHasGroupStage(e.target.checked)}
+                      disabled={isCreatingCompetition}
+                    />
+                    Phase de groupes
+                  </label>
+                  <label htmlFor="tournament-knockout" className="trainings-field-label">
+                    Phase élimination
+                  </label>
+                  <select
+                    id="tournament-knockout"
+                    value={tournamentKnockoutMode}
+                    onChange={(e) => setTournamentKnockoutMode(e.target.value as 'NONE' | 'SINGLE' | 'HOME_AWAY')}
+                    className="trainings-text-input"
+                    disabled={isCreatingCompetition}
+                  >
+                    <option value="NONE">Aucune</option>
+                    <option value="SINGLE">Match simple</option>
+                    <option value="HOME_AWAY">Aller / retour</option>
+                  </select>
+                </>
+              )}
 
               {matchdayLocations.length > 0 && (
                 <div className="trainings-location-picker">
@@ -673,9 +731,9 @@ export default function TrainingsPage() {
                       <button
                         key={location}
                         type="button"
-                        onClick={() => setPlateauLocation(location)}
-                        className={`trainings-location-chip ${plateauLocation.trim() === location ? 'trainings-location-chip--active' : ''}`}
-                        disabled={isCreatingPlateau}
+                        onClick={() => setCompetitionLocation(location)}
+                        className={`trainings-location-chip ${competitionLocation.trim() === location ? 'trainings-location-chip--active' : ''}`}
+                        disabled={isCreatingCompetition}
                       >
                         {location}
                       </button>
@@ -687,18 +745,18 @@ export default function TrainingsPage() {
               <div className="trainings-modal-actions">
                 <button
                   type="button"
-                  onClick={closePlateauModal}
+                  onClick={closeCompetitionModal}
                   className="trainings-secondary-btn"
-                  disabled={isCreatingPlateau}
+                  disabled={isCreatingCompetition}
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   className="trainings-primary-btn"
-                  disabled={isCreatingPlateau || !plateauLocation.trim()}
+                  disabled={isCreatingCompetition || !competitionLocation.trim()}
                 >
-                  {isCreatingPlateau ? 'Création…' : 'Continuer'}
+                  {isCreatingCompetition ? 'Création…' : 'Continuer'}
                 </button>
               </div>
             </form>
