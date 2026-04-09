@@ -305,6 +305,9 @@ export default function PlateauDetailsPage() {
     if (!plateau?.date) return ''
     return new Date(plateau.date).toLocaleDateString()
   }, [plateau])
+  const isMatchCompetition = (plateau?.competitionType || 'PLATEAU') === 'MATCH'
+  const isTournamentCompetition = (plateau?.competitionType || 'PLATEAU') === 'TOURNOI'
+  const competitionLabel = isMatchCompetition ? 'Match' : (isTournamentCompetition ? 'Tournoi' : 'Plateau')
   const backToPlanningUrl = useMemo(
     () => toPlanningUrl(plateau?.date, searchParams.get('date')),
     [plateau?.date, searchParams]
@@ -331,6 +334,7 @@ export default function PlateauDetailsPage() {
       slots: summaryRotation.slots,
     } satisfies PlanningData
   }, [plateauPlanning, summaryRotation])
+  const isTournamentChampionship = isTournamentCompetition && (plateauPlanningData as PlanningData | null | undefined)?.tournamentFormat === 'CHAMPIONNAT'
   const plateauPlanningTeams = useMemo(() => {
     if (!plateauPlanningData?.slots?.length) return [] as string[]
     const labels = new Set<string>()
@@ -549,6 +553,91 @@ export default function PlateauDetailsPage() {
       }),
     }]
   }, [clubName, localCancelledMatchIds, matchSourceMode, navigate, plateau?.date, plateau?.teamId, plateauMatches, selectedTeamId, teamOptions])
+  const tournamentStandings = useMemo(() => {
+    if (!isTournamentChampionship) return []
+    const allTeams = Array.from(new Set(
+      plateauPlanningTeams.length
+        ? plateauPlanningTeams
+        : (plateauPlanningData?.slots?.flatMap((slot) => slot.games.flatMap((game) => [game.A, game.B])) ?? [])
+    ))
+    if (!allTeams.length) return []
+
+    type StandingRow = { team: string; played: number; won: number; draw: number; lost: number; gf: number; ga: number; gd: number; points: number }
+    const table = new Map<string, StandingRow>(
+      allTeams.map((team) => [team, { team, played: 0, won: 0, draw: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 }])
+    )
+
+    const gameByKey = new Map<string, { A: string; B: string }>()
+    for (const [slotIndex, slot] of (plateauPlanningData?.slots ?? []).entries()) {
+      for (const [gameIndex, game] of slot.games.entries()) {
+        gameByKey.set(`slot:${slotIndex}:game:${gameIndex}`, { A: game.A, B: game.B })
+      }
+    }
+
+    for (const match of plateauMatches) {
+      if (isMatchCancelled(match, { localCancelledIds: localCancelledMatchIds })) continue
+      if (isPendingMatch(match, { referenceDate: plateau?.date ?? null, localCancelledIds: localCancelledMatchIds })) continue
+      const key = (match.rotationGameKey || '').trim()
+      let teamA = ''
+      let teamB = ''
+      if (key && gameByKey.has(key)) {
+        const mapped = gameByKey.get(key)!
+        teamA = mapped.A
+        teamB = mapped.B
+      } else {
+        const parsed = (match.opponentName || '').match(/^(.+)\s+vs\s+(.+)$/i)
+        if (parsed) {
+          teamA = parsed[1].trim()
+          teamB = parsed[2].trim()
+        }
+      }
+      if (!teamA || !teamB) continue
+      if (!table.has(teamA)) table.set(teamA, { team: teamA, played: 0, won: 0, draw: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 })
+      if (!table.has(teamB)) table.set(teamB, { team: teamB, played: 0, won: 0, draw: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 })
+
+      const homeScore = match.teams.find((team) => team.side === 'home')?.score ?? 0
+      const awayScore = match.teams.find((team) => team.side === 'away')?.score ?? 0
+
+      const rowA = table.get(teamA)!
+      const rowB = table.get(teamB)!
+      rowA.played += 1
+      rowB.played += 1
+      rowA.gf += homeScore
+      rowA.ga += awayScore
+      rowB.gf += awayScore
+      rowB.ga += homeScore
+      if (homeScore > awayScore) {
+        rowA.won += 1
+        rowA.points += 3
+        rowB.lost += 1
+      } else if (homeScore < awayScore) {
+        rowB.won += 1
+        rowB.points += 3
+        rowA.lost += 1
+      } else {
+        rowA.draw += 1
+        rowB.draw += 1
+        rowA.points += 1
+        rowB.points += 1
+      }
+    }
+
+    return Array.from(table.values())
+      .map((row) => ({ ...row, gd: row.gf - row.ga }))
+      .sort((lhs, rhs) =>
+        rhs.points - lhs.points
+        || rhs.gd - lhs.gd
+        || rhs.gf - lhs.gf
+        || lhs.team.localeCompare(rhs.team, 'fr-FR')
+      )
+  }, [
+    isTournamentChampionship,
+    localCancelledMatchIds,
+    plateau?.date,
+    plateauMatches,
+    plateauPlanningData?.slots,
+    plateauPlanningTeams,
+  ])
   const activeTeamName = useMemo(() => {
     const activeId = selectedTeamId || plateau?.teamId
     if (!activeId) return ''
@@ -593,6 +682,12 @@ export default function PlateauDetailsPage() {
   }, [plateau?.date, plateau?.meetingTime, plateauPlanningData?.start])
   const publicPlateauUrl = useMemo(() => sharedPublicUrl, [sharedPublicUrl])
   const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
+
+  useEffect(() => {
+    if (isMatchCompetition && matchSourceMode !== 'MANUAL') {
+      setMatchSourceMode('MANUAL')
+    }
+  }, [isMatchCompetition, matchSourceMode])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
@@ -917,17 +1012,23 @@ export default function PlateauDetailsPage() {
     const planningTeams = Array.from(new Set(planningData.slots.flatMap((slot) => slot.games.flatMap((game) => [game.A, game.B]))))
     const inferredFromCurrentPlanning = findPlanningTeamLabel(planningTeams, [clubName, activeTeamName])
     const teamLabel = selectedPlanningTeam || inferredPlanningTeamLabel || inferredFromCurrentPlanning
-    if (!teamLabel) {
-      uiAlert('Sélectionnez votre équipe dans la rotation avant de générer les matchs.')
-      return
-    }
-    const generated = planningData.slots.flatMap((slot) =>
+    const generated = planningData.slots.flatMap((slot, slotIndex) =>
       slot.games
-        .filter((game) => game.A === teamLabel || game.B === teamLabel)
-        .map((game) => ({ opponent: game.A === teamLabel ? game.B : game.A }))
+        .map((game, gameIndex) => ({ game, slotIndex, gameIndex }))
+        .filter(({ game }) => isTournamentCompetition || (teamLabel ? (game.A === teamLabel || game.B === teamLabel) : false))
+        .map(({ game, slotIndex, gameIndex }) => ({
+          opponent: isTournamentCompetition
+            ? (teamLabel && (game.A === teamLabel || game.B === teamLabel) ? (game.A === teamLabel ? game.B : game.A) : `${game.A} vs ${game.B}`)
+            : (game.A === teamLabel ? game.B : game.A),
+          rotationGameKey: `slot:${slotIndex}:game:${gameIndex}`,
+        }))
     )
     if (!generated.length) {
-      uiAlert(`Aucun match de l'équipe "${teamLabel}" trouvé dans la rotation.`)
+      uiAlert(isTournamentCompetition
+        ? 'Aucun match généré à partir de ce planning de tournoi.'
+        : (teamLabel
+          ? `Aucun match de l'équipe "${teamLabel}" trouvé dans la rotation.`
+          : 'Sélectionnez votre équipe dans la rotation avant de générer les matchs.'))
       return
     }
 
@@ -938,7 +1039,9 @@ export default function PlateauDetailsPage() {
       const created = await Promise.all(
         generated.map((matchItem) =>
           apiPost<MatchLite>(apiRoutes.matches.list, {
-            type: 'PLATEAU' as const,
+            type: isTournamentCompetition
+              ? ('TOURNOI' as const)
+              : (isMatchCompetition ? ('MATCH' as const) : ('PLATEAU' as const)),
             matchdayId: id,
             sides: {
               home: { starters: [], subs: [] },
@@ -948,6 +1051,7 @@ export default function PlateauDetailsPage() {
             buteurs: [],
             opponentName: matchItem.opponent,
             played: false,
+            rotationGameKey: matchItem.rotationGameKey,
             tactic: defaultMatchTactic,
           })
         )
@@ -1020,7 +1124,7 @@ export default function PlateauDetailsPage() {
     }
     try {
       const payload = {
-        type: 'PLATEAU' as const,
+        type: isMatchCompetition ? ('MATCH' as const) : ('PLATEAU' as const),
         matchdayId: id,
         sides: {
           home: { starters: [], subs: [] },
@@ -1048,7 +1152,7 @@ export default function PlateauDetailsPage() {
   return (
     <div className="training-details-page">
       <PlateauPageHeader
-        title="Plateau"
+        title={competitionLabel}
         subtitle={dateLabel}
         backAction={(
           <button type="button" className="back-link-button" onClick={() => navigate(backToPlanningUrl)}>
@@ -1081,7 +1185,7 @@ export default function PlateauDetailsPage() {
                       void openShareModal()
                     }}
                   >
-                    Partager le plateau
+                    {`Partager le ${competitionLabel.toLowerCase()}`}
                   </button>
                   <button
                     type="button"
@@ -1090,7 +1194,7 @@ export default function PlateauDetailsPage() {
                       openDeletePlateauModal()
                     }}
                   >
-                    Supprimer le plateau
+                    {`Supprimer le ${competitionLabel.toLowerCase()}`}
                   </button>
                 </div>
               </>
@@ -1143,36 +1247,38 @@ export default function PlateauDetailsPage() {
             <div className="card-head matches-card-head">
               <h3>Matchs</h3>
               <div className="head-actions">
-                <div className="match-source-toggle" role="tablist" aria-label="Mode de gestion des matchs">
-                  <span
-                    className={`match-source-toggle-thumb ${matchSourceMode === 'ROTATION' ? 'is-rotation' : ''}`}
-                    aria-hidden="true"
-                  />
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={matchSourceMode === 'MANUAL'}
-                    onClick={() => { void switchToManualMode() }}
-                    disabled={!writable}
-                    className={`match-source-toggle-btn ${matchSourceMode === 'MANUAL' ? 'is-active' : ''}`}
-                  >
-                    Manuel
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={matchSourceMode === 'ROTATION'}
-                    onClick={() => { void switchToRotationMode() }}
-                    disabled={!writable}
-                    className={`match-source-toggle-btn ${matchSourceMode === 'ROTATION' ? 'is-active' : ''}`}
-                  >
-                    Rotation
-                  </button>
-                </div>
+                {!isMatchCompetition && (
+                  <div className="match-source-toggle" role="tablist" aria-label="Mode de gestion des matchs">
+                    <span
+                      className={`match-source-toggle-thumb ${matchSourceMode === 'ROTATION' ? 'is-rotation' : ''}`}
+                      aria-hidden="true"
+                    />
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={matchSourceMode === 'MANUAL'}
+                      onClick={() => { void switchToManualMode() }}
+                      disabled={!writable}
+                      className={`match-source-toggle-btn ${matchSourceMode === 'MANUAL' ? 'is-active' : ''}`}
+                    >
+                      Manuel
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={matchSourceMode === 'ROTATION'}
+                      onClick={() => { void switchToRotationMode() }}
+                      disabled={!writable}
+                      className={`match-source-toggle-btn ${matchSourceMode === 'ROTATION' ? 'is-active' : ''}`}
+                    >
+                      Rotation
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="matches-section-body">
-              {matchSourceMode === 'ROTATION' && (
+              {!isMatchCompetition && matchSourceMode === 'ROTATION' && (
                 <>
                   {plateauPlanningTeams.length > 0 && (
                     <div className="rotation-team-absences">
@@ -1246,23 +1352,23 @@ export default function PlateauDetailsPage() {
                   )}
                 </>
               )}
-              {matchSourceMode === 'MANUAL' && plateauMatches.length > 0 && (
+              {(isMatchCompetition || matchSourceMode === 'MANUAL') && plateauMatches.length > 0 && (
                 <PlateauRotationContent
                   filterValue=""
                   filterOptions={[]}
                   onFilterChange={() => {}}
                   slots={manualDisplaySlots}
-                  emptyMessage="Aucun match encore enregistré pour ce plateau."
+                  emptyMessage={`Aucun match encore enregistré pour ce ${competitionLabel.toLowerCase()}.`}
                 />
               )}
               {plateauMatches.length === 0 && (
                 <div className="matches-empty-state">
-                  {matchSourceMode === 'ROTATION'
+                  {!isMatchCompetition && matchSourceMode === 'ROTATION'
                     ? 'Aucun match généré depuis la rotation pour le moment.'
-                    : 'Aucun match encore enregistré pour ce plateau.'}
+                    : `Aucun match encore enregistré pour ce ${competitionLabel.toLowerCase()}.`}
                 </div>
               )}
-              {matchSourceMode === 'MANUAL' && writable && (
+              {(isMatchCompetition || matchSourceMode === 'MANUAL') && writable && (
                 <CtaButton
                   type="button"
                   onClick={openCreateMatchModal}
@@ -1273,6 +1379,52 @@ export default function PlateauDetailsPage() {
               )}
             </div>
           </section>
+
+          {isTournamentChampionship && (
+            <section className="details-card">
+              <div className="card-head matches-card-head">
+                <h3>Classement</h3>
+              </div>
+              {tournamentStandings.length === 0 ? (
+                <div className="matches-empty-state">Aucun match joué pour le moment.</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', color: '#64748b' }}>
+                        <th style={{ padding: '8px 6px' }}>#</th>
+                        <th style={{ padding: '8px 6px' }}>Équipe</th>
+                        <th style={{ padding: '8px 6px' }}>Pts</th>
+                        <th style={{ padding: '8px 6px' }}>J</th>
+                        <th style={{ padding: '8px 6px' }}>G</th>
+                        <th style={{ padding: '8px 6px' }}>N</th>
+                        <th style={{ padding: '8px 6px' }}>P</th>
+                        <th style={{ padding: '8px 6px' }}>BP</th>
+                        <th style={{ padding: '8px 6px' }}>BC</th>
+                        <th style={{ padding: '8px 6px' }}>Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournamentStandings.map((row, index) => (
+                        <tr key={`standing-${row.team}`} style={{ borderTop: '1px solid #e5e7eb' }}>
+                          <td style={{ padding: '8px 6px', fontWeight: 700 }}>{index + 1}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.team}</td>
+                          <td style={{ padding: '8px 6px', fontWeight: 700 }}>{row.points}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.played}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.won}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.draw}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.lost}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.gf}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.ga}</td>
+                          <td style={{ padding: '8px 6px' }}>{row.gd > 0 ? `+${row.gd}` : row.gd}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
         </>
       )}
 
@@ -1485,11 +1637,12 @@ export default function PlateauDetailsPage() {
         </>
       )}
 
-      {writable && isPlanningModalOpen && plateau?.date && (
+      {writable && !isMatchCompetition && isPlanningModalOpen && plateau?.date && (
         <PlanningModal
           dateISO={plateau.date}
           planning={editingPlanning}
           initialTeamLabel={clubName || activeTeamName}
+          competitionType={(plateau.competitionType as 'PLATEAU' | 'MATCH' | 'TOURNOI' | undefined) ?? 'PLATEAU'}
           onClose={closePlanningModal}
           onSaved={upsertPlanning}
         />
@@ -1498,14 +1651,14 @@ export default function PlateauDetailsPage() {
       {writable && isShareModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeShareModal} />
-          <div className="drill-modal share-modal" role="dialog" aria-modal="true" aria-label="Partager le plateau">
+          <div className="drill-modal share-modal" role="dialog" aria-modal="true" aria-label={`Partager le ${competitionLabel.toLowerCase()}`}>
             <div className="drill-modal-head">
-              <h3>Partager le plateau</h3>
+              <h3>{`Partager le ${competitionLabel.toLowerCase()}`}</h3>
               <button type="button" onClick={closeShareModal}>✕</button>
             </div>
             <div className="share-content">
               <p className="muted-line">
-                Ce lien ouvre la version publique du plateau avec les blocs titre/date, informations et rotation.
+                Ce lien ouvre la version publique de la compétition.
               </p>
               <label className="share-url-block">
                 <span>Lien public</span>
@@ -1530,7 +1683,7 @@ export default function PlateauDetailsPage() {
               {shareQrLoading && <p className="muted-line">Génération du QR code…</p>}
               {shareQrDataUrl && (
                 <div className="share-qr-wrap">
-                  <img src={shareQrDataUrl} alt="QR code du lien public du plateau" width={220} height={220} />
+                  <img src={shareQrDataUrl} alt={`QR code du lien public du ${competitionLabel.toLowerCase()}`} width={220} height={220} />
                 </div>
               )}
             </div>
@@ -1541,13 +1694,13 @@ export default function PlateauDetailsPage() {
       {writable && isDeletePlateauModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeDeletePlateauModal} />
-          <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Confirmer la suppression du plateau">
+          <div className="drill-modal" role="dialog" aria-modal="true" aria-label={`Confirmer la suppression du ${competitionLabel.toLowerCase()}`}>
             <div className="drill-modal-head">
-              <h3>Supprimer le plateau ?</h3>
+              <h3>{`Supprimer le ${competitionLabel.toLowerCase()} ?`}</h3>
               <button type="button" onClick={closeDeletePlateauModal} disabled={deletingPlateau}>✕</button>
             </div>
             <p className="muted-line">
-              Cette action est définitive. Tous les matchs liés à ce plateau seront supprimés.
+              Cette action est définitive. Tous les matchs liés à cette compétition seront supprimés.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button
@@ -1571,7 +1724,7 @@ export default function PlateauDetailsPage() {
         </>
       )}
 
-      {writable && matchModeConfirm && (
+      {writable && !isMatchCompetition && matchModeConfirm && (
         <>
           <div className="modal-overlay" onClick={closeMatchModeConfirmModal} />
           <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Confirmer le changement de mode des matchs">

@@ -10,6 +10,7 @@ type PlanningModalProps = {
   onClose: () => void
   onSaved: (planning: Planning) => void
   initialTeamLabel?: string
+  competitionType?: 'PLATEAU' | 'MATCH' | 'TOURNOI'
 }
 
 const DEFAULT_PLANNING_DATA: PlanningData = {
@@ -36,6 +37,7 @@ export default function PlanningModal({
   onClose,
   onSaved,
   initialTeamLabel,
+  competitionType = 'PLATEAU',
 }: PlanningModalProps) {
   const initialData = useMemo<PlanningData>(() => {
     if (planning?.data) return planning.data as PlanningData
@@ -114,6 +116,7 @@ export default function PlanningModal({
           value={initialData}
           onChange={setDataObj}
           onMetaChange={setEditorMeta}
+          competitionType={competitionType}
         />
 
         {minTeamsWarning && (

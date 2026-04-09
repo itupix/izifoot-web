@@ -13,6 +13,8 @@ export type PlanningData = {
   restEveryX?: number;
   allowRematches?: boolean;
   regenSeed?: number;
+  tournamentFormat?: 'ELIMINATION' | 'CHAMPIONNAT';
+  tournamentWithPools?: boolean;
   teams?: TeamEntry[];
   slots: { time: string; games: { pitch: number; A: string; B: string }[] }[];
 };
@@ -39,6 +41,7 @@ type Props = {
   value?: PlanningData | null;               // planning existant à éditer (facultatif)
   onChange?: (data: PlanningData) => void;   // renvoyé à chaque modification (pour sauvegarde)
   onMetaChange?: (meta: { canSave: boolean; hasGeneratedRotation: boolean; warnings: string[] }) => void;
+  competitionType?: 'PLATEAU' | 'MATCH' | 'TOURNOI';
 };
 
 const subtleButtonStyle = {
@@ -273,6 +276,97 @@ function packSchedule(matches: Match[], pitches: number, restEveryX: number) {
   return agenda
 }
 
+function buildRoundRobinRounds(teams: Team[], seed: number): Match[][] {
+  if (teams.length < 2) return []
+  const seededTeams = seededShuffle(teams, seed || 1)
+  const working: Array<Team | null> = [...seededTeams]
+  if (working.length % 2 === 1) working.push(null)
+  const roundsCount = working.length - 1
+  const rounds: Match[][] = []
+
+  for (let roundIndex = 0; roundIndex < roundsCount; roundIndex += 1) {
+    const games: Match[] = []
+    for (let pairIndex = 0; pairIndex < working.length / 2; pairIndex += 1) {
+      const lhs = working[pairIndex]
+      const rhs = working[working.length - 1 - pairIndex]
+      if (!lhs || !rhs) continue
+      games.push({ id: `champ:${roundIndex}:${pairIndex}`, a: lhs, b: rhs })
+    }
+    rounds.push(games)
+    const fixed = working[0]
+    const rotating = working.slice(1)
+    rotating.unshift(rotating.pop() ?? null)
+    working.splice(0, working.length, fixed, ...rotating)
+  }
+
+  return rounds
+}
+
+function buildEliminationRounds(teams: Team[], seed: number): Match[][] {
+  const rounds: Match[][] = []
+  if (teams.length < 2) return rounds
+  const seededTeams = seededShuffle(teams, seed || 1)
+  let nextSyntheticId = Math.max(0, ...teams.map((team) => team.id)) + 1
+  let currentRound = seededTeams
+  let roundIndex = 0
+
+  while (currentRound.length > 1) {
+    const games: Match[] = []
+    const nextRound: Team[] = []
+    for (let index = 0; index < currentRound.length; index += 2) {
+      const lhs = currentRound[index]
+      const rhs = currentRound[index + 1]
+      if (!rhs) {
+        nextRound.push(lhs)
+        continue
+      }
+      games.push({ id: `elim:${roundIndex}:${index / 2}`, a: lhs, b: rhs })
+      nextRound.push({
+        id: nextSyntheticId++,
+        label: `Vainqueur ${lhs.label} vs ${rhs.label}`,
+        club: '',
+        teamNumber: null,
+      })
+    }
+    if (games.length > 0) rounds.push(games)
+    currentRound = nextRound
+    roundIndex += 1
+  }
+  return rounds
+}
+
+function buildTournamentRounds(
+  teams: Team[],
+  format: 'ELIMINATION' | 'CHAMPIONNAT',
+  withPools: boolean,
+  seed: number
+): Match[][] {
+  const championshipRounds = buildRoundRobinRounds(teams, seed || 1)
+  if (format === 'CHAMPIONNAT') return championshipRounds
+  const eliminationRounds = buildEliminationRounds(teams, (seed || 1) + 1000)
+  if (withPools) return [...championshipRounds, ...eliminationRounds]
+  return eliminationRounds
+}
+
+function packTournamentRounds(rounds: Match[][], pitches: number) {
+  const agenda: Array<{ timeIndex: number; games: Array<{ pitch: number; match: Match }> }> = []
+  let timeIndex = 0
+  const safePitches = Math.max(1, pitches)
+
+  for (const roundGames of rounds) {
+    if (roundGames.length === 0) continue
+    for (let start = 0; start < roundGames.length; start += safePitches) {
+      const chunk = roundGames.slice(start, start + safePitches)
+      agenda.push({
+        timeIndex,
+        games: chunk.map((match, index) => ({ pitch: index + 1, match })),
+      })
+      timeIndex += 1
+    }
+  }
+  return agenda
+}
+
 function mergeUniqueLabels(...lists: string[][]) {
   const seen = new Set<string>()
   const merged: string[] = []
@@ -288,7 +382,7 @@ function mergeUniqueLabels(...lists: string[][]) {
 }
 
 /** ==== Composant principal ==== */
-const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
+const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange, competitionType = 'PLATEAU' }) => {
   // 1) États (initialisés depuis `value` si présent)
   // Hydratation rudimentaire depuis value: reconstruit l'heure de départ / terrains / etc.
   const initial = value ?? { start: '10:00', pitches: 3, matchMin: 10, breakMin: 2, slots: [] }
@@ -339,6 +433,11 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
   const [allowRematches, setAllowRematches] = useState(
     typeof value?.allowRematches === 'boolean' ? value.allowRematches : false
   )
+  const [tournamentFormat, setTournamentFormat] = useState<'ELIMINATION' | 'CHAMPIONNAT'>(
+    value?.tournamentFormat === 'ELIMINATION' ? 'ELIMINATION' : 'CHAMPIONNAT'
+  )
+  const [tournamentWithPools, setTournamentWithPools] = useState(Boolean(value?.tournamentWithPools))
+  const isTournament = competitionType === 'TOURNOI'
 
   useEffect(() => {
     if (!value) return
@@ -350,6 +449,8 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
     setMatchesPerTeam(typeof value.matchesPerTeam === 'number' ? clamp(value.matchesPerTeam, 1) : 3)
     setRestEveryX(typeof value.restEveryX === 'number' ? clamp(value.restEveryX, 1) : 3)
     setAllowRematches(typeof value.allowRematches === 'boolean' ? value.allowRematches : false)
+    setTournamentFormat(value.tournamentFormat === 'ELIMINATION' ? 'ELIMINATION' : 'CHAMPIONNAT')
+    setTournamentWithPools(Boolean(value.tournamentWithPools))
     setRegenKey(typeof value.regenSeed === 'number' ? value.regenSeed : 1)
   }, [
     value,
@@ -361,6 +462,8 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
     setMatchesPerTeam,
     setRestEveryX,
     setAllowRematches,
+    setTournamentFormat,
+    setTournamentWithPools,
     setRegenKey,
   ])
 
@@ -378,16 +481,23 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
     [teamHistory, teamsList]
   )
   const teams = useMemo(() => parseTeams(teamsText), [teamsText])
-  const matches = useMemo(() => generateAllMatches(teams, forbidIntraClub), [teams, forbidIntraClub])
-  const limitedMatches = useMemo(
-    () => limitMatchesPerTeam(matches, teams, Math.max(1, matchesPerTeam), allowRematches, regenKey || 1),
-    [matches, teams, matchesPerTeam, allowRematches, regenKey]
+  const tournamentRounds = useMemo(
+    () => (isTournament ? buildTournamentRounds(teams, tournamentFormat, tournamentWithPools, regenKey || 1) : []),
+    [isTournament, teams, tournamentFormat, tournamentWithPools, regenKey]
   )
+  const matches = useMemo(() => {
+    if (isTournament) return tournamentRounds.flat()
+    return generateAllMatches(teams, forbidIntraClub)
+  }, [isTournament, teams, forbidIntraClub, tournamentRounds])
+  const limitedMatches = useMemo(() => {
+    if (isTournament) return matches
+    return limitMatchesPerTeam(matches, teams, Math.max(1, matchesPerTeam), allowRematches, regenKey || 1)
+  }, [isTournament, matches, teams, matchesPerTeam, allowRematches, regenKey])
   const shuffledMatches = useMemo(() => seededShuffle(limitedMatches, regenKey || 1), [limitedMatches, regenKey])
-  const agenda = useMemo(
-    () => packSchedule(shuffledMatches, Math.max(1, pitches), Math.max(1, restEveryX)),
-    [shuffledMatches, pitches, restEveryX]
-  )
+  const agenda = useMemo(() => {
+    if (isTournament) return packTournamentRounds(tournamentRounds, Math.max(1, pitches))
+    return packSchedule(shuffledMatches, Math.max(1, pitches), Math.max(1, restEveryX))
+  }, [isTournament, tournamentRounds, shuffledMatches, pitches, restEveryX])
 
   // 3) Remonter le JSON (pour sauvegarde côté parent)
   useEffect(() => {
@@ -399,6 +509,8 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
       restEveryX,
       allowRematches,
       regenSeed: regenKey,
+      tournamentFormat: isTournament ? tournamentFormat : undefined,
+      tournamentWithPools: isTournament ? tournamentWithPools : undefined,
       teams: teamEntries,
       slots: agenda.map((slot) => ({
         time: fmtTime(addMinutes(parsedStart!, slot.timeIndex * slotMinutes)),
@@ -417,8 +529,11 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
     matchesPerTeam,
     restEveryX,
     allowRematches,
+    tournamentFormat,
+    tournamentWithPools,
     regenKey,
     teamEntries,
+    isTournament,
     onChange,
   ])
 
@@ -436,9 +551,9 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
     const nextWarnings: string[] = []
     if (teams.length < 2) nextWarnings.push('Ajoutez au moins 2 équipes.')
     if (matches.length === 0 && teams.length >= 2) nextWarnings.push("Aucun match possible avec ces contraintes (peut-être trop d'équipes d'un même club ?).")
-    if (matchesPerTeam >= teams.length) nextWarnings.push("Le nombre de matchs par équipe doit être inférieur au nombre d'équipes.")
+    if (!isTournament && matchesPerTeam >= teams.length) nextWarnings.push("Le nombre de matchs par équipe doit être inférieur au nombre d'équipes.")
     return nextWarnings
-  }, [matches.length, matchesPerTeam, teams.length])
+  }, [matches.length, matchesPerTeam, teams.length, isTournament])
   const hasGeneratedRotation = agenda.length > 0
   const canSave = hasGeneratedRotation
 
@@ -658,51 +773,78 @@ const PlanningEditor: React.FC<Props> = ({ value, onChange, onMetaChange }) => {
                 </label>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
-                <label style={{ display: 'grid', gap: 6 }}>
-                  Nombre de matchs par équipe
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={() => setMatchesPerTeam((prev) => clamp(prev - 1, 1, Math.max(1, teams.length - 1)))}
-                      style={stepperButtonStyle}
-                      aria-label="Diminuer le nombre de matchs par équipe"
+              {isTournament ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    Format du tournoi
+                    <select
+                      value={tournamentFormat}
+                      onChange={(event) => setTournamentFormat(event.target.value as 'ELIMINATION' | 'CHAMPIONNAT')}
                     >
-                      −
-                    </button>
-                    <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{matchesPerTeam}</output>
-                    <button
-                      type="button"
-                      onClick={() => setMatchesPerTeam((prev) => clamp(prev + 1, 1, Math.max(1, teams.length - 1)))}
-                      style={stepperButtonStyle}
-                      aria-label="Augmenter le nombre de matchs par équipe"
-                    >
-                      +
-                    </button>
+                      <option value="CHAMPIONNAT">Championnat</option>
+                      <option value="ELIMINATION">Élimination</option>
+                    </select>
+                  </label>
+                  {tournamentFormat === 'ELIMINATION' && (
+                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 24 }}>
+                      <input
+                        type="checkbox"
+                        checked={tournamentWithPools}
+                        onChange={(event) => setTournamentWithPools(event.target.checked)}
+                      />
+                      Matchs de poules
+                    </label>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      Nombre de matchs par équipe
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => setMatchesPerTeam((prev) => clamp(prev - 1, 1, Math.max(1, teams.length - 1)))}
+                          style={stepperButtonStyle}
+                          aria-label="Diminuer le nombre de matchs par équipe"
+                        >
+                          −
+                        </button>
+                        <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{matchesPerTeam}</output>
+                        <button
+                          type="button"
+                          onClick={() => setMatchesPerTeam((prev) => clamp(prev + 1, 1, Math.max(1, teams.length - 1)))}
+                          style={stepperButtonStyle}
+                          aria-label="Augmenter le nombre de matchs par équipe"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                      Max matchs d'affilée
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev - 1, 1))} style={stepperButtonStyle} aria-label="Diminuer le nombre maximal de matchs d'affilée">−</button>
+                        <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{restEveryX}</output>
+                        <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev + 1, 1))} style={stepperButtonStyle} aria-label="Augmenter le nombre maximal de matchs d'affilée">+</button>
+                      </div>
+                    </label>
                   </div>
-                </label>
-                <label style={{ display: 'grid', gap: 6 }}>
-                  Max matchs d'affilée
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev - 1, 1))} style={stepperButtonStyle} aria-label="Diminuer le nombre maximal de matchs d'affilée">−</button>
-                    <output style={{ minWidth: 32, textAlign: 'center', fontWeight: 700 }}>{restEveryX}</output>
-                    <button type="button" onClick={() => setRestEveryX((prev) => clamp(prev + 1, 1))} style={stepperButtonStyle} aria-label="Augmenter le nombre maximal de matchs d'affilée">+</button>
-                  </div>
-                </label>
-              </div>
 
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  checked={!forbidIntraClub}
-                  onChange={(e) => setForbidIntraClub(!e.target.checked)}
-                />
-                Autoriser les matchs entre équipes d'un même club
-              </label>
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" checked={allowRematches} onChange={(e) => setAllowRematches(e.target.checked)} />
-                Autoriser les rematches si nécessaire (équilibrage)
-              </label>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={!forbidIntraClub}
+                      onChange={(e) => setForbidIntraClub(!e.target.checked)}
+                    />
+                    Autoriser les matchs entre équipes d'un même club
+                  </label>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input type="checkbox" checked={allowRematches} onChange={(e) => setAllowRematches(e.target.checked)} />
+                    Autoriser les rematches si nécessaire (équilibrage)
+                  </label>
+                </>
+              )}
             </div>
           </AttendanceAccordion>
 

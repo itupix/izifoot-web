@@ -96,8 +96,6 @@ export default function TrainingsPage() {
   const [isCompetitionModalOpen, setIsCompetitionModalOpen] = useState(false)
   const [competitionLocation, setCompetitionLocation] = useState('')
   const [competitionType, setCompetitionType] = useState<'PLATEAU' | 'MATCH' | 'TOURNOI'>('PLATEAU')
-  const [tournamentHasGroupStage, setTournamentHasGroupStage] = useState(true)
-  const [tournamentKnockoutMode, setTournamentKnockoutMode] = useState<'NONE' | 'SINGLE' | 'HOME_AWAY'>('SINGLE')
   const [isCreatingCompetition, setIsCreatingCompetition] = useState(false)
   const [pickerMonth, setPickerMonth] = useState<Date>(() => {
     const now = new Date()
@@ -270,8 +268,6 @@ export default function TrainingsPage() {
   function openCompetitionModal() {
     setCompetitionType('PLATEAU')
     setCompetitionLocation('')
-    setTournamentHasGroupStage(true)
-    setTournamentKnockoutMode('SINGLE')
     setIsCompetitionModalOpen(true)
   }
 
@@ -292,8 +288,6 @@ export default function TrainingsPage() {
         date: day.toISOString(),
         lieu: normalizedLieu,
         competitionType,
-        tournamentHasGroupStage: competitionType === 'TOURNOI' ? tournamentHasGroupStage : null,
-        tournamentKnockoutMode: competitionType === 'TOURNOI' ? tournamentKnockoutMode : null,
         teamId: selectedTeamId || undefined,
         team_id: selectedTeamId || undefined,
         teamName: activeTeam?.name || undefined,
@@ -683,47 +677,19 @@ export default function TrainingsPage() {
               </select>
 
               <label htmlFor="plateau-location" className="trainings-field-label">
-                {competitionType === 'MATCH' ? 'Lieu du match' : competitionType === 'TOURNOI' ? 'Lieu du tournoi' : 'Lieu du plateau'}
+                {competitionType === 'MATCH' ? 'Lieu du match' : competitionType === 'TOURNOI' ? 'Nom du tournoi' : 'Lieu du plateau'}
               </label>
               <input
                 id="plateau-location"
                 value={competitionLocation}
                 onChange={(e) => setCompetitionLocation(e.target.value)}
-                placeholder="Ex. Stade municipal"
+                placeholder={competitionType === 'TOURNOI' ? 'Ex. Tournoi de printemps U11' : 'Ex. Stade municipal'}
                 className="trainings-text-input"
                 autoFocus
                 disabled={isCreatingCompetition}
               />
 
-              {competitionType === 'TOURNOI' && (
-                <>
-                  <label className="trainings-field-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={tournamentHasGroupStage}
-                      onChange={(e) => setTournamentHasGroupStage(e.target.checked)}
-                      disabled={isCreatingCompetition}
-                    />
-                    Phase de groupes
-                  </label>
-                  <label htmlFor="tournament-knockout" className="trainings-field-label">
-                    Phase élimination
-                  </label>
-                  <select
-                    id="tournament-knockout"
-                    value={tournamentKnockoutMode}
-                    onChange={(e) => setTournamentKnockoutMode(e.target.value as 'NONE' | 'SINGLE' | 'HOME_AWAY')}
-                    className="trainings-text-input"
-                    disabled={isCreatingCompetition}
-                  >
-                    <option value="NONE">Aucune</option>
-                    <option value="SINGLE">Match simple</option>
-                    <option value="HOME_AWAY">Aller / retour</option>
-                  </select>
-                </>
-              )}
-
-              {matchdayLocations.length > 0 && (
+              {competitionType !== 'TOURNOI' && matchdayLocations.length > 0 && (
                 <div className="trainings-location-picker">
                   <span className="trainings-location-picker-label">Lieux déjà utilisés</span>
                   <div className="trainings-location-chips">
