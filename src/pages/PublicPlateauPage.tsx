@@ -78,6 +78,20 @@ export default function PublicPlateauPage() {
       year: 'numeric',
     })
   }, [matchday])
+  const normalizedCompetitionType = (matchday?.competitionType || 'PLATEAU').toUpperCase()
+  const competitionLabel = normalizedCompetitionType === 'MATCH'
+    ? 'match'
+    : normalizedCompetitionType === 'TOURNOI'
+      ? 'tournoi'
+      : 'plateau'
+  const pageTitle = useMemo(() => {
+    if (normalizedCompetitionType === 'TOURNOI') {
+      const tournamentName = matchday?.lieu?.trim() || matchday?.address?.trim() || ''
+      return tournamentName || 'Tournoi'
+    }
+    if (normalizedCompetitionType === 'MATCH') return 'Match'
+    return 'Plateau'
+  }, [matchday?.address, matchday?.lieu, normalizedCompetitionType])
 
   const teamLabels = useMemo(() => {
     if (!rotation?.slots?.length) return [] as string[]
@@ -229,18 +243,18 @@ export default function PublicPlateauPage() {
   return (
     <div className="training-details-page public-plateau-page">
       <PlateauPageHeader
-        title="Plateau"
+        title={pageTitle}
         subtitle={dateLabel}
         action={(
           <button type="button" className="add-button" onClick={() => setIsShareModalOpen(true)}>
-            Partager le plateau
+            {`Partager le ${competitionLabel}`}
           </button>
         )}
       />
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}
-      {!loading && !error && !matchday && <p className="error-text">Plateau introuvable.</p>}
+      {!loading && !error && !matchday && <p className="error-text">{`${pageTitle} introuvable.`}</p>}
 
       {matchday && (
         <>
@@ -262,7 +276,7 @@ export default function PublicPlateauPage() {
 
           <section className="details-card">
             <div className="card-head">
-              <h3>Rotation</h3>
+              <h3>Organiser</h3>
             </div>
             {rotation ? (
               <PlateauRotationContent
@@ -275,7 +289,7 @@ export default function PublicPlateauPage() {
               />
             ) : (
               <div className="matches-section-body">
-                <div className="rotation-empty-state">Aucune rotation enregistrée pour ce plateau.</div>
+                <div className="rotation-empty-state">Aucune rotation enregistrée pour cette compétition.</div>
               </div>
             )}
           </section>
@@ -285,14 +299,14 @@ export default function PublicPlateauPage() {
       {isShareModalOpen && (
         <>
           <div className="modal-overlay" onClick={closeShareModal} />
-          <div className="drill-modal share-modal" role="dialog" aria-modal="true" aria-label="Partager le plateau">
+          <div className="drill-modal share-modal" role="dialog" aria-modal="true" aria-label={`Partager le ${competitionLabel}`}>
             <div className="drill-modal-head">
-              <h3>Partager le plateau</h3>
+              <h3>{`Partager le ${competitionLabel}`}</h3>
               <button type="button" onClick={closeShareModal}>✕</button>
             </div>
             <div className="share-content">
               <p className="muted-line">
-                Ce lien ouvre la version publique du plateau avec les blocs titre/date, informations et rotation.
+                Ce lien ouvre la version publique de la compétition avec les blocs titre/date, informations et organisation.
               </p>
               <label className="share-url-block">
                 <span>Lien public</span>
@@ -317,7 +331,7 @@ export default function PublicPlateauPage() {
               {shareQrLoading && <p className="muted-line">Génération du QR code…</p>}
               {shareQrDataUrl && (
                 <div className="share-qr-wrap">
-                  <img src={shareQrDataUrl} alt="QR code du lien public du plateau" width={220} height={220} />
+                  <img src={shareQrDataUrl} alt={`QR code du lien public du ${competitionLabel}`} width={220} height={220} />
                 </div>
               )}
             </div>
