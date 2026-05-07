@@ -90,6 +90,22 @@ function getLicence(player: Player): string {
   return raw.trim()
 }
 
+function getAdultInviteMissingFields(player: Player): string[] {
+  if (isChildPlayer(player)) return []
+  const { lastName } = getPlayerNames(player)
+  const missingFields: string[] = []
+  if (!lastName.trim()) missingFields.push('nom')
+  if (!(player.email || '').trim()) missingFields.push('e-mail')
+  if (!(player.phone || '').trim()) missingFields.push('téléphone')
+  return missingFields
+}
+
+function formatFieldList(fields: string[]): string {
+  if (fields.length <= 1) return fields[0] || ''
+  if (fields.length === 2) return `${fields[0]} et ${fields[1]}`
+  return `${fields.slice(0, -1).join(', ')} et ${fields[fields.length - 1]}`
+}
+
 type InvitationStatusValue = 'NONE' | 'PENDING' | 'ACCEPTED'
 type PlayerInvitationStatusResponse = {
   playerId: string
@@ -200,6 +216,17 @@ export default function PlayerDetailsPage() {
 
   const playerName = useMemo(() => (player ? getPlayerDisplayName(player) : 'Joueur'), [player])
   const playerPosition = useMemo(() => formatPositionLabel(player?.primary_position || POSITION_UNDEFINED), [player])
+  const nonChildInviteMissingFields = useMemo(
+    () => (player ? getAdultInviteMissingFields(player) : []),
+    [player],
+  )
+  const nonChildInviteGuardMessage = useMemo(() => {
+    if (!nonChildInviteMissingFields.length) return ''
+    const inviteClause = invitationStatus === 'PENDING'
+      ? 'avant de renvoyer l’invitation'
+      : 'avant d’inviter ce joueur'
+    return `Complétez ${formatFieldList(nonChildInviteMissingFields)} ${inviteClause}.`
+  }, [invitationStatus, nonChildInviteMissingFields])
   const parentContacts = useMemo(() => {
     if (!player) return []
     const contacts = Array.isArray(player.parentContacts) ? player.parentContacts : []
@@ -268,14 +295,14 @@ export default function PlayerDetailsPage() {
     const normalizedPhone = phone.trim()
     const normalizedLicence = licence.trim()
 
-    if (!normalizedFirstName || !normalizedLastName || (!isChild && (!normalizedEmail || !normalizedPhone))) {
-      uiAlert(isChild ? 'Merci de renseigner prénom et nom.' : 'Merci de renseigner prénom, nom, e-mail et téléphone.')
+    if (!normalizedFirstName) {
+      uiAlert('Merci de renseigner le prénom.')
       return
     }
     setSaving(true)
     try {
       const body: Record<string, unknown> = {
-        name: `${normalizedFirstName} ${normalizedLastName}`.trim(),
+        name: [normalizedFirstName, normalizedLastName].filter(Boolean).join(' '),
         firstName: normalizedFirstName,
         first_name: normalizedFirstName,
         prenom: normalizedFirstName,
@@ -325,14 +352,19 @@ export default function PlayerDetailsPage() {
 
   async function sendPlayerInvitation(payloadOverride?: { email?: string; phone?: string }) {
     if (!player?.id) return
+    if (isChildPlayer(player) && !payloadOverride) {
+      setInviteParentModalOpen(true)
+      return
+    }
+    if (nonChildInviteMissingFields.length > 0) {
+      uiAlert(`Invitation impossible: ${nonChildInviteGuardMessage}`)
+      openEditModal()
+      return
+    }
     setInviteSending(true)
     try {
       const isResend = invitationStatus === 'PENDING'
       const payload: { email?: string; phone?: string } = payloadOverride || {}
-      if (isChildPlayer(player) && !payloadOverride) {
-        setInviteParentModalOpen(true)
-        return
-      }
       const response = await apiPost<PlayerInviteResponse>(apiRoutes.players.invite(player.id), payload)
       await refreshInvitationStatus(player.id)
       const nextInviteUrl = typeof response?.inviteUrl === 'string' ? response.inviteUrl.trim() : ''
@@ -349,7 +381,11 @@ export default function PlayerDetailsPage() {
         return
       }
       if (err instanceof HttpError && err.status === 400) {
-        uiAlert(toErrorMessage(err, 'Coordonnée parent requise (e-mail ou téléphone).'))
+        uiAlert(
+          isChildPlayer(player)
+            ? toErrorMessage(err, 'Coordonnée parent requise (e-mail ou téléphone).')
+            : toErrorMessage(err, 'Complétez le nom, l’e-mail et le téléphone avant d’inviter ce joueur.'),
+        )
         return
       }
       uiAlert(`Erreur invitation joueur: ${toErrorMessage(err)}`)
@@ -441,17 +477,40 @@ export default function PlayerDetailsPage() {
                   </div>
                 )}
                 {!invitationLoading && !invitationStatusError && invitationStatus && (invitationStatus !== 'ACCEPTED' || isChildPlayer(player)) && (
-                  <div className="player-invite-row">
-                    {invitationStatus === 'PENDING' ? <span className="player-invite-label">Invité</span> : null}
-                    <button
-                      type="button"
-                      className="player-invite-btn"
-                      onClick={() => { void sendPlayerInvitation() }}
-                      disabled={inviteSending}
-                    >
-                      {inviteSending ? 'Envoi...' : invitationStatus === 'PENDING' ? 'Renvoyer l’invitation' : (isChildPlayer(player) ? 'Inviter un parent' : 'Inviter')}
-                    </button>
-                  </div>
+                  nonChildInviteGuardMessage ? (
+                    <>
+                      {invitationStatus === 'PENDING' ? (
+                        <div className="player-invite-row">
+                          <span className="player-invite-label">Invité</span>
+                        </div>
+                      ) : null}
+                      <div className="player-invite-row">
+                        <span className="player-invite-error-text">{nonChildInviteGuardMessage}</span>
+                      </div>
+                      <div className="player-invite-row">
+                        <button
+                          type="button"
+                          className="player-invite-btn secondary"
+                          onClick={openEditModal}
+                          disabled={inviteSending}
+                        >
+                          Compléter la fiche
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="player-invite-row">
+                      {invitationStatus === 'PENDING' ? <span className="player-invite-label">Invité</span> : null}
+                      <button
+                        type="button"
+                        className="player-invite-btn"
+                        onClick={() => { void sendPlayerInvitation() }}
+                        disabled={inviteSending}
+                      >
+                        {inviteSending ? 'Envoi...' : invitationStatus === 'PENDING' ? 'Renvoyer l’invitation' : (isChildPlayer(player) ? 'Inviter un parent' : 'Inviter')}
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
               <div className="player-details-menu-wrap player-details-menu-wrap--hero">
@@ -583,7 +642,7 @@ export default function PlayerDetailsPage() {
             <form onSubmit={submitEdit} className="player-form-grid">
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-edit-last-name">Nom</label>
-                <input id="player-edit-last-name" className="players-input" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                <input id="player-edit-last-name" className="players-input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
               </div>
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-edit-first-name">Prénom</label>
@@ -597,13 +656,14 @@ export default function PlayerDetailsPage() {
               </div>
               {!isChild && (
                 <>
+                  <p className="panel-note">Le nom, l’e-mail et le téléphone sont requis uniquement pour l’invitation du joueur.</p>
                   <div className="players-form-field">
                     <label className="players-field-label" htmlFor="player-edit-phone">Numéro de téléphone</label>
-                    <input id="player-edit-phone" className="players-input" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                    <input id="player-edit-phone" className="players-input" value={phone} onChange={(e) => setPhone(e.target.value)} />
                   </div>
                   <div className="players-form-field">
                     <label className="players-field-label" htmlFor="player-edit-email">Adresse e-mail</label>
-                    <input id="player-edit-email" className="players-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                    <input id="player-edit-email" className="players-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                 </>
               )}

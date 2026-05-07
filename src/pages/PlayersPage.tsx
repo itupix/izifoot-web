@@ -368,47 +368,36 @@ export default function PlayersPage() {
     const normalizedEmail = email.trim()
     const normalizedPhone = phone.trim()
     const normalizedLicence = licence.trim()
+    const normalizedPrimary = primary.trim()
 
-    if (!normalizedFirstName || !normalizedLastName || (!isChild && (!normalizedEmail || !normalizedPhone))) {
-      uiAlert(isChild ? 'Merci de renseigner prénom et nom.' : 'Merci de renseigner prénom, nom, e-mail et téléphone.')
+    if (!normalizedFirstName) {
+      uiAlert('Merci de renseigner le prénom.')
       return
     }
     try {
-      const body: {
-        name: string
-        firstName: string
-        first_name: string
-        prenom: string
-        lastName: string
-        last_name: string
-        nom: string
-        primary_position: string
-        email: string
-        phone: string
-        licence?: string
-        license?: string
-        isChild: boolean
-        enfant: boolean
-        teamId?: string
-      } = {
-        name: `${normalizedFirstName} ${normalizedLastName}`.trim(),
+      const body: Record<string, unknown> = {
+        name: [normalizedFirstName, normalizedLastName].filter(Boolean).join(' '),
         firstName: normalizedFirstName,
         first_name: normalizedFirstName,
         prenom: normalizedFirstName,
-        lastName: normalizedLastName,
-        last_name: normalizedLastName,
-        nom: normalizedLastName,
-        primary_position: (primary || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED,
-        email: isChild ? '' : normalizedEmail,
-        phone: isChild ? '' : normalizedPhone,
         isChild,
         enfant: isChild,
-        teamId: selectedTeamId || undefined,
       }
+      if (normalizedLastName) {
+        body.lastName = normalizedLastName
+        body.last_name = normalizedLastName
+        body.nom = normalizedLastName
+      }
+      if (normalizedPrimary && normalizedPrimary !== POSITION_UNDEFINED) {
+        body.primary_position = normalizedPrimary
+      }
+      if (!isChild && normalizedEmail) body.email = normalizedEmail
+      if (!isChild && normalizedPhone) body.phone = normalizedPhone
       if (normalizedLicence) {
         body.licence = normalizedLicence
         body.license = normalizedLicence
       }
+      if (selectedTeamId) body.teamId = selectedTeamId
       const created = await apiPost<Player>(apiRoutes.players.list, body)
       setPlayers((prev) => [...prev, created].sort((a, b) => getPlayerDisplayName(a).localeCompare(getPlayerDisplayName(b), 'fr', { sensitivity: 'base' })))
       setFirstName('')
@@ -761,7 +750,7 @@ export default function PlayersPage() {
           <div className="players-modal-backdrop" onClick={() => setModalOpen(false)} />
           <div className="players-modal players-modal--create" role="dialog" aria-modal="true">
             <div className="players-modal-head">
-              <strong>Ajouter un joueur</strong>
+              <strong>Ajout rapide d&apos;un joueur</strong>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
@@ -771,18 +760,11 @@ export default function PlayersPage() {
                 x
               </button>
             </div>
+            <p className="panel-note">
+              Seul le prénom est requis. Vous pourrez compléter la fiche et gérer l&apos;invitation ensuite depuis le profil joueur.
+            </p>
 
             <form onSubmit={createPlayer} className="players-create-form">
-              <div className="players-form-field">
-                <label className="players-field-label" htmlFor="player-last-name-input">Nom</label>
-                <input
-                  id="player-last-name-input"
-                  className="players-input"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                />
-              </div>
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-first-name-input">Prénom</label>
                 <input
@@ -791,6 +773,15 @@ export default function PlayersPage() {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
+                />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-last-name-input">Nom</label>
+                <input
+                  id="player-last-name-input"
+                  className="players-input"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
                 />
               </div>
               <div className="players-form-field">
@@ -804,27 +795,34 @@ export default function PlayersPage() {
                   <span>Enfant</span>
                 </label>
               </div>
-              <div className="players-form-field">
-                <label className="players-field-label" htmlFor="player-phone-input">Numéro de téléphone</label>
-                <input
-                  id="player-phone-input"
-                  className="players-input"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="players-form-field">
-                <label className="players-field-label" htmlFor="player-email-input">Adresse e-mail</label>
-                <input
-                  id="player-email-input"
-                  className="players-input"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
+              <p className="panel-note">
+                {isChild
+                  ? 'L’invitation d’un parent se fait ensuite depuis la fiche joueur.'
+                  : 'Pour inviter un joueur adulte plus tard, il faudra compléter son nom, son e-mail et son téléphone.'}
+              </p>
+              {!isChild && (
+                <>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-phone-input">Numéro de téléphone</label>
+                    <input
+                      id="player-phone-input"
+                      className="players-input"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                  </div>
+                  <div className="players-form-field">
+                    <label className="players-field-label" htmlFor="player-email-input">Adresse e-mail</label>
+                    <input
+                      id="player-email-input"
+                      className="players-input"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-licence-input">Licence</label>
                 <input
@@ -850,7 +848,7 @@ export default function PlayersPage() {
                   ))}
                 </select>
               </div>
-              <button type="submit" className="players-primary-btn">Ajouter</button>
+              <button type="submit" className="players-primary-btn">Créer la fiche</button>
             </form>
           </div>
         </>

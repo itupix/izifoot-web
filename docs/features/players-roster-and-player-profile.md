@@ -57,7 +57,7 @@ Restrictions: depends on multiple endpoints.
 - API: players endpoints, invitation status, invite QR, attendance/matches/trainings aggregates.
 
 ## 6. User Flows
-- Main flow: open roster -> create/select player -> edit profile.
+- Main flow: open roster -> quick-create player with first name only -> open detail -> complete profile fields if needed -> invite.
 - Variants: send invitation or unlink parent contact.
 - Back navigation: player detail to list.
 - Interruptions: invite errors.
@@ -69,7 +69,7 @@ Restrictions: depends on multiple endpoints.
 - Actions: create/update/delete player, invite, unlink parent.
 - States: loading, saving, deleting, invite pending.
 - Conditions: role guard for direction/coach.
-- Validations: required profile fields and contact format constraints.
+- Validations: quick-add only requires first name; adult invite is blocked until last name, email, and phone are available.
 - Blocking rules: destructive actions require confirmation.
 - Automations: QR generation endpoint consumed for invite display.
 
@@ -83,6 +83,7 @@ Constraints: normalized in adapters/components.
 ## 9. Business Rules
 - Player detail fetch includes invitation status endpoint.
 - Parent unlink triggers data refresh.
+- Adult invite CTA is guarded in UI when the player profile misses last name, email, or phone.
 - Invite response may include URL and QR usage.
 
 ## 10. State Machine
@@ -145,15 +146,15 @@ Constraints: normalized in adapters/components.
 - Security: enforce redaction rules for parent contacts where needed.
 
 ## 20. Acceptance Criteria
-1. Direction/coach can CRUD players.
-2. Invitation status and invite action work from detail page.
+1. Direction/coach can quick-create a player with first name only from the roster page.
+2. Invitation status and invite action work from detail page, with an explicit guard when adult invite prerequisites are missing.
 3. Parent unlink updates displayed data.
 4. Unauthorized roles cannot access roster pages.
 
 ## 21. Test Scenarios
-- Happy path: create player and send invite.
+- Happy path: quick-create player, complete profile, then send invite.
 - Permissions: parent denied route.
-- Errors: delete player with backend constraint failure.
+- Errors: invite blocked in UI when adult profile is incomplete; delete player with backend constraint failure.
 - Edge cases: payload only containing legacy field keys.
 
 ## 22. Technical References
