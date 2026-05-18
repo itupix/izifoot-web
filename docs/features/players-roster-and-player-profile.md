@@ -57,7 +57,7 @@ Restrictions: depends on multiple endpoints.
 - API: players endpoints, invitation status, invite QR, attendance/matches/trainings aggregates.
 
 ## 6. User Flows
-- Main flow: open roster -> quick-create player with first name only -> open detail -> complete profile fields if needed -> invite.
+- Main flow: open roster -> quick-create player with first name only -> optionally add licence/date of birth at creation -> open detail -> complete remaining profile fields if needed -> invite.
 - Variants: send invitation or unlink parent contact.
 - Back navigation: player detail to list.
 - Interruptions: invite errors.
@@ -65,7 +65,7 @@ Restrictions: depends on multiple endpoints.
 - Edge cases: legacy field names in payload.
 
 ## 7. Functional Behavior
-- UI behavior: paginated list and detail with multiple data fetches.
+- UI behavior: paginated list and detail with multiple data fetches, including date-of-birth capture on create/edit.
 - Actions: create/update/delete player, invite, unlink parent.
 - States: loading, saving, deleting, invite pending.
 - Conditions: role guard for direction/coach.

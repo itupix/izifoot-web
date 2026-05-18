@@ -90,6 +90,23 @@ function getLicence(player: Player): string {
   return raw.trim()
 }
 
+function getDateOfBirth(player: Player): string {
+  const raw = (typeof player.dateOfBirth === 'string' ? player.dateOfBirth : '') || (typeof player.date_of_birth === 'string' ? player.date_of_birth : '')
+  return raw.trim()
+}
+
+function formatDateOfBirth(value: string): string {
+  const normalized = value.trim()
+  if (!normalized) return '—'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${normalized}T00:00:00Z`))
+}
+
 function getAdultInviteMissingFields(player: Player): string[] {
   if (isChildPlayer(player)) return []
   const { lastName } = getPlayerNames(player)
@@ -159,6 +176,7 @@ export default function PlayerDetailsPage() {
   const [phone, setPhone] = useState('')
   const [isChild, setIsChild] = useState(false)
   const [licence, setLicence] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [primaryPosition, setPrimaryPosition] = useState(POSITION_UNDEFINED)
 
   async function refreshInvitationStatus(playerId: string) {
@@ -281,6 +299,7 @@ export default function PlayerDetailsPage() {
     setPhone((player.phone || '').trim())
     setIsChild(isChildPlayer(player))
     setLicence(getLicence(player))
+    setDateOfBirth(getDateOfBirth(player))
     setPrimaryPosition((player.primary_position || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED)
     setEditModalOpen(true)
   }
@@ -294,6 +313,7 @@ export default function PlayerDetailsPage() {
     const normalizedEmail = email.trim()
     const normalizedPhone = phone.trim()
     const normalizedLicence = licence.trim()
+    const normalizedDateOfBirth = dateOfBirth.trim()
 
     if (!normalizedFirstName) {
       uiAlert('Merci de renseigner le prénom.')
@@ -319,6 +339,8 @@ export default function PlayerDetailsPage() {
         body.licence = normalizedLicence
         body.license = normalizedLicence
       }
+      body.dateOfBirth = normalizedDateOfBirth || null
+      body.date_of_birth = normalizedDateOfBirth || null
       body.parentFirstName = null
       body.parent_first_name = null
       body.parentPrenom = null
@@ -622,6 +644,11 @@ export default function PlayerDetailsPage() {
               </div>
             )}
             <div>
+              <span className="player-info-icon"><CalendarCheck2 size={15} /></span>
+              <strong>Date de naissance</strong>
+              <p>{formatDateOfBirth(getDateOfBirth(player))}</p>
+            </div>
+            <div>
               <span className="player-info-icon"><IdCard size={15} /></span>
               <strong>Licence</strong>
               <p>{getLicence(player) || '—'}</p>
@@ -670,6 +697,10 @@ export default function PlayerDetailsPage() {
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-edit-licence">Licence</label>
                 <input id="player-edit-licence" className="players-input" value={licence} onChange={(e) => setLicence(e.target.value)} />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-date-of-birth">Date de naissance</label>
+                <input id="player-edit-date-of-birth" className="players-input" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
               </div>
               <div className="players-form-field">
                 <label className="players-field-label" htmlFor="player-edit-position">Poste</label>

@@ -197,6 +197,7 @@ export default function PlayersPage() {
   const [phone, setPhone] = useState('')
   const [isChild, setIsChild] = useState(false)
   const [licence, setLicence] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
 
   const [q, setQ] = useState('')
   const [posFilter, setPosFilter] = useState('')
@@ -368,6 +369,7 @@ export default function PlayersPage() {
     const normalizedEmail = email.trim()
     const normalizedPhone = phone.trim()
     const normalizedLicence = licence.trim()
+    const normalizedDateOfBirth = dateOfBirth.trim()
     const normalizedPrimary = primary.trim()
 
     if (!normalizedFirstName) {
@@ -397,6 +399,10 @@ export default function PlayersPage() {
         body.licence = normalizedLicence
         body.license = normalizedLicence
       }
+      if (normalizedDateOfBirth) {
+        body.dateOfBirth = normalizedDateOfBirth
+        body.date_of_birth = normalizedDateOfBirth
+      }
       if (selectedTeamId) body.teamId = selectedTeamId
       const created = await apiPost<Player>(apiRoutes.players.list, body)
       setPlayers((prev) => [...prev, created].sort((a, b) => getPlayerDisplayName(a).localeCompare(getPlayerDisplayName(b), 'fr', { sensitivity: 'base' })))
@@ -407,6 +413,7 @@ export default function PlayersPage() {
       setPhone('')
       setIsChild(false)
       setLicence('')
+      setDateOfBirth('')
       setModalOpen(false)
     } catch (err: unknown) {
       uiAlert(`Erreur creation joueur: ${toErrorMessage(err)}`)
@@ -830,6 +837,16 @@ export default function PlayersPage() {
                   className="players-input"
                   value={licence}
                   onChange={(e) => setLicence(e.target.value)}
+                />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-date-of-birth-input">Date de naissance</label>
+                <input
+                  id="player-date-of-birth-input"
+                  className="players-input"
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
                 />
               </div>
               <div className="players-form-field">

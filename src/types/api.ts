@@ -24,6 +24,8 @@ export interface Player {
   phone?: string | null
   licence?: string | null
   license?: string | null
+  dateOfBirth?: string | null
+  date_of_birth?: string | null
   isChild?: boolean | null
   enfant?: boolean | null
   parentFirstName?: string | null
