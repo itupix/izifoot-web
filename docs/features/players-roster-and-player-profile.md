@@ -57,7 +57,7 @@ Restrictions: depends on multiple endpoints.
 - API: players endpoints, invitation status, invite QR, attendance/matches/trainings aggregates.
 
 ## 6. User Flows
-- Main flow: open roster -> quick-create player with first name only -> optionally add licence/date of birth at creation -> open detail -> complete remaining profile fields if needed -> invite.
+- Main flow: open roster -> quick-create player with first name only -> optionally add licence/date of birth at creation -> open detail -> review club/team context -> complete remaining profile fields if needed -> if authorized reassign the player to another team -> invite.
 - Variants: send invitation or unlink parent contact.
 - Back navigation: player detail to list.
 - Interruptions: invite errors.
@@ -65,7 +65,7 @@ Restrictions: depends on multiple endpoints.
 - Edge cases: legacy field names in payload.
 
 ## 7. Functional Behavior
-- UI behavior: paginated list and detail with multiple data fetches, including date-of-birth capture on create/edit.
+- UI behavior: paginated list and detail with multiple data fetches, including date-of-birth capture on create/edit, visible club/team context on the profile, and conditional team reassignment when multiple teams are writable.
 - Actions: create/update/delete player, invite, unlink parent.
 - States: loading, saving, deleting, invite pending.
 - Conditions: role guard for direction/coach.
@@ -84,6 +84,7 @@ Constraints: normalized in adapters/components.
 - Player detail fetch includes invitation status endpoint.
 - Parent unlink triggers data refresh.
 - Adult invite CTA is guarded in UI when the player profile misses last name, email, or phone.
+- Team reassignment is exposed only when several writable teams are available in scope.
 - Invite response may include URL and QR usage.
 
 ## 10. State Machine
@@ -100,7 +101,7 @@ Constraints: normalized in adapters/components.
 
 ## 12. Routes / API / Handlers
 - Front routes: `/effectif`, `/effectif/:id`.
-- API: `/players*`, `/players/:id/invitation-status`, `/players/:id/invite`, `/players/:id/invite/qr`, `/players/:id/parents/:parentId`.
+- API: `/players*`, `/players/:id/invitation-status`, `/players/:id/invite`, `/players/:id/invite/qr`, `/players/:id/parents/:parentId`, `/clubs/me`, `/teams`.
 
 ## 13. Persistence
 - Client: local state for selected player and profile edits.
@@ -147,12 +148,14 @@ Constraints: normalized in adapters/components.
 
 ## 20. Acceptance Criteria
 1. Direction/coach can quick-create a player with first name only from the roster page.
-2. Invitation status and invite action work from detail page, with an explicit guard when adult invite prerequisites are missing.
-3. Parent unlink updates displayed data.
-4. Unauthorized roles cannot access roster pages.
+2. Player detail displays the current club and team.
+3. Invitation status and invite action work from detail page, with an explicit guard when adult invite prerequisites are missing.
+4. Team reassignment is available only when the user has several writable teams, and the active team scope follows the reassigned team.
+5. Parent unlink updates displayed data.
+6. Unauthorized roles cannot access roster pages.
 
 ## 21. Test Scenarios
-- Happy path: quick-create player, complete profile, then send invite.
+- Happy path: quick-create player, complete profile, reassign team if needed, then send invite.
 - Permissions: parent denied route.
 - Errors: invite blocked in UI when adult profile is incomplete; delete player with backend constraint failure.
 - Edge cases: payload only containing legacy field keys.

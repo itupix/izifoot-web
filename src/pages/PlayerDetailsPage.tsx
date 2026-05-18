@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarCheck2, IdCard, Mail, Phone, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
+import { Building2, CalendarCheck2, IdCard, Mail, Phone, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { API_BASE, HttpError } from '../api'
 import { apiGetAllItems } from '../adapters/pagination'
@@ -9,7 +9,8 @@ import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { uiAlert } from '../ui'
-import type { AttendanceRow, MatchLite, Player, Training } from '../types/api'
+import { useTeamScope } from '../useTeamScope'
+import type { AttendanceRow, ClubMe, MatchLite, Player, Training } from '../types/api'
 import './PlayerDetailsPage.css'
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
@@ -95,6 +96,14 @@ function getDateOfBirth(player: Player): string {
   return raw.trim()
 }
 
+function getTeamName(player: Player): string {
+  return (typeof player.teamName === 'string' ? player.teamName : '').trim()
+}
+
+function getClubName(player: Player): string {
+  return (typeof player.clubName === 'string' ? player.clubName : '').trim()
+}
+
 function formatDateOfBirth(value: string): string {
   const normalized = value.trim()
   if (!normalized) return '—'
@@ -147,6 +156,7 @@ function normalizeInvitationStatus(value: unknown): InvitationStatusValue {
 export default function PlayerDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { selectedTeamId, setSelectedTeamId, teamOptions } = useTeamScope()
 
   const [player, setPlayer] = useState<Player | null>(null)
   const [loading, setLoading] = useState(true)
@@ -169,6 +179,7 @@ export default function PlayerDetailsPage() {
   const [inviteParentEmail, setInviteParentEmail] = useState('')
   const [inviteParentPhone, setInviteParentPhone] = useState('')
   const [deletingParentId, setDeletingParentId] = useState<string | null>(null)
+  const [clubName, setClubName] = useState('')
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -178,6 +189,7 @@ export default function PlayerDetailsPage() {
   const [licence, setLicence] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [primaryPosition, setPrimaryPosition] = useState(POSITION_UNDEFINED)
+  const [editTeamId, setEditTeamId] = useState('')
 
   async function refreshInvitationStatus(playerId: string) {
     setInvitationLoading(true)
@@ -207,17 +219,19 @@ export default function PlayerDetailsPage() {
       setInvitationStatusError(null)
       setInviteUrl(null)
       try {
-        const [playerData, matchData, attendanceData, trainingData] = await Promise.all([
+        const [playerData, matchData, attendanceData, trainingData, clubData] = await Promise.all([
           apiGet<Player>(apiRoutes.players.byId(id)),
           apiGetAllItems<MatchLite>(apiRoutes.matches.list).catch(() => []),
           apiGetAllItems<AttendanceRow>(apiRoutes.attendance.list).catch(() => []),
           apiGetAllItems<Training>(apiRoutes.trainings.list).catch(() => []),
+          apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
         ])
         if (!cancelled) {
           setPlayer(playerData)
           setMatches(matchData)
           setAttendanceRows(attendanceData)
           setTrainings(trainingData)
+          setClubName((clubData?.name || '').trim())
           void refreshInvitationStatus(playerData.id)
         }
       } catch (err: unknown) {
@@ -234,6 +248,30 @@ export default function PlayerDetailsPage() {
 
   const playerName = useMemo(() => (player ? getPlayerDisplayName(player) : 'Joueur'), [player])
   const playerPosition = useMemo(() => formatPositionLabel(player?.primary_position || POSITION_UNDEFINED), [player])
+  const teamNameById = useMemo(() => new Map(teamOptions.map((team) => [team.id, team.name])), [teamOptions])
+  const availableTeamOptions = useMemo(() => {
+    const options = teamOptions.map((team) => ({ id: team.id, name: team.name }))
+    const currentTeamId = (player?.teamId || '').trim()
+    const currentTeamName = getTeamName(player || ({} as Player))
+    if (currentTeamId && !options.some((team) => team.id === currentTeamId)) {
+      options.push({ id: currentTeamId, name: currentTeamName || currentTeamId })
+    }
+    return options
+  }, [player, teamOptions])
+  const canEditTeam = availableTeamOptions.length > 1
+  const playerTeamName = useMemo(() => {
+    if (!player) return ''
+    const currentTeamName = getTeamName(player)
+    if (currentTeamName) return currentTeamName
+    const currentTeamId = (player.teamId || '').trim()
+    if (!currentTeamId) return ''
+    return teamNameById.get(currentTeamId) || currentTeamId
+  }, [player, teamNameById])
+  const playerClubName = useMemo(() => {
+    if (!player) return ''
+    const currentClubName = getClubName(player)
+    return currentClubName || clubName.trim()
+  }, [clubName, player])
   const nonChildInviteMissingFields = useMemo(
     () => (player ? getAdultInviteMissingFields(player) : []),
     [player],
@@ -301,6 +339,7 @@ export default function PlayerDetailsPage() {
     setLicence(getLicence(player))
     setDateOfBirth(getDateOfBirth(player))
     setPrimaryPosition((player.primary_position || POSITION_UNDEFINED).trim() || POSITION_UNDEFINED)
+    setEditTeamId((player.teamId || '').trim() || selectedTeamId || availableTeamOptions[0]?.id || '')
     setEditModalOpen(true)
   }
 
@@ -314,6 +353,7 @@ export default function PlayerDetailsPage() {
     const normalizedPhone = phone.trim()
     const normalizedLicence = licence.trim()
     const normalizedDateOfBirth = dateOfBirth.trim()
+    const normalizedTeamId = editTeamId.trim()
 
     if (!normalizedFirstName) {
       uiAlert('Merci de renseigner le prénom.')
@@ -339,6 +379,10 @@ export default function PlayerDetailsPage() {
         body.licence = normalizedLicence
         body.license = normalizedLicence
       }
+      if (normalizedTeamId) {
+        body.teamId = normalizedTeamId
+        body.team_id = normalizedTeamId
+      }
       body.dateOfBirth = normalizedDateOfBirth || null
       body.date_of_birth = normalizedDateOfBirth || null
       body.parentFirstName = null
@@ -349,6 +393,12 @@ export default function PlayerDetailsPage() {
       body.parentNom = null
 
       const updated = await apiPut<Player>(apiRoutes.players.byId(player.id), body)
+      if (normalizedTeamId && normalizedTeamId !== (player.teamId || '').trim()) {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('izifoot.activeTeamId', normalizedTeamId)
+        }
+        setSelectedTeamId(normalizedTeamId)
+      }
       setPlayer(updated)
       await refreshInvitationStatus(updated.id)
       setEditModalOpen(false)
@@ -644,6 +694,16 @@ export default function PlayerDetailsPage() {
               </div>
             )}
             <div>
+              <span className="player-info-icon"><Building2 size={15} /></span>
+              <strong>Club</strong>
+              <p>{playerClubName || '—'}</p>
+            </div>
+            <div>
+              <span className="player-info-icon"><ShieldCheck size={15} /></span>
+              <strong>Équipe</strong>
+              <p>{playerTeamName || '—'}</p>
+            </div>
+            <div>
               <span className="player-info-icon"><CalendarCheck2 size={15} /></span>
               <strong>Date de naissance</strong>
               <p>{formatDateOfBirth(getDateOfBirth(player))}</p>
@@ -712,6 +772,30 @@ export default function PlayerDetailsPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-club">Club</label>
+                <input id="player-edit-club" className="players-input" value={playerClubName || '—'} readOnly disabled />
+              </div>
+              <div className="players-form-field">
+                <label className="players-field-label" htmlFor="player-edit-team">Équipe</label>
+                {canEditTeam ? (
+                  <select id="player-edit-team" className="players-input" value={editTeamId} onChange={(e) => setEditTeamId(e.target.value)}>
+                    {availableTeamOptions.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="player-edit-team"
+                    className="players-input"
+                    value={playerTeamName || availableTeamOptions[0]?.name || '—'}
+                    readOnly
+                    disabled
+                  />
+                )}
               </div>
 
               <div className="player-modal-actions">

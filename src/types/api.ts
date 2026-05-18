@@ -43,7 +43,10 @@ export interface Player {
     phone?: string | null
     status?: string | null
   }[]
+  clubId?: string | null
+  clubName?: string | null
   teamId?: string | null
+  teamName?: string | null
 }
 
 export interface Training {
