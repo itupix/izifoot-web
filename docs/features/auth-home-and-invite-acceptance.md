@@ -79,7 +79,7 @@ Restrictions: dependent on backend auth endpoints.
 - `InvitationDetails`
 Source: `GET /auth/invitations/:token`.
 Purpose: render invite context.
-Format: id/email/role/status/expiresAt.
+Format: id/email/role/status/expiresAt/clubName.
 Constraints: token validity.
 - Auth payload
 Source: login/register forms.
@@ -90,6 +90,7 @@ Constraints: backend validation.
 ## 9. Business Rules
 - Invite acceptance must call backend token endpoint first.
 - Successful invite acceptance triggers auth refresh.
+- Invite acceptance title uses `clubName` when available to personalize the onboarding copy.
 - Route fallback redirects authenticated users to role default route.
 
 ## 10. State Machine

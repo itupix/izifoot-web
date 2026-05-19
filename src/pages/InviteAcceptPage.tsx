@@ -139,6 +139,11 @@ export default function InviteAcceptPage() {
     }
   }
 
+  const inviteClubName = details?.clubName?.trim() || ''
+  const inviteAcceptTitle = inviteClubName
+    ? `Rejoindre le club de foot ${inviteClubName}`
+    : 'Rejoindre le club de foot'
+
   return (
     <div className="invite-accept-page">
       <div className="panel invite-accept-card">
@@ -146,7 +151,7 @@ export default function InviteAcceptPage() {
           <img src={whistleImg} alt="Izifoot" />
           <span>izifoot</span>
         </div>
-        <h2 className="invite-accept-title">Rejoindre Izifoot</h2>
+        <h2 className="invite-accept-title">{inviteAcceptTitle}</h2>
         <p className="invite-accept-subtitle">
           Izifoot est l&apos;application des clubs pour suivre le planning de l&apos;équipe, les séances et les matchs.
         </p>

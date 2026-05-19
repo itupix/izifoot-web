@@ -45,6 +45,7 @@
   color: #0f172a;
   font-size: 28px;
   line-height: 1.15;
+  text-wrap: balance;
 }
 
 .invite-accept-subtitle {

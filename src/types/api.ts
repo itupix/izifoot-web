@@ -114,6 +114,7 @@ export interface InvitationDetails {
   lastName?: string | null
   role: 'DIRECTION' | 'COACH' | 'PLAYER' | 'PARENT'
   status: InvitationStatus
+  clubName?: string | null
   expiresAt?: string
 }
 
