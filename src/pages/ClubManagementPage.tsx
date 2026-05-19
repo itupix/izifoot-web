@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import QRCode from 'qrcode'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { DotsHorizontalIcon, PlusIcon } from '../components/icons'
@@ -48,9 +49,19 @@ const GAME_FORMAT_OPTIONS = [
 
 type AgeCategoryValue = (typeof AGE_CATEGORY_OPTIONS)[number]['value']
 type GameFormatValue = (typeof GAME_FORMAT_OPTIONS)[number]['value']
+type CoachInviteMutationResponse = {
+  inviteUrl?: string | null
+  invitationStatus?: string | null
+  status?: string | null
+  invitationId?: string | null
+  sentAt?: string | null
+  expiresAt?: string | null
+  reactivated?: boolean
+}
 
 const AGE_CATEGORY_INDEX_BY_VALUE = new Map(AGE_CATEGORY_OPTIONS.map((option, index) => [option.value, index]))
 const AGE_CATEGORY_LABEL_BY_VALUE = new Map(AGE_CATEGORY_OPTIONS.map((option) => [option.value, option.label]))
+const coachInviteRoute = (id: string) => `/coaches/${encodeURIComponent(id)}/invite`
 
 function normalizeCategoryToken(value: string): string {
   return value
@@ -211,7 +222,13 @@ export default function ClubManagementPage() {
   const [coachPendingDelete, setCoachPendingDelete] = useState<ClubCoach | null>(null)
   const [deletingCoach, setDeletingCoach] = useState(false)
   const [mutatingCoachId, setMutatingCoachId] = useState<string | null>(null)
+  const [invitingCoachId, setInvitingCoachId] = useState<string | null>(null)
   const [coachSelectionByTeamId, setCoachSelectionByTeamId] = useState<Record<string, string>>({})
+  const [coachInviteUrl, setCoachInviteUrl] = useState<string | null>(null)
+  const [coachInviteTargetName, setCoachInviteTargetName] = useState('')
+  const [coachInviteModalOpen, setCoachInviteModalOpen] = useState(false)
+  const [coachInviteQrDataUrl, setCoachInviteQrDataUrl] = useState<string | null>(null)
+  const [coachInviteQrLoading, setCoachInviteQrLoading] = useState(false)
 
   const isDirection = me?.role === 'DIRECTION'
 
@@ -292,6 +309,31 @@ export default function ClubManagementPage() {
     if (!suggestedGameFormat) return
     setTeamGameFormat(suggestedGameFormat)
   }, [suggestedGameFormat])
+
+  useEffect(() => {
+    if (!coachInviteModalOpen || !coachInviteUrl) {
+      setCoachInviteQrDataUrl(null)
+      setCoachInviteQrLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setCoachInviteQrLoading(true)
+    void QRCode.toDataURL(coachInviteUrl, { width: 512, margin: 1 })
+      .then((dataUrl) => {
+        if (!cancelled) setCoachInviteQrDataUrl(dataUrl)
+      })
+      .catch(() => {
+        if (!cancelled) setCoachInviteQrDataUrl(null)
+      })
+      .finally(() => {
+        if (!cancelled) setCoachInviteQrLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [coachInviteModalOpen, coachInviteUrl])
 
   function handleProtectedRouteErrors(err: unknown, forbiddenMessage = 'Action reservee a la direction'): boolean {
     const status = extractStatusCode(err)
@@ -470,6 +512,12 @@ export default function ClubManagementPage() {
     setIsCoachModalOpen(true)
   }
 
+  function openCoachInviteModal(inviteUrl: string, coachName: string) {
+    setCoachInviteUrl(inviteUrl)
+    setCoachInviteTargetName(coachName)
+    setCoachInviteModalOpen(true)
+  }
+
   async function submitCoach(e: React.FormEvent) {
     e.preventDefault()
     const firstName = coachFirstName.trim()
@@ -482,7 +530,7 @@ export default function ClubManagementPage() {
 
     setSavingCoach(true)
     try {
-      await apiPost(apiRoutes.accounts.list, {
+      const response = await apiPost<CoachInviteMutationResponse>(apiRoutes.accounts.list, {
         role: 'COACH',
         email: emailValue,
         firstName,
@@ -500,7 +548,13 @@ export default function ClubManagementPage() {
       })
       setIsCoachModalOpen(false)
       setRefreshTick((tick) => tick + 1)
-      openInfoModal('Coach ajoute.', 'Succes')
+      const nextInviteUrl = typeof response?.inviteUrl === 'string' ? response.inviteUrl.trim() : ''
+      const coachName = [firstName, lastName].filter(Boolean).join(' ').trim() || emailValue
+      if (nextInviteUrl) {
+        openCoachInviteModal(nextInviteUrl, coachName)
+      } else {
+        openInfoModal(response?.reactivated ? 'Coach reactive.' : 'Coach ajoute.', 'Succes')
+      }
     } catch (err: unknown) {
       if (handleProtectedRouteErrors(err)) return
       const status = extractStatusCode(err)
@@ -511,6 +565,36 @@ export default function ClubManagementPage() {
       openInfoModal(toErrorMessage(err, 'Erreur ajout coach'), 'Erreur')
     } finally {
       setSavingCoach(false)
+    }
+  }
+
+  async function resendCoachInvitation(coach: ClubCoach) {
+    setInvitingCoachId(coach.id)
+    try {
+      const response = await apiPost<CoachInviteMutationResponse>(coachInviteRoute(coach.id), {})
+      setRefreshTick((tick) => tick + 1)
+      const nextInviteUrl = typeof response?.inviteUrl === 'string' ? response.inviteUrl.trim() : ''
+      if (nextInviteUrl) {
+        openCoachInviteModal(nextInviteUrl, coachDisplayName(coach))
+      } else {
+        openInfoModal('Invitation coach renvoyee.', 'Succes')
+      }
+    } catch (err: unknown) {
+      if (handleProtectedRouteErrors(err)) return
+      const status = extractStatusCode(err)
+      if (status === 409) {
+        setRefreshTick((tick) => tick + 1)
+        openInfoModal('Compte coach deja active.', 'Information')
+        return
+      }
+      if (status === 404) {
+        setRefreshTick((tick) => tick + 1)
+        openInfoModal('Invitation coach introuvable.', 'Erreur')
+        return
+      }
+      openInfoModal(toErrorMessage(err, 'Erreur invitation coach'), 'Erreur')
+    } finally {
+      setInvitingCoachId(null)
     }
   }
 
@@ -775,6 +859,7 @@ export default function ClubManagementPage() {
               <tbody>
                 {sortedCoaches.map((coach) => {
                   const badge = coachInvitationBadge(coach)
+                  const inviteActionLabel = (coach.invitationStatus || '').toUpperCase() === 'PENDING' ? 'Renvoyer l’invitation' : 'Inviter'
                   return (
                     <tr key={coach.id}>
                       <td className="club-table-cell">
@@ -786,6 +871,16 @@ export default function ClubManagementPage() {
                       <td className="club-table-cell">{coachManagedTeamsLabel(coach)}</td>
                       <td className="club-table-cell">{badge || 'Actif'}</td>
                       <td className="club-table-cell">
+                        {coach.invitationStatus?.toUpperCase() !== 'ACCEPTED' ? (
+                          <button
+                            type="button"
+                            className="club-inline-action"
+                            onClick={() => { void resendCoachInvitation(coach) }}
+                            disabled={invitingCoachId === coach.id}
+                          >
+                            {invitingCoachId === coach.id ? 'Envoi...' : inviteActionLabel}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="club-inline-action danger"
@@ -1116,6 +1211,59 @@ export default function ClubManagementPage() {
                 disabled={deletingCoach}
               >
                 {deletingCoach ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {coachInviteModalOpen && coachInviteUrl && (
+        <>
+          <div className="club-modal-overlay" onClick={() => setCoachInviteModalOpen(false)} />
+          <div className="club-modal club-modal--invite" role="dialog" aria-modal="true" aria-label="Invitation coach">
+            <div className="club-modal-head">
+              <h3>Invitation prête</h3>
+              <button
+                type="button"
+                aria-label="Fermer"
+                className="club-modal-close"
+                onClick={() => setCoachInviteModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="club-modal-text">
+              Partagez ce QR code ou ce lien avec {coachInviteTargetName || 'le coach'} pour finaliser le compte.
+            </p>
+            <div className="club-invite-qr-wrap">
+              {coachInviteQrLoading ? (
+                <p className="club-inline-hint">Generation du QR code...</p>
+              ) : coachInviteQrDataUrl ? (
+                <img src={coachInviteQrDataUrl} alt="QR code d'invitation coach" />
+              ) : (
+                <p className="club-inline-hint">QR code indisponible.</p>
+              )}
+            </div>
+            <div className="club-invite-link-row">
+              <input style={inputStyle} value={coachInviteUrl} readOnly />
+            </div>
+            <div className="club-modal-actions">
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(coachInviteUrl)
+                    openInfoModal('Lien copie.', 'Succes')
+                  } catch {
+                    openInfoModal('Impossible de copier automatiquement le lien.', 'Information')
+                  }
+                }}
+              >
+                Copier le lien
+              </button>
+              <button type="button" style={buttonStyle} onClick={() => setCoachInviteModalOpen(false)}>
+                Fermer
               </button>
             </div>
           </div>

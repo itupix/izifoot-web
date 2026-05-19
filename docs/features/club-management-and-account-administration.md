@@ -17,7 +17,7 @@
 Included
 - `ClubManagementPage.tsx` and `ClubCoachDetailsPage.tsx`.
 - Club rename, team create/update/delete.
-- Account invitation creation, coach assignment, and coach deletion.
+- Account invitation creation with shareable link/QR, coach assignment, resend, and coach deletion.
 
 Excluded
 - Invitation acceptance endpoint flow (auth feature).
@@ -57,7 +57,7 @@ Restrictions: depends on backend scope checks.
 - API: `clubs.me`, `teams.*`, `accounts.*`.
 
 ## 6. User Flows
-- Main flow: open club page -> edit club/team -> assign or remove coaches directly from a team card -> maintain the coach directory.
+- Main flow: open club page -> edit club/team -> add or resend a coach invitation -> open the share sheet with the link and QR -> assign or remove coaches directly from a team card -> maintain the coach directory.
 - Variants: delete team or coach after confirmation; reactivate a previously removed coach by reusing the same email.
 - Back navigation: from coach detail to club list.
 - Interruptions: validation errors on forms.
@@ -66,7 +66,7 @@ Restrictions: depends on backend scope checks.
 
 ## 7. Functional Behavior
 - UI behavior: loads club, teams, and merged coach summaries, then renders every team as a management card.
-- Actions: rename club, CRUD teams, add coach, delete coach, assign or unassign coach teams.
+- Actions: rename club, CRUD teams, add coach, resend coach invitation, delete coach, assign or unassign coach teams.
 - States: loading, loaded, mutating, error.
 - Conditions: route guard `DIRECTION` only.
 - Validations: required fields for team and invite forms; coach assignment only accepts current-club teams.
@@ -90,6 +90,7 @@ Constraints: kept in sync by `PUT /coaches/:id/teams`.
 - Team creation requires name/category/format.
 - Invitation creation requires target role and team mapping.
 - Team cards are the primary entry point for coach assignment.
+- Coach invitations can be reopened from the directory with the same share sheet pattern used elsewhere in staff flows.
 - The global active-team picker is hidden on `/club` because club administration is cross-team.
 
 ## 10. State Machine
@@ -101,7 +102,7 @@ Constraints: kept in sync by `PUT /coaches/:id/teams`.
 ## 11. UI Components
 - Club name editor.
 - Team cards/forms with coach chips and assignment controls.
-- Coach directory table with deletion.
+- Coach directory table with resend/delete actions.
 - Account invite form.
 - Coach detail page.
 
