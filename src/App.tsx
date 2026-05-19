@@ -22,6 +22,7 @@ import Home from './pages/Home'
 import MatchDay from './pages/MatchDay'
 import MatchDetailsPage from './pages/MatchDetailsPage'
 import MessagesPage from './pages/MessagesPage'
+import MobileAuthPage, { MobileAuthStartPage } from './pages/MobileAuthPage'
 import PlateauDetailsPage from './pages/PlateauDetailsPage'
 import PlayerDetailsPage from './pages/PlayerDetailsPage'
 import PlayersPage from './pages/PlayersPage'
@@ -71,9 +72,10 @@ export default function App() {
     || location.pathname.startsWith('/plateau/public/')
     || location.pathname.startsWith('/public/matchday/')
   )
+  const isMobileAuth = location.pathname === '/auth/mobile' || location.pathname === '/auth/mobile/start'
   const isInviteAccept = location.pathname.startsWith('/invite/accept')
   const hidesTeamScopePicker = location.pathname === '/club' || location.pathname.startsWith('/club/')
-  const showSidebarShell = !isHome && !isPublicPlateau && !isInviteAccept
+  const showSidebarShell = !isHome && !isPublicPlateau && !isInviteAccept && !isMobileAuth
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [messageUnreadCount, setMessageUnreadCount] = React.useState(0)
   const headerHeight = 64
@@ -125,7 +127,7 @@ export default function App() {
 
   return (
     <>
-      {!isHome && !isInviteAccept && (
+      {!isHome && !isInviteAccept && !isMobileAuth && (
         <>
           <header
             style={{
@@ -259,7 +261,7 @@ export default function App() {
 
       <main
         style={
-          isHome || isInviteAccept
+          isHome || isInviteAccept || isMobileAuth
             ? { padding: 0, display: 'flex', justifyContent: 'center' }
             : { padding: 16, paddingTop: headerHeight + 16, display: 'flex', justifyContent: 'center' }
         }
@@ -267,6 +269,8 @@ export default function App() {
         <div style={{ width: '100%', maxWidth: pageWidth }}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/auth/mobile/start" element={<MobileAuthStartPage />} />
+            <Route path="/auth/mobile" element={<MobileAuthPage />} />
             <Route path="/matchday/public/:token" element={<PublicPlateauPage />} />
             <Route path="/plateau/public/:token" element={<LegacyPublicMatchdayRedirect />} />
             <Route path="/public/matchday/:token" element={<LegacyPublicMatchdayRedirect />} />

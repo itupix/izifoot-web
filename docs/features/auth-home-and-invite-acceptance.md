@@ -16,6 +16,7 @@
 ## 3. Scope
 Included
 - `Home.tsx` auth form flow.
+- `MobileAuthPage.tsx` and `/auth/mobile/start` bridge for ASWebAuthenticationSession.
 - `InviteAcceptPage.tsx` token lookup and acceptance.
 - `useAuth` integration for refresh after acceptance.
 
@@ -53,13 +54,14 @@ Actions: refreshes user context.
 Restrictions: dependent on backend auth endpoints.
 
 ## 5. Entry Points
-- UI: `/` and `/invite/accept?token=...`.
+- UI: `/`, `/auth/mobile`, `/auth/mobile/start`, and `/invite/accept?token=...`.
 - Routes: defined in `App.tsx`.
 - External links: invite URLs from backend.
 - API triggers: `apiRoutes.auth.*` and `/me` refresh.
 
 ## 6. User Flows
 - Main flow: user submits login/register -> `useAuth` refresh -> routed by role.
+- Mobile flow: `/auth/mobile/start` delegates to backend state creation, `/auth/mobile` reuses web auth then forwards to `/auth/mobile/callback` on the API domain.
 - Variants: invite token accepted before normal login.
 - Back navigation: can return to home and re-attempt.
 - Interruptions: expired/invalid invite token.
@@ -86,12 +88,18 @@ Source: login/register forms.
 Purpose: session creation.
 Format: email/password plus clubName for register.
 Constraints: backend validation.
+- Mobile auth bridge params
+Source: backend redirect query string.
+Purpose: preserve `platform` + anti-CSRF `state` during ASWebAuthenticationSession.
+Format: query string.
+Constraints: `platform=ios`, opaque `state`.
 
 ## 9. Business Rules
 - Invite acceptance must call backend token endpoint first.
 - Successful invite acceptance triggers auth refresh.
 - Invite acceptance title uses `clubName` when available to personalize the onboarding copy.
 - Route fallback redirects authenticated users to role default route.
+- Mobile auth never redirects to `/planning` or `/club`; it always continues to the API callback so the app receives only `code + state`.
 
 ## 10. State Machine
 - States: `UNAUTHENTICATED`, `AUTH_LOADING`, `AUTHENTICATED`, `INVITE_LOADING`, `INVITE_ERROR`.
@@ -104,8 +112,8 @@ Constraints: backend validation.
 - Route guards.
 
 ## 12. Routes / API / Handlers
-- Front routes: `/`, `/invite/accept`.
-- API: `/auth/register`, `/auth/login`, `/auth/invitations/:token`, `/auth/invitations/accept`, `/me`.
+- Front routes: `/`, `/auth/mobile/start`, `/auth/mobile`, `/invite/accept`.
+- API: `/auth/register`, `/auth/login`, `/auth/mobile/start`, `/auth/mobile/callback`, `/auth/invitations/:token`, `/auth/invitations/accept`, `/me`.
 - Hooks: `useAuth`.
 
 ## 13. Persistence
@@ -128,6 +136,7 @@ Constraints: backend validation.
 - Access control: client route guards + backend enforcement.
 - Data exposure: no private data before auth.
 - Guest rules: only public auth routes accessible.
+- Mobile bridge: callback navigation is browser-driven and relies on the API’s short-lived mobile state cookie, not on exposing a token in the URL.
 
 ## 17. UX Requirements
 - Feedback: clear success/error messages per submission.
@@ -142,6 +151,7 @@ Constraints: backend validation.
 - Invite flow targets both first-time and existing accounts.
 - Missing
 - Explicit frontend mapping of backend error codes.
+- Associated Domains / Universal Links are not used yet; the current mobile callback stays on the custom scheme `izifoot://`.
 - Tech debt
 - Legacy naming aliases increase adapter complexity.
 
