@@ -133,6 +133,7 @@ function formatFieldList(fields: string[]): string {
 }
 
 type InvitationStatusValue = 'NONE' | 'PENDING' | 'ACCEPTED'
+type ParentInvitationStatusValue = InvitationStatusValue | 'EXPIRED' | 'CANCELLED'
 type PlayerInvitationStatusResponse = {
   playerId: string
   status: InvitationStatusValue
@@ -146,11 +147,54 @@ type PlayerInviteResponse = {
   expiresAt?: string | null
   inviteUrl?: string | null
 }
+type PlayerInviteRequest = {
+  email?: string
+  phone?: string
+  parentId?: string
+}
 
 function normalizeInvitationStatus(value: unknown): InvitationStatusValue {
   const normalized = typeof value === 'string' ? value.trim().toUpperCase() : ''
   if (normalized === 'PENDING' || normalized === 'ACCEPTED') return normalized
   return 'NONE'
+}
+
+function normalizeParentInvitationStatus(value: unknown): ParentInvitationStatusValue {
+  const normalized = typeof value === 'string' ? value.trim().toUpperCase() : ''
+  if (normalized === 'PENDING' || normalized === 'ACCEPTED' || normalized === 'EXPIRED' || normalized === 'CANCELLED') {
+    return normalized
+  }
+  return 'NONE'
+}
+
+function getParentInvitationStatusLabel(status: ParentInvitationStatusValue): string {
+  switch (status) {
+    case 'PENDING':
+      return 'Invitation en attente'
+    case 'ACCEPTED':
+      return 'Compte activé'
+    case 'EXPIRED':
+      return 'Invitation expirée'
+    case 'CANCELLED':
+      return 'Invitation annulée'
+    default:
+      return 'Non invité'
+  }
+}
+
+function getParentInvitationStatusClassName(status: ParentInvitationStatusValue): string {
+  switch (status) {
+    case 'PENDING':
+      return 'player-parent-status is-pending'
+    case 'ACCEPTED':
+      return 'player-parent-status is-accepted'
+    case 'EXPIRED':
+      return 'player-parent-status is-expired'
+    case 'CANCELLED':
+      return 'player-parent-status is-cancelled'
+    default:
+      return 'player-parent-status is-none'
+  }
 }
 
 export default function PlayerDetailsPage() {
@@ -232,7 +276,13 @@ export default function PlayerDetailsPage() {
           setAttendanceRows(attendanceData)
           setTrainings(trainingData)
           setClubName((clubData?.name || '').trim())
-          void refreshInvitationStatus(playerData.id)
+          if (isChildPlayer(playerData)) {
+            setInvitationLoading(false)
+            setInvitationStatus(null)
+            setInvitationStatusError(null)
+          } else {
+            void refreshInvitationStatus(playerData.id)
+          }
         }
       } catch (err: unknown) {
         if (!cancelled) setError(toErrorMessage(err))
@@ -293,7 +343,9 @@ export default function PlayerDetailsPage() {
       const email = (contact?.email || '').trim()
       const phone = (contact?.phone || '').trim()
       const parentId = typeof contact?.parentId === 'string' ? contact.parentId : ''
-      return { parentId, fullName, email, phone, firstName, lastName }
+      const status = normalizeParentInvitationStatus(contact?.status)
+      const inviteKey = parentId || email || phone || `${fullName}-${status}`
+      return { parentId, fullName, email, phone, firstName, lastName, status, inviteKey }
     })
   }, [player])
   const hasLicence = useMemo(() => Boolean(player && getLicence(player)), [player])
@@ -400,7 +452,13 @@ export default function PlayerDetailsPage() {
         setSelectedTeamId(normalizedTeamId)
       }
       setPlayer(updated)
-      await refreshInvitationStatus(updated.id)
+      if (isChildPlayer(updated)) {
+        setInvitationLoading(false)
+        setInvitationStatus(null)
+        setInvitationStatusError(null)
+      } else {
+        await refreshInvitationStatus(updated.id)
+      }
       setEditModalOpen(false)
     } catch (err: unknown) {
       uiAlert(`Erreur modification joueur: ${toErrorMessage(err)}`)
@@ -422,13 +480,15 @@ export default function PlayerDetailsPage() {
     }
   }
 
-  async function sendPlayerInvitation(payloadOverride?: { email?: string; phone?: string }) {
+  async function sendPlayerInvitation(payloadOverride?: PlayerInviteRequest) {
     if (!player?.id) return
     if (isChildPlayer(player) && !payloadOverride) {
+      setInviteParentEmail('')
+      setInviteParentPhone('')
       setInviteParentModalOpen(true)
       return
     }
-    if (nonChildInviteMissingFields.length > 0) {
+    if (!isChildPlayer(player) && nonChildInviteMissingFields.length > 0) {
       uiAlert(`Invitation impossible: ${nonChildInviteGuardMessage}`)
       openEditModal()
       return
@@ -436,9 +496,14 @@ export default function PlayerDetailsPage() {
     setInviteSending(true)
     try {
       const isResend = invitationStatus === 'PENDING'
-      const payload: { email?: string; phone?: string } = payloadOverride || {}
+      const payload: PlayerInviteRequest = payloadOverride || {}
       const response = await apiPost<PlayerInviteResponse>(apiRoutes.players.invite(player.id), payload)
-      await refreshInvitationStatus(player.id)
+      if (isChildPlayer(player)) {
+        const refreshed = await apiGet<Player>(apiRoutes.players.byId(player.id))
+        setPlayer(refreshed)
+      } else {
+        await refreshInvitationStatus(player.id)
+      }
       const nextInviteUrl = typeof response?.inviteUrl === 'string' ? response.inviteUrl.trim() : ''
       if (nextInviteUrl) {
         setInviteUrl(nextInviteUrl)
@@ -448,8 +513,13 @@ export default function PlayerDetailsPage() {
       }
     } catch (err: unknown) {
       if (err instanceof HttpError && err.status === 409) {
-        uiAlert('Compte déjà activé.')
-        await refreshInvitationStatus(player.id)
+        uiAlert(isChildPlayer(player) ? 'Compte parent déjà activé.' : 'Compte déjà activé.')
+        if (isChildPlayer(player)) {
+          const refreshed = await apiGet<Player>(apiRoutes.players.byId(player.id))
+          setPlayer(refreshed)
+        } else {
+          await refreshInvitationStatus(player.id)
+        }
         return
       }
       if (err instanceof HttpError && err.status === 400) {
@@ -478,6 +548,20 @@ export default function PlayerDetailsPage() {
     void sendPlayerInvitation({
       ...(normalizedEmail ? { email: normalizedEmail } : {}),
       ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+    })
+  }
+
+  function inviteExistingParent(parent: typeof parentContacts[number]) {
+    if (!player?.id) return
+    if (parent.status === 'ACCEPTED') return
+    if (!parent.parentId && !parent.email && !parent.phone) {
+      uiAlert('Coordonnée parent manquante pour renvoyer l’invitation.')
+      return
+    }
+    void sendPlayerInvitation({
+      ...(parent.parentId ? { parentId: parent.parentId } : {}),
+      ...(parent.email ? { email: parent.email } : {}),
+      ...(parent.phone ? { phone: parent.phone } : {}),
     })
   }
 
@@ -530,12 +614,12 @@ export default function PlayerDetailsPage() {
                   <span><ShieldCheck size={13} />{hasLicence ? 'Licence OK' : 'Licence manquante'}</span>
                   <span><CalendarCheck2 size={13} />{trainingAttendanceRate}% assiduité</span>
                 </div>
-                {invitationLoading && (
+                {!isChildPlayer(player) && invitationLoading && (
                   <div className="player-invite-row">
                     <span className="player-invite-pending-text">Chargement du statut d&apos;invitation...</span>
                   </div>
                 )}
-                {!invitationLoading && invitationStatusError && (
+                {!isChildPlayer(player) && !invitationLoading && invitationStatusError && (
                   <div className="player-invite-row">
                     <span className="player-invite-error-text">{invitationStatusError}</span>
                     <button
@@ -548,7 +632,7 @@ export default function PlayerDetailsPage() {
                     </button>
                   </div>
                 )}
-                {!invitationLoading && !invitationStatusError && invitationStatus && (invitationStatus !== 'ACCEPTED' || isChildPlayer(player)) && (
+                {!isChildPlayer(player) && !invitationLoading && !invitationStatusError && invitationStatus && invitationStatus !== 'ACCEPTED' && (
                   nonChildInviteGuardMessage ? (
                     <>
                       {invitationStatus === 'PENDING' ? (
@@ -579,7 +663,7 @@ export default function PlayerDetailsPage() {
                         onClick={() => { void sendPlayerInvitation() }}
                         disabled={inviteSending}
                       >
-                        {inviteSending ? 'Envoi...' : invitationStatus === 'PENDING' ? 'Renvoyer l’invitation' : (isChildPlayer(player) ? 'Inviter un parent' : 'Inviter')}
+                        {inviteSending ? 'Envoi...' : invitationStatus === 'PENDING' ? 'Renvoyer l’invitation' : 'Inviter'}
                       </button>
                     </div>
                   )
@@ -655,9 +739,28 @@ export default function PlayerDetailsPage() {
                 {parentContacts.length > 0 ? (
                   <div className="player-parent-list">
                     {parentContacts.map((contact, index) => (
-                      <div key={`${contact.fullName}-${contact.email}-${contact.phone}-${index}`} className="player-parent-item">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <div key={contact.inviteKey} className="player-parent-item">
+                        <div className="player-parent-item-head">
                           <strong>{`Parent ${index + 1}`}</strong>
+                          <span className={getParentInvitationStatusClassName(contact.status)}>
+                            {getParentInvitationStatusLabel(contact.status)}
+                          </span>
+                        </div>
+                        <p><span>Prénom:</span> {contact.firstName || '—'}</p>
+                        <p><span>Nom:</span> {contact.lastName || '—'}</p>
+                        <p><span>E-mail:</span> {contact.email || '—'}</p>
+                        <p><span>Téléphone:</span> {contact.phone || '—'}</p>
+                        <div className="player-parent-actions">
+                          {contact.status !== 'ACCEPTED' ? (
+                            <button
+                              type="button"
+                              className="player-invite-btn"
+                              onClick={() => inviteExistingParent(contact)}
+                              disabled={inviteSending}
+                            >
+                              {inviteSending ? 'Envoi...' : contact.status === 'PENDING' ? 'Renvoyer l’invitation' : 'Inviter ce parent'}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="players-danger-btn"
@@ -667,15 +770,37 @@ export default function PlayerDetailsPage() {
                             {deletingParentId === contact.parentId ? 'Suppression...' : 'Supprimer'}
                           </button>
                         </div>
-                        <p><span>Prénom:</span> {contact.firstName || '—'}</p>
-                        <p><span>Nom:</span> {contact.lastName || '—'}</p>
-                        <p><span>E-mail:</span> {contact.email || '—'}</p>
-                        <p><span>Téléphone:</span> {contact.phone || '—'}</p>
                       </div>
                     ))}
+                    <button
+                      type="button"
+                      className="player-invite-btn secondary"
+                      onClick={() => {
+                        setInviteParentEmail('')
+                        setInviteParentPhone('')
+                        setInviteParentModalOpen(true)
+                      }}
+                      disabled={inviteSending}
+                    >
+                      Inviter un autre parent
+                    </button>
                   </div>
                 ) : (
-                  <p>—</p>
+                  <div className="player-parent-actions">
+                    <p>—</p>
+                    <button
+                      type="button"
+                      className="player-invite-btn"
+                      onClick={() => {
+                        setInviteParentEmail('')
+                        setInviteParentPhone('')
+                        setInviteParentModalOpen(true)
+                      }}
+                      disabled={inviteSending}
+                    >
+                      Inviter un parent
+                    </button>
+                  </div>
                 )}
               </div>
             )}

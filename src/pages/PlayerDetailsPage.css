@@ -315,9 +315,45 @@
   background: #f8fafc;
 }
 
+.player-parent-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .player-parent-item strong {
   font-weight: 700;
   color: #0f172a;
+}
+
+.player-parent-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.player-parent-status.is-accepted {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+}
+
+.player-parent-status.is-pending {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+}
+
+.player-parent-status.is-expired,
+.player-parent-status.is-cancelled,
+.player-parent-status.is-none {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
 }
 
 .player-parent-item p {
@@ -327,6 +363,14 @@
 .player-parent-item p span {
   color: #64748b;
   font-weight: 600;
+}
+
+.player-parent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
 }
 
 .player-info-icon {

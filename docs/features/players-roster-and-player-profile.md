@@ -11,7 +11,7 @@
 - Why it exists: Team management requires detailed player records and onboarding actions.
 - Target users: admin/coach.
 - Context of use: `/effectif` and `/effectif/:id`.
-- Expected outcome: accurate player profiles and invitation status visibility.
+- Expected outcome: accurate player profiles, adult invitation visibility, and parent-by-parent invitation control for child accounts.
 
 ## 3. Scope
 Included
@@ -58,7 +58,7 @@ Restrictions: depends on multiple endpoints.
 
 ## 6. User Flows
 - Main flow: open roster -> quick-create player with first name only -> optionally add licence/date of birth at creation -> open detail -> review club/team context -> complete remaining profile fields if needed -> if authorized reassign the player to another team -> invite.
-- Variants: send invitation or unlink parent contact.
+- Variants: send invitation, resend per-parent invitation, or unlink parent contact.
 - Back navigation: player detail to list.
 - Interruptions: invite errors.
 - Errors: invalid payload or forbidden scope.
@@ -66,7 +66,7 @@ Restrictions: depends on multiple endpoints.
 
 ## 7. Functional Behavior
 - UI behavior: paginated list and detail with multiple data fetches, including date-of-birth capture on create/edit, visible club/team context on the profile, and conditional team reassignment when multiple teams are writable.
-- Actions: create/update/delete player, invite, unlink parent.
+- Actions: create/update/delete player, invite adult player, invite/resend per parent for child accounts, unlink parent.
 - States: loading, saving, deleting, invite pending.
 - Conditions: role guard for direction/coach.
 - Validations: quick-add only requires first name; adult invite is blocked until last name, email, and phone are available.
@@ -81,7 +81,7 @@ Format: mixed camelCase/snake_case fields.
 Constraints: normalized in adapters/components.
 
 ## 9. Business Rules
-- Player detail fetch includes invitation status endpoint.
+- Player detail fetch includes the adult invitation status endpoint plus parent-by-parent invitation state in the player payload for child accounts.
 - Parent unlink triggers data refresh.
 - Adult invite CTA is guarded in UI when the player profile misses last name, email, or phone.
 - Team reassignment is exposed only when several writable teams are available in scope.
@@ -97,7 +97,7 @@ Constraints: normalized in adapters/components.
 - Player list cards/table.
 - Player profile form.
 - Invite modal and QR display.
-- Parent contact section.
+- Parent contact section with per-parent invitation status and resend actions.
 
 ## 12. Routes / API / Handlers
 - Front routes: `/effectif`, `/effectif/:id`.
