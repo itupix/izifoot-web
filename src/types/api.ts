@@ -117,6 +117,30 @@ export interface InvitationDetails {
   expiresAt?: string
 }
 
+export interface ClubCoachTeam {
+  id: string
+  name: string
+}
+
+export interface ClubCoach {
+  id: string
+  firstName?: string | null
+  lastName?: string | null
+  email: string
+  phone?: string | null
+  teamId?: string | null
+  teamName?: string | null
+  managedTeamIds?: string[]
+  managedTeams?: ClubCoachTeam[]
+  invitationStatus?: InvitationStatus | string
+  role?: 'COACH'
+  createdAt?: string | null
+  updatedAt?: string | null
+  invitedByUserId?: string | null
+  acceptedAt?: string | null
+  expiresAt?: string | null
+}
+
 export interface AttendanceRow {
   id?: string
   session_type: 'TRAINING' | 'PLATEAU'

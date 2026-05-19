@@ -1,26 +1,40 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-
-type CoachState = {
-  id: string
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  teamName: string
-  invited: boolean
-}
+import { apiGet } from '../apiClient'
+import { apiRoutes } from '../apiRoutes'
+import { coachDisplayName, coachInvitationBadge, coachManagedTeamsLabel, normalizeClubCoach } from '../features/clubCoaches'
+import type { ClubCoach } from '../types/api'
 
 export default function ClubCoachDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
-  const coach = (location.state as { coach?: CoachState } | null)?.coach ?? null
+  const initialCoach = (location.state as { coach?: ClubCoach } | null)?.coach ?? null
+  const [coach, setCoach] = useState<ClubCoach | null>(initialCoach)
+
+  useEffect(() => {
+    const coachId = id ?? ''
+    if (!coachId) return
+    let cancelled = false
+
+    async function loadCoach() {
+      try {
+        const payload = await apiGet<ClubCoach>(apiRoutes.coaches.byId(coachId))
+        if (!cancelled) setCoach(normalizeClubCoach(payload))
+      } catch {
+        if (!cancelled) setCoach((current) => current ?? null)
+      }
+    }
+
+    void loadCoach()
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   const fullName = useMemo(() => {
-    const first = coach?.firstName?.trim() || ''
-    const last = coach?.lastName?.trim() || ''
-    return `${first} ${last}`.trim() || 'Coach'
-  }, [coach?.firstName, coach?.lastName])
+    return coach ? coachDisplayName(coach) : 'Coach'
+  }, [coach])
+  const invitationBadge = coach ? coachInvitationBadge(coach) : null
 
   return (
     <div className="page-shell">
@@ -38,8 +52,8 @@ export default function ClubCoachDetailsPage() {
           <div><strong>Prénom:</strong> {coach?.firstName || '—'}</div>
           <div><strong>Email:</strong> {coach?.email || '—'}</div>
           <div><strong>Téléphone:</strong> {coach?.phone || '—'}</div>
-          <div><strong>Équipe:</strong> {coach?.teamName || '—'}</div>
-          {coach?.invited ? <div><strong>Statut:</strong> Invité</div> : null}
+          <div><strong>Équipes:</strong> {coach ? coachManagedTeamsLabel(coach) : '—'}</div>
+          <div><strong>Statut:</strong> {invitationBadge || 'Actif'}</div>
         </div>
       </section>
     </div>

@@ -72,6 +72,7 @@ export default function App() {
     || location.pathname.startsWith('/public/matchday/')
   )
   const isInviteAccept = location.pathname.startsWith('/invite/accept')
+  const hidesTeamScopePicker = location.pathname === '/club' || location.pathname.startsWith('/club/')
   const showSidebarShell = !isHome && !isPublicPlateau && !isInviteAccept
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [messageUnreadCount, setMessageUnreadCount] = React.useState(0)
@@ -227,7 +228,7 @@ export default function App() {
                   </Link>
                 ))}
               </nav>
-              {canSelectTeam && (
+              {canSelectTeam && !hidesTeamScopePicker && (
                 <div className={style.teamScopeBlock}>
                   <label htmlFor="team-scope-select" className={style.teamScopeLabel}>Équipe active</label>
                   <select

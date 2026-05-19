@@ -13,6 +13,11 @@ export const apiRoutes = {
   meChild: '/me/child',
   clubs: {
     me: '/clubs/me',
+    coaches: '/clubs/me/coaches',
+  },
+  coaches: {
+    byId: (id: string) => `/coaches/${enc(id)}`,
+    teams: (id: string) => `/coaches/${enc(id)}/teams`,
   },
   teams: {
     list: '/teams',

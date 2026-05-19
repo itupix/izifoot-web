@@ -1,26 +1,23 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { DotsHorizontalIcon, PlusIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
+import {
+  coachDisplayName,
+  coachInvitationBadge,
+  coachManagedTeamsLabel,
+  compareCoaches,
+  isCoachAssignedToTeam,
+  normalizeClubCoach,
+} from '../features/clubCoaches'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
+import { useNavigate } from 'react-router-dom'
 import { useTeamScope } from '../useTeamScope'
-import type { AccountInvitation, ClubMe, Team } from '../types/api'
+import type { ClubCoach, ClubMe, Team } from '../types/api'
 import './ClubManagementPage.css'
-
-type ClubCoach = {
-  id: string
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  teamId: string | null
-  teamName: string
-  invited: boolean
-}
 
 const AGE_CATEGORY_OPTIONS = [
   { value: 'U6', label: 'U6' },
@@ -41,13 +38,15 @@ const AGE_CATEGORY_OPTIONS = [
   { value: 'SENIORS', label: 'Seniors' },
   { value: 'VETERANS', label: 'Vétérans' },
 ] as const
-type AgeCategoryValue = (typeof AGE_CATEGORY_OPTIONS)[number]['value']
+
 const GAME_FORMAT_OPTIONS = [
   { value: '3v3', label: '3v3' },
   { value: '5v5', label: '5v5' },
   { value: '8v8', label: '8v8' },
   { value: '11v11', label: '11v11' },
 ] as const
+
+type AgeCategoryValue = (typeof AGE_CATEGORY_OPTIONS)[number]['value']
 type GameFormatValue = (typeof GAME_FORMAT_OPTIONS)[number]['value']
 
 const AGE_CATEGORY_INDEX_BY_VALUE = new Map(AGE_CATEGORY_OPTIONS.map((option, index) => [option.value, index]))
@@ -172,102 +171,8 @@ function normalizeTeam(team: unknown): Team | null {
   return { id, name, category, format, clubId }
 }
 
-function normalizeAccountList(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload
-  if (payload && typeof payload === 'object') {
-    const raw = payload as Record<string, unknown>
-    if (Array.isArray(raw.items)) return raw.items
-    if (Array.isArray(raw.data)) return raw.data
-  }
-  return []
-}
-
-function splitFullName(value: string): { firstName: string; lastName: string } {
-  const parts = value.trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return { firstName: '', lastName: '' }
-  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
-  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
-}
-
-function normalizeCoachAccount(account: unknown): {
-  id: string
-  role: string
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  teamId: string | null
-  status: string
-} | null {
-  const raw = (account && typeof account === 'object' ? account : {}) as Record<string, unknown>
-  const role = typeof raw.role === 'string' ? raw.role.toUpperCase() : ''
-  if (!role) return null
-  const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id : ''
-  if (!id) return null
-  const email = typeof raw.email === 'string' ? raw.email.trim() : ''
-  const phone = typeof raw.phone === 'string' ? raw.phone.trim() : (typeof raw.telephone === 'string' ? raw.telephone.trim() : '')
-  const firstNameRaw = typeof raw.firstName === 'string' ? raw.firstName.trim() : (typeof raw.prenom === 'string' ? raw.prenom.trim() : '')
-  const lastNameRaw = typeof raw.lastName === 'string' ? raw.lastName.trim() : (typeof raw.nom === 'string' ? raw.nom.trim() : '')
-  const fullName = typeof raw.name === 'string' ? raw.name.trim() : ''
-  const split = (!firstNameRaw && !lastNameRaw && fullName) ? splitFullName(fullName) : { firstName: '', lastName: '' }
-  const teamId = typeof raw.teamId === 'string'
-    ? raw.teamId
-    : (typeof raw.team_id === 'string'
-      ? raw.team_id
-      : (Array.isArray(raw.managedTeamIds) && typeof raw.managedTeamIds[0] === 'string' ? raw.managedTeamIds[0] : null))
-  const status = typeof raw.status === 'string'
-    ? raw.status.toUpperCase()
-    : (typeof raw.invitationStatus === 'string' ? raw.invitationStatus.toUpperCase() : '')
-  return {
-    id,
-    role,
-    firstName: firstNameRaw || split.firstName,
-    lastName: lastNameRaw || split.lastName,
-    email,
-    phone,
-    teamId: teamId || null,
-    status,
-  }
-}
-
-function extractInvitationTeamId(invitation: AccountInvitation): string | null {
-  const raw = invitation as AccountInvitation & {
-    teamId?: string | null
-    team_id?: string | null
-  }
-  return raw.teamId || raw.team_id || null
-}
-
-function extractInvitationNames(invitation: AccountInvitation): { firstName: string; lastName: string } {
-  const raw = invitation as AccountInvitation & {
-    firstName?: string | null
-    first_name?: string | null
-    prenom?: string | null
-    lastName?: string | null
-    last_name?: string | null
-    nom?: string | null
-    name?: string | null
-  }
-
-  const firstName =
-    (typeof raw.firstName === 'string' ? raw.firstName : '') ||
-    (typeof raw.first_name === 'string' ? raw.first_name : '') ||
-    (typeof raw.prenom === 'string' ? raw.prenom : '')
-  const lastName =
-    (typeof raw.lastName === 'string' ? raw.lastName : '') ||
-    (typeof raw.last_name === 'string' ? raw.last_name : '') ||
-    (typeof raw.nom === 'string' ? raw.nom : '')
-
-  if (firstName.trim() || lastName.trim()) {
-    return { firstName: firstName.trim(), lastName: lastName.trim() }
-  }
-
-  const fallbackName = typeof raw.name === 'string' ? raw.name.trim() : ''
-  if (fallbackName) {
-    return splitFullName(fallbackName)
-  }
-
-  return { firstName: '', lastName: '' }
+function uniqueTeamIds(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
 }
 
 export default function ClubManagementPage() {
@@ -277,8 +182,7 @@ export default function ClubManagementPage() {
 
   const [club, setClub] = useState<ClubMe | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
-  const [invitations, setInvitations] = useState<AccountInvitation[]>([])
-  const [accounts, setAccounts] = useState<unknown[]>([])
+  const [coaches, setCoaches] = useState<ClubCoach[]>([])
   const [refreshTick, setRefreshTick] = useState(0)
 
   const [clubName, setClubName] = useState('')
@@ -291,10 +195,9 @@ export default function ClubManagementPage() {
   const [teamGameFormat, setTeamGameFormat] = useState<GameFormatValue | ''>('')
   const [savingTeam, setSavingTeam] = useState(false)
   const [deletingTeam, setDeletingTeam] = useState(false)
-  const [isActiveTeamMenuOpen, setIsActiveTeamMenuOpen] = useState(false)
+  const [openTeamMenuId, setOpenTeamMenuId] = useState<string | null>(null)
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false)
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null)
-  const [activeTeamTabId, setActiveTeamTabId] = useState<string | null>(null)
   const [teamPendingDelete, setTeamPendingDelete] = useState<Team | null>(null)
   const [infoModal, setInfoModal] = useState<{ title: string; message: string } | null>(null)
 
@@ -305,6 +208,10 @@ export default function ClubManagementPage() {
   const [coachTeamId, setCoachTeamId] = useState('')
   const [isCoachModalOpen, setIsCoachModalOpen] = useState(false)
   const [savingCoach, setSavingCoach] = useState(false)
+  const [coachPendingDelete, setCoachPendingDelete] = useState<ClubCoach | null>(null)
+  const [deletingCoach, setDeletingCoach] = useState(false)
+  const [mutatingCoachId, setMutatingCoachId] = useState<string | null>(null)
+  const [coachSelectionByTeamId, setCoachSelectionByTeamId] = useState<Record<string, string>>({})
 
   const isDirection = me?.role === 'DIRECTION'
 
@@ -313,23 +220,27 @@ export default function ClubManagementPage() {
   }
 
   const loadClubData = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
-    const [clubData, teamData, invitationData, accountData] = await Promise.all([
+    const [clubData, teamData, coachData] = await Promise.all([
       apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
       apiGet<Team[]>(apiRoutes.teams.list).catch(() => []),
-      apiGet<AccountInvitation[]>(apiRoutes.accounts.invitations).catch(() => []),
-      apiGet<unknown>(apiRoutes.accounts.list).catch(() => []),
+      apiGet<ClubCoach[]>(apiRoutes.clubs.coaches).catch(() => []),
     ])
 
     if (isCancelled()) return
 
     setClub(clubData)
     setClubName(clubData?.name ?? '')
-    const normalizedTeams = (Array.isArray(teamData) ? teamData : [])
-      .map(normalizeTeam)
-      .filter((team): team is Team => Boolean(team))
-    setTeams(normalizedTeams)
-    setInvitations(Array.isArray(invitationData) ? invitationData : [])
-    setAccounts(normalizeAccountList(accountData))
+    setTeams(
+      (Array.isArray(teamData) ? teamData : [])
+        .map(normalizeTeam)
+        .filter((team): team is Team => Boolean(team)),
+    )
+    setCoaches(
+      (Array.isArray(coachData) ? coachData : [])
+        .map(normalizeClubCoach)
+        .filter((coach): coach is ClubCoach => Boolean(coach))
+        .sort(compareCoaches),
+    )
   }, [refreshTick])
 
   const { loading, error } = useAsyncLoader(loadClubData)
@@ -338,61 +249,21 @@ export default function ClubManagementPage() {
     () => [...teams].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr-FR')),
     [teams],
   )
-
-  const coachItems = useMemo<ClubCoach[]>(() => {
-    const teamNameById = new Map(sortedTeams.map((team) => [team.id, team.name || team.id]))
-    const pendingCoachInvitations = invitations
-      .filter((invitation) => invitation.role === 'COACH' && invitation.status === 'PENDING')
-    const pendingByEmail = new Map(
-      pendingCoachInvitations
-        .map((invitation) => [invitation.email?.trim().toLowerCase() || '', invitation] as const)
-        .filter(([email]) => Boolean(email)),
-    )
-
-    const fromAccounts = normalizeAccountList(accounts)
-      .map(normalizeCoachAccount)
-      .filter((account): account is NonNullable<ReturnType<typeof normalizeCoachAccount>> => Boolean(account))
-      .filter((account) => account.role === 'COACH')
-      .map((account) => {
-        const emailKey = account.email.trim().toLowerCase()
-        const linkedInvitation = emailKey ? pendingByEmail.get(emailKey) : undefined
-        return {
-          id: account.id,
-          firstName: account.firstName,
-          lastName: account.lastName,
-          email: account.email,
-          phone: account.phone,
-          teamId: account.teamId,
-          teamName: account.teamId ? (teamNameById.get(account.teamId) || account.teamId) : 'Non affecté',
-          invited: account.status === 'PENDING' || Boolean(linkedInvitation),
-        } satisfies ClubCoach
-      })
-
-    const existingEmails = new Set(fromAccounts.map((coach) => coach.email.trim().toLowerCase()).filter(Boolean))
-    const fromPendingOnly = pendingCoachInvitations
-      .filter((invitation) => !existingEmails.has((invitation.email || '').trim().toLowerCase()))
-      .map((invitation) => {
-        const teamId = extractInvitationTeamId(invitation)
-        const names = extractInvitationNames(invitation)
-        return {
-          id: `invite:${invitation.id}`,
-          firstName: names.firstName,
-          lastName: names.lastName,
-          email: invitation.email || '',
-          phone: '',
-          teamId,
-          teamName: teamId ? (teamNameById.get(teamId) || teamId) : 'Non affecté',
-          invited: true,
-        } satisfies ClubCoach
-      })
-
-    return [...fromAccounts, ...fromPendingOnly]
-      .sort((a, b) => `${a.lastName} ${a.firstName} ${a.email}`.localeCompare(`${b.lastName} ${b.firstName} ${b.email}`, 'fr-FR'))
-  }, [accounts, invitations, sortedTeams])
-  const activeTeam = useMemo(
-    () => sortedTeams.find((team) => team.id === activeTeamTabId) ?? sortedTeams[0] ?? null,
-    [activeTeamTabId, sortedTeams],
+  const sortedCoaches = useMemo(
+    () => [...coaches].sort(compareCoaches),
+    [coaches],
   )
+  const coachesByTeamId = useMemo(() => {
+    const next = new Map<string, ClubCoach[]>()
+    for (const team of sortedTeams) next.set(team.id, [])
+    for (const coach of sortedCoaches) {
+      for (const teamId of coach.managedTeamIds || []) {
+        if (!next.has(teamId)) continue
+        next.get(teamId)?.push(coach)
+      }
+    }
+    return next
+  }, [sortedCoaches, sortedTeams])
   const sortedSelectedAgeCategories = useMemo(
     () => [...selectedAgeCategories].sort(
       (a, b) => (AGE_CATEGORY_INDEX_BY_VALUE.get(a) ?? Number.MAX_SAFE_INTEGER) - (AGE_CATEGORY_INDEX_BY_VALUE.get(b) ?? Number.MAX_SAFE_INTEGER),
@@ -418,32 +289,18 @@ export default function ClubManagementPage() {
   )
 
   useEffect(() => {
-    if (!sortedTeams.length) {
-      if (activeTeamTabId !== null) setActiveTeamTabId(null)
-      return
-    }
-    if (!activeTeamTabId || !sortedTeams.some((team) => team.id === activeTeamTabId)) {
-      setActiveTeamTabId(sortedTeams[0].id)
-    }
-  }, [activeTeamTabId, sortedTeams])
-
-  useEffect(() => {
-    if (!activeTeam) setIsActiveTeamMenuOpen(false)
-  }, [activeTeam])
-
-  useEffect(() => {
     if (!suggestedGameFormat) return
     setTeamGameFormat(suggestedGameFormat)
   }, [suggestedGameFormat])
 
-  function handleProtectedRouteErrors(err: unknown, forbiddenMessage = 'Action réservée à la direction'): boolean {
+  function handleProtectedRouteErrors(err: unknown, forbiddenMessage = 'Action reservee a la direction'): boolean {
     const status = extractStatusCode(err)
     if (status === 401) {
       navigate('/', { replace: true })
       return true
     }
     if (status === 403) {
-      openInfoModal(forbiddenMessage, 'Accès refusé')
+      openInfoModal(forbiddenMessage, 'Acces refuse')
       return true
     }
     return false
@@ -460,7 +317,7 @@ export default function ClubManagementPage() {
       setClub(updated)
       setClubName(updated.name ?? nextName)
       setIsRenameModalOpen(false)
-      openInfoModal('Nom du club mis à jour.', 'Succès')
+      openInfoModal('Nom du club mis a jour.', 'Succes')
     } catch (err: unknown) {
       if (handleProtectedRouteErrors(err)) return
       const status = extractStatusCode(err)
@@ -479,7 +336,7 @@ export default function ClubManagementPage() {
     setTeamName('')
     setSelectedAgeCategories([])
     setTeamGameFormat('')
-    setIsActiveTeamMenuOpen(false)
+    setOpenTeamMenuId(null)
     setIsTeamModalOpen(true)
   }
 
@@ -489,12 +346,12 @@ export default function ClubManagementPage() {
     const parsedCategories = parseAgeCategorySelection(team.category)
     setSelectedAgeCategories(parsedCategories)
     setTeamGameFormat(normalizeGameFormat(team.format) || suggestGameFormatFromAgeCategories(parsedCategories))
-    setIsActiveTeamMenuOpen(false)
+    setOpenTeamMenuId(null)
     setIsTeamModalOpen(true)
   }
 
   function requestDeleteTeam(team: Team) {
-    setIsActiveTeamMenuOpen(false)
+    setOpenTeamMenuId(null)
     setTeamPendingDelete(team)
   }
 
@@ -509,10 +366,11 @@ export default function ClubManagementPage() {
       }
       await refreshTeamScope()
       setTeamPendingDelete(null)
-      openInfoModal('Équipe supprimée.', 'Succès')
+      setRefreshTick((tick) => tick + 1)
+      openInfoModal('Equipe supprimee.', 'Succes')
     } catch (err: unknown) {
       if (handleProtectedRouteErrors(err)) return
-      openInfoModal(toErrorMessage(err, 'Erreur suppression équipe'), 'Erreur')
+      openInfoModal(toErrorMessage(err, 'Erreur suppression equipe'), 'Erreur')
     } finally {
       setDeletingTeam(false)
     }
@@ -524,22 +382,22 @@ export default function ClubManagementPage() {
     setSavingTeam(true)
     try {
       if (!isAgeSelectionContiguous) {
-        openInfoModal('Sélectionne une ou plusieurs catégories d’âge qui se suivent (ex: U8-U9).', 'Validation')
+        openInfoModal("Selectionne une ou plusieurs categories d'age qui se suivent (ex: U8-U9).", 'Validation')
         return
       }
       if (!teamGameFormat) {
-        openInfoModal('Sélectionne un format de jeu.', 'Validation')
+        openInfoModal('Selectionne un format de jeu.', 'Validation')
         return
       }
+
       const normalizedCategory = selectedAgeCategoryLabel
       const rawProvidedName = teamName.trim()
-      const fallbackBaseName = normalizedCategory
       const comparableNames = teams
         .filter((team) => !editingTeamId || team.id !== editingTeamId)
         .map((team) => team.name || '')
-      const normalizedTeamName = rawProvidedName || buildUniqueTeamName(fallbackBaseName, comparableNames)
+      const normalizedTeamName = rawProvidedName || buildUniqueTeamName(normalizedCategory, comparableNames)
       if (!normalizedTeamName) {
-        openInfoModal("Impossible de déterminer le nom de l'équipe.", 'Erreur')
+        openInfoModal("Impossible de determiner le nom de l'equipe.", 'Erreur')
         return
       }
 
@@ -559,7 +417,7 @@ export default function ClubManagementPage() {
           format: teamGameFormat,
         }
         setTeams((prev) => prev.map((team) => (team.id === editingTeamId ? { ...team, ...normalizedUpdated } : team)))
-        openInfoModal('Équipe mise à jour.', 'Succès')
+        openInfoModal('Equipe mise a jour.', 'Succes')
       } else {
         const created = await apiPost<Team>(apiRoutes.teams.list, {
           name: normalizedTeamName,
@@ -571,7 +429,7 @@ export default function ClubManagementPage() {
         })
         const normalizedCreated = normalizeTeam(created) ?? { id: '', name: normalizedTeamName }
         if (!normalizedCreated.id) {
-          openInfoModal('Équipe créée mais identifiant introuvable dans la réponse backend.', 'Avertissement')
+          openInfoModal("Equipe creee mais identifiant introuvable dans la reponse backend.", 'Avertissement')
           await refreshTeamScope()
           return
         }
@@ -579,10 +437,11 @@ export default function ClubManagementPage() {
         if (!selectedTeamId) {
           setSelectedTeamId(normalizedCreated.id)
         }
-        openInfoModal('Équipe créée.', 'Succès')
+        openInfoModal('Equipe creee.', 'Succes')
       }
 
       await refreshTeamScope()
+      setRefreshTick((tick) => tick + 1)
       setTeamName('')
       setSelectedAgeCategories([])
       setTeamGameFormat('')
@@ -590,7 +449,7 @@ export default function ClubManagementPage() {
       setIsTeamModalOpen(false)
     } catch (err: unknown) {
       if (handleProtectedRouteErrors(err)) return
-      openInfoModal(toErrorMessage(err, editingTeamId ? 'Erreur mise à jour équipe' : 'Erreur création équipe'), 'Erreur')
+      openInfoModal(toErrorMessage(err, editingTeamId ? 'Erreur mise a jour equipe' : 'Erreur creation equipe'), 'Erreur')
     } finally {
       setSavingTeam(false)
     }
@@ -611,23 +470,19 @@ export default function ClubManagementPage() {
     setIsCoachModalOpen(true)
   }
 
-  function openCoachDetails(coach: ClubCoach) {
-    navigate(`/club/coach/${encodeURIComponent(coach.id)}`, { state: { coach } })
-  }
-
   async function submitCoach(e: React.FormEvent) {
     e.preventDefault()
     const firstName = coachFirstName.trim()
     const lastName = coachLastName.trim()
     const emailValue = coachEmail.trim()
     if (!firstName || !lastName || !emailValue || !coachTeamId) {
-      openInfoModal('Merci de renseigner prénom, nom, email et équipe.', 'Validation')
+      openInfoModal('Merci de renseigner prenom, nom, email et equipe.', 'Validation')
       return
     }
 
     setSavingCoach(true)
     try {
-      await apiPost<AccountInvitation>(apiRoutes.accounts.list, {
+      await apiPost(apiRoutes.accounts.list, {
         role: 'COACH',
         email: emailValue,
         firstName,
@@ -645,17 +500,68 @@ export default function ClubManagementPage() {
       })
       setIsCoachModalOpen(false)
       setRefreshTick((tick) => tick + 1)
-      openInfoModal('Coach ajouté.', 'Succès')
+      openInfoModal('Coach ajoute.', 'Succes')
     } catch (err: unknown) {
       if (handleProtectedRouteErrors(err)) return
       const status = extractStatusCode(err)
       if (status === 400) {
-        openInfoModal(toErrorMessage(err, 'Données coach invalides'), 'Erreur')
+        openInfoModal(toErrorMessage(err, 'Donnees coach invalides'), 'Erreur')
         return
       }
       openInfoModal(toErrorMessage(err, 'Erreur ajout coach'), 'Erreur')
     } finally {
       setSavingCoach(false)
+    }
+  }
+
+  async function updateCoachTeams(coach: ClubCoach, managedTeamIds: string[]) {
+    setMutatingCoachId(coach.id)
+    try {
+      await apiPut(apiRoutes.coaches.teams(coach.id), {
+        managedTeamIds: uniqueTeamIds(managedTeamIds),
+      })
+      setRefreshTick((tick) => tick + 1)
+    } catch (err: unknown) {
+      if (handleProtectedRouteErrors(err)) return
+      openInfoModal(toErrorMessage(err, 'Erreur mise a jour coach'), 'Erreur')
+    } finally {
+      setMutatingCoachId(null)
+    }
+  }
+
+  async function assignCoachToTeam(teamId: string, fallbackCoachId?: string) {
+    const coachId = coachSelectionByTeamId[teamId] || fallbackCoachId || ''
+    const coach = sortedCoaches.find((item) => item.id === coachId)
+    if (!coach) {
+      openInfoModal('Selectionne un coach a affecter.', 'Validation')
+      return
+    }
+
+    const nextManagedTeamIds = uniqueTeamIds([...(coach.managedTeamIds || []), teamId])
+    await updateCoachTeams(coach, nextManagedTeamIds)
+    setCoachSelectionByTeamId((prev) => ({ ...prev, [teamId]: '' }))
+  }
+
+  async function removeCoachFromTeam(coach: ClubCoach, teamId: string) {
+    await updateCoachTeams(
+      coach,
+      (coach.managedTeamIds || []).filter((managedTeamId) => managedTeamId !== teamId),
+    )
+  }
+
+  async function confirmDeleteCoach() {
+    if (!coachPendingDelete?.id) return
+    setDeletingCoach(true)
+    try {
+      await apiDelete(apiRoutes.coaches.byId(coachPendingDelete.id))
+      setCoachPendingDelete(null)
+      setRefreshTick((tick) => tick + 1)
+      openInfoModal('Coach supprime.', 'Succes')
+    } catch (err: unknown) {
+      if (handleProtectedRouteErrors(err)) return
+      openInfoModal(toErrorMessage(err, 'Erreur suppression coach'), 'Erreur')
+    } finally {
+      setDeletingCoach(false)
     }
   }
 
@@ -703,85 +609,140 @@ export default function ClubManagementPage() {
         </div>
       </header>
 
-      {loading && <div>Chargement…</div>}
+      {loading && <div>Chargement...</div>}
       {error && <div className="inline-alert error">{error}</div>}
 
       <section className="panel" style={cardStyle}>
         <div className="panel-head">
-          <h3 className="panel-title">Mes équipes</h3>
-          {sortedTeams.length > 0 && (
-            <RoundIconButton
-              ariaLabel="Ajouter une équipe"
-              className="menu-dots-button"
-              onClick={openCreateTeamModal}
-            >
-              <PlusIcon size={18} />
-            </RoundIconButton>
-          )}
+          <h3 className="panel-title">Mes equipes</h3>
+          <RoundIconButton
+            ariaLabel="Ajouter une equipe"
+            className="menu-dots-button"
+            onClick={openCreateTeamModal}
+          >
+            <PlusIcon size={18} />
+          </RoundIconButton>
         </div>
         {sortedTeams.length === 0 ? (
           <div className="club-empty-teams-state">
-            <p className="club-empty-teams-text">Aucune équipe.</p>
+            <p className="club-empty-teams-text">Aucune equipe.</p>
             <button type="button" style={buttonStyle} onClick={openCreateTeamModal}>
-              Ajouter une équipe
+              Ajouter une equipe
             </button>
           </div>
         ) : (
-          <div className="club-teams-tabs-block">
-            <div className="club-teams-tabs" role="tablist" aria-label="Équipes du club">
-              {sortedTeams.map((team) => {
-                const isActive = activeTeam?.id === team.id
-                return (
-                  <button
-                    key={team.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    className={`club-team-tab-btn ${isActive ? 'is-active' : ''}`}
-                    onClick={() => setActiveTeamTabId(team.id)}
-                  >
-                    {team.name || 'Équipe'}
-                  </button>
-                )
-              })}
-            </div>
-            {activeTeam && (
-              <div className="club-team-tab-panel" role="tabpanel">
-                <div className="club-team-floating-actions">
-                  <div className="club-menu-wrap">
-                    <RoundIconButton
-                      ariaLabel="Ouvrir le menu de l'équipe"
-                      className="menu-dots-button"
-                      size={28}
-                      onClick={() => setIsActiveTeamMenuOpen((prev) => !prev)}
-                    >
-                      <DotsHorizontalIcon size={16} />
-                    </RoundIconButton>
-                    {isActiveTeamMenuOpen && (
-                      <>
+          <div className="club-team-cards">
+            {sortedTeams.map((team) => {
+              const teamCoaches = coachesByTeamId.get(team.id) || []
+              const assignableCoaches = sortedCoaches.filter((coach) => !isCoachAssignedToTeam(coach, team.id))
+              const selectValue = coachSelectionByTeamId[team.id] ?? ''
+
+              return (
+                <article key={team.id} className="club-team-card">
+                  <div className="club-team-card-head">
+                    <div className="club-team-title-wrap">
+                      <h4 className="club-team-card-title">{team.name || 'Equipe'}</h4>
+                      <p className="club-team-card-meta">
+                        {[team.category, team.format].filter(Boolean).join(' • ') || 'Categorie et format non renseignes'}
+                      </p>
+                    </div>
+                    <div className="club-menu-wrap">
+                      <RoundIconButton
+                        ariaLabel={`Ouvrir le menu de l'equipe ${team.name || team.id}`}
+                        className="menu-dots-button"
+                        size={28}
+                        onClick={() => setOpenTeamMenuId((prev) => (prev === team.id ? null : team.id))}
+                      >
+                        <DotsHorizontalIcon size={16} />
+                      </RoundIconButton>
+                      {openTeamMenuId === team.id && (
+                        <>
+                          <button
+                            type="button"
+                            className="club-menu-backdrop"
+                            aria-label="Fermer le menu de l'equipe"
+                            onClick={() => setOpenTeamMenuId(null)}
+                          />
+                          <div className="club-floating-menu">
+                            <button type="button" onClick={() => openEditTeamModal(team)}>
+                              Modifier
+                            </button>
+                            <button type="button" className="danger" onClick={() => requestDeleteTeam(team)}>
+                              Supprimer
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="club-team-associations">
+                    <div className="club-team-associations-head">
+                      <strong>Coachs associes</strong>
+                      <span className="club-status-badge">{teamCoaches.length}</span>
+                    </div>
+
+                    {teamCoaches.length === 0 ? (
+                      <p className="club-inline-hint">Aucun coach affecte a cette equipe.</p>
+                    ) : (
+                      <div className="club-team-coach-list">
+                        {teamCoaches.map((coach) => {
+                          const badge = coachInvitationBadge(coach)
+                          const busy = mutatingCoachId === coach.id
+                          return (
+                            <div key={`${team.id}:${coach.id}`} className="club-team-coach-chip">
+                              <div className="club-team-coach-copy">
+                                <span className="club-team-coach-name">{coachDisplayName(coach)}</span>
+                                {badge ? <span className="club-status-badge is-muted">{badge}</span> : null}
+                              </div>
+                              <button
+                                type="button"
+                                className="club-chip-remove"
+                                onClick={() => { void removeCoachFromTeam(coach, team.id) }}
+                                disabled={busy}
+                              >
+                                {busy ? '...' : 'Retirer'}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {assignableCoaches.length > 0 ? (
+                      <div className="club-team-assign-row">
+                        <select
+                          value={selectValue}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            setCoachSelectionByTeamId((prev) => ({ ...prev, [team.id]: value }))
+                          }}
+                          style={inputStyle}
+                          disabled={mutatingCoachId !== null}
+                        >
+                          <option value="">Selectionner un coach</option>
+                          {assignableCoaches.map((coach) => (
+                            <option key={coach.id} value={coach.id}>
+                              {coachDisplayName(coach)}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
-                          className="club-menu-backdrop"
-                          aria-label="Fermer le menu de l'équipe"
-                          onClick={() => setIsActiveTeamMenuOpen(false)}
-                        />
-                        <div className="club-floating-menu">
-                          <button type="button" onClick={() => openEditTeamModal(activeTeam)}>
-                            Modifier
-                          </button>
-                          <button type="button" className="danger" onClick={() => requestDeleteTeam(activeTeam)}>
-                            Supprimer
-                          </button>
-                        </div>
-                      </>
+                          style={buttonStyle}
+                          onClick={() => { void assignCoachToTeam(team.id, assignableCoaches[0]?.id) }}
+                          disabled={mutatingCoachId !== null}
+                        >
+                          Affecter
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="club-inline-hint">Tous les coaches sont deja associes a cette equipe.</p>
                     )}
                   </div>
-                </div>
-                <div><strong>Nom:</strong> {activeTeam.name || '—'}</div>
-                <div><strong>Catégorie:</strong> {activeTeam.category || '—'}</div>
-                <div><strong>Format:</strong> {activeTeam.format || '—'}</div>
-              </div>
-            )}
+                </article>
+              )
+            })}
           </div>
         )}
       </section>
@@ -789,13 +750,11 @@ export default function ClubManagementPage() {
       <section className="panel" style={cardStyle}>
         <div className="panel-head">
           <h3 className="panel-title">Coachs</h3>
-          {coachItems.length > 0 && (
-            <RoundIconButton ariaLabel="Ajouter un coach" className="menu-dots-button" onClick={openCoachModal}>
-              <PlusIcon size={18} />
-            </RoundIconButton>
-          )}
+          <RoundIconButton ariaLabel="Ajouter un coach" className="menu-dots-button" onClick={openCoachModal}>
+            <PlusIcon size={18} />
+          </RoundIconButton>
         </div>
-        {coachItems.length === 0 ? (
+        {sortedCoaches.length === 0 ? (
           <div className="club-empty-teams-state">
             <p className="club-empty-teams-text">Aucun coach.</p>
             <button type="button" style={buttonStyle} onClick={openCoachModal}>
@@ -808,16 +767,36 @@ export default function ClubManagementPage() {
               <thead style={{ background: '#f8fafc' }}>
                 <tr>
                   <th className="club-table-cell club-table-head">Coach</th>
-                  <th className="club-table-cell club-table-head">Équipe</th>
+                  <th className="club-table-cell club-table-head">Equipes</th>
+                  <th className="club-table-cell club-table-head">Statut</th>
+                  <th className="club-table-cell club-table-head">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {coachItems.map((coach) => (
-                  <tr key={coach.id} className="club-coach-row" onClick={() => openCoachDetails(coach)}>
-                    <td className="club-table-cell">{`${coach.firstName || ''} ${coach.lastName || ''}`.trim() || '—'}</td>
-                    <td className="club-table-cell">{coach.teamName || '—'}</td>
-                  </tr>
-                ))}
+                {sortedCoaches.map((coach) => {
+                  const badge = coachInvitationBadge(coach)
+                  return (
+                    <tr key={coach.id}>
+                      <td className="club-table-cell">
+                        <div className="club-coach-main-copy">
+                          <strong>{coachDisplayName(coach)}</strong>
+                          {coach.email ? <span>{coach.email}</span> : null}
+                        </div>
+                      </td>
+                      <td className="club-table-cell">{coachManagedTeamsLabel(coach)}</td>
+                      <td className="club-table-cell">{badge || 'Actif'}</td>
+                      <td className="club-table-cell">
+                        <button
+                          type="button"
+                          className="club-inline-action danger"
+                          onClick={() => setCoachPendingDelete(coach)}
+                        >
+                          Supprimer
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -868,7 +847,7 @@ export default function ClubManagementPage() {
                     ...(renamingClub || clubName.trim().length < 2 || clubName.trim().length > 120 ? disabledButtonStyle : {}),
                   }}
                 >
-                  {renamingClub ? 'Enregistrement…' : 'Enregistrer'}
+                  {renamingClub ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
               </div>
             </form>
@@ -878,18 +857,15 @@ export default function ClubManagementPage() {
 
       {isTeamModalOpen && (
         <>
-          <div
-            className="club-modal-overlay"
-            onClick={() => !savingTeam && setIsTeamModalOpen(false)}
-          />
+          <div className="club-modal-overlay" onClick={() => !savingTeam && setIsTeamModalOpen(false)} />
           <div
             className="club-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={editingTeamId ? 'Modifier une équipe' : 'Ajouter une équipe'}
+            aria-label={editingTeamId ? 'Modifier une equipe' : 'Ajouter une equipe'}
           >
             <div className="club-modal-head">
-              <h3>{editingTeamId ? 'Modifier une équipe' : 'Ajouter une équipe'}</h3>
+              <h3>{editingTeamId ? 'Modifier une equipe' : 'Ajouter une equipe'}</h3>
               <button
                 type="button"
                 aria-label="Fermer"
@@ -904,12 +880,12 @@ export default function ClubManagementPage() {
               <input
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                placeholder="Nom de l'équipe"
+                placeholder="Nom de l'equipe"
                 style={inputStyle}
                 autoFocus
               />
               <div className="club-age-selector-wrap">
-                <span className="club-age-selector-label">Catégorie d’âge</span>
+                <span className="club-age-selector-label">Categorie d'age</span>
                 <div className="club-age-selector-grid">
                   {AGE_CATEGORY_OPTIONS.map((option) => {
                     const selected = selectedAgeCategories.includes(option.value)
@@ -927,14 +903,14 @@ export default function ClubManagementPage() {
                 </div>
                 {!isAgeSelectionContiguous && selectedAgeCategories.length > 0 && (
                   <p className="club-age-selector-error">
-                    Les catégories sélectionnées doivent se suivre (ex: U8-U9).
+                    Les categories selectionnees doivent se suivre (ex: U8-U9).
                   </p>
                 )}
               </div>
               <label className="club-field-grid">
                 <span className="club-age-selector-label">Format de jeu</span>
                 <select value={teamGameFormat} onChange={(e) => setTeamGameFormat(normalizeGameFormat(e.target.value))} style={inputStyle}>
-                  <option value="">Sélectionner un format</option>
+                  <option value="">Selectionner un format</option>
                   {GAME_FORMAT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -959,7 +935,7 @@ export default function ClubManagementPage() {
                     ...(savingTeam || !isAgeSelectionContiguous || !teamGameFormat ? disabledButtonStyle : {}),
                   }}
                 >
-                  {savingTeam ? 'Enregistrement…' : editingTeamId ? 'Enregistrer' : 'Créer équipe'}
+                  {savingTeam ? 'Enregistrement...' : editingTeamId ? 'Enregistrer' : 'Creer equipe'}
                 </button>
               </div>
             </form>
@@ -985,11 +961,11 @@ export default function ClubManagementPage() {
             </div>
             <form onSubmit={submitCoach} style={formStyle}>
               <label className="club-field-grid">
-                <span className="club-age-selector-label">Prénom</span>
+                <span className="club-age-selector-label">Prenom</span>
                 <input
                   value={coachFirstName}
                   onChange={(e) => setCoachFirstName(e.target.value)}
-                  placeholder="Prénom"
+                  placeholder="Prenom"
                   style={inputStyle}
                   required
                 />
@@ -1016,18 +992,18 @@ export default function ClubManagementPage() {
                 />
               </label>
               <label className="club-field-grid">
-                <span className="club-age-selector-label">Téléphone</span>
+                <span className="club-age-selector-label">Telephone</span>
                 <input
                   value={coachPhone}
                   onChange={(e) => setCoachPhone(e.target.value)}
-                  placeholder="Téléphone"
+                  placeholder="Telephone"
                   style={inputStyle}
                 />
               </label>
               <label className="club-field-grid">
-                <span className="club-age-selector-label">Équipe</span>
+                <span className="club-age-selector-label">Equipe initiale</span>
                 <select value={coachTeamId} onChange={(e) => setCoachTeamId(e.target.value)} style={inputStyle} required>
-                  <option value="">Sélectionner une équipe</option>
+                  <option value="">Selectionner une equipe</option>
                   {sortedTeams.map((team) => (
                     <option key={team.id} value={team.id}>{team.name || team.id}</option>
                   ))}
@@ -1050,7 +1026,7 @@ export default function ClubManagementPage() {
                   }}
                   disabled={savingCoach}
                 >
-                  {savingCoach ? 'Enregistrement…' : 'Ajouter'}
+                  {savingCoach ? 'Enregistrement...' : 'Ajouter'}
                 </button>
               </div>
             </form>
@@ -1060,13 +1036,10 @@ export default function ClubManagementPage() {
 
       {teamPendingDelete && (
         <>
-          <div
-            className="club-modal-overlay"
-            onClick={() => !deletingTeam && setTeamPendingDelete(null)}
-          />
-          <div className="club-modal" role="dialog" aria-modal="true" aria-label="Supprimer une équipe">
+          <div className="club-modal-overlay" onClick={() => !deletingTeam && setTeamPendingDelete(null)} />
+          <div className="club-modal" role="dialog" aria-modal="true" aria-label="Supprimer une equipe">
             <div className="club-modal-head">
-              <h3>Supprimer une équipe</h3>
+              <h3>Supprimer une equipe</h3>
               <button
                 type="button"
                 aria-label="Fermer"
@@ -1078,7 +1051,7 @@ export default function ClubManagementPage() {
               </button>
             </div>
             <p className="club-modal-text">
-              Supprimer l&apos;équipe &quot;{teamPendingDelete.name || teamPendingDelete.id}&quot; ?
+              Supprimer l&apos;equipe &quot;{teamPendingDelete.name || teamPendingDelete.id}&quot; ?
             </p>
             <div className="club-modal-actions">
               <button
@@ -1098,7 +1071,51 @@ export default function ClubManagementPage() {
                 onClick={() => { void confirmDeleteTeam() }}
                 disabled={deletingTeam}
               >
-                {deletingTeam ? 'Suppression…' : 'Supprimer'}
+                {deletingTeam ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {coachPendingDelete && (
+        <>
+          <div className="club-modal-overlay" onClick={() => !deletingCoach && setCoachPendingDelete(null)} />
+          <div className="club-modal" role="dialog" aria-modal="true" aria-label="Supprimer un coach">
+            <div className="club-modal-head">
+              <h3>Supprimer un coach</h3>
+              <button
+                type="button"
+                aria-label="Fermer"
+                className="club-modal-close"
+                onClick={() => !deletingCoach && setCoachPendingDelete(null)}
+                disabled={deletingCoach}
+              >
+                ×
+              </button>
+            </div>
+            <p className="club-modal-text">
+              Supprimer le coach &quot;{coachDisplayName(coachPendingDelete)}&quot; du club ?
+            </p>
+            <div className="club-modal-actions">
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={() => setCoachPendingDelete(null)}
+                disabled={deletingCoach}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...dangerButtonStyle,
+                  ...(deletingCoach ? disabledButtonStyle : {}),
+                }}
+                onClick={() => { void confirmDeleteCoach() }}
+                disabled={deletingCoach}
+              >
+                {deletingCoach ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
           </div>
