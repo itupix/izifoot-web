@@ -1,5 +1,6 @@
 import React from 'react'
 import { useLocation } from 'react-router-dom'
+import { api } from '../api'
 import { apiUrl } from '../apiClient'
 import { toErrorMessage } from '../errors'
 import { useAuth } from '../useAuth'
@@ -69,6 +70,7 @@ export default function MobileAuthPage() {
   const location = useLocation()
   const { me, loading, login, register } = useAuth()
   const hasAutoContinuedRef = React.useRef(false)
+  const submittedAuthRef = React.useRef(false)
 
   const searchParams = React.useMemo(() => new URLSearchParams(location.search), [location.search])
   const platform = (searchParams.get('platform') || '').toLowerCase()
@@ -81,6 +83,8 @@ export default function MobileAuthPage() {
   const [clubName, setClubName] = React.useState('')
   const [authError, setAuthError] = React.useState<string | null>(serverError)
   const [authLoading, setAuthLoading] = React.useState(false)
+  const [isConfirmingSession, setIsConfirmingSession] = React.useState(false)
+  const [canAutoContinue, setCanAutoContinue] = React.useState(false)
 
   React.useEffect(() => {
     setAuthError(serverError)
@@ -98,10 +102,20 @@ export default function MobileAuthPage() {
     : 'Rejoignez izifoot pour gérer votre équipe.'
 
   React.useEffect(() => {
-    if (!me || !callbackUrl || hasAutoContinuedRef.current) return
+    if (!me) {
+      setCanAutoContinue(false)
+      return
+    }
+    if (!submittedAuthRef.current && !loading) {
+      setCanAutoContinue(true)
+    }
+  }, [loading, me])
+
+  React.useEffect(() => {
+    if (!me || !callbackUrl || !canAutoContinue || hasAutoContinuedRef.current) return
     hasAutoContinuedRef.current = true
     window.location.assign(callbackUrl)
-  }, [callbackUrl, me])
+  }, [callbackUrl, canAutoContinue, me])
 
   async function submitAuth(event: React.FormEvent) {
     event.preventDefault()
@@ -110,6 +124,7 @@ export default function MobileAuthPage() {
 
     try {
       if (mode === 'login') {
+        submittedAuthRef.current = true
         await login(email.trim(), password)
       } else {
         const normalizedClubName = clubName.trim()
@@ -117,11 +132,18 @@ export default function MobileAuthPage() {
           setAuthError('Le nom du club est requis.')
           return
         }
+        submittedAuthRef.current = true
         await register(email.trim(), password, normalizedClubName)
       }
+      setIsConfirmingSession(true)
+      await api.me()
+      setCanAutoContinue(true)
     } catch (error: unknown) {
+      submittedAuthRef.current = false
+      setCanAutoContinue(false)
       setAuthError(toErrorMessage(error))
     } finally {
+      setIsConfirmingSession(false)
       setAuthLoading(false)
     }
   }
@@ -152,17 +174,20 @@ export default function MobileAuthPage() {
   }
 
   if (me) {
+    const isWaitingToResume = isConfirmingSession || canAutoContinue
     return (
       <MobileAuthCard
-        title="Retour vers l’app"
-        subtitle={`Connexion validée pour ${me.email}. Réouverture automatique de l’app iOS.`}
+        title={isWaitingToResume ? 'Retour vers l’app' : 'Connexion confirmée'}
+        subtitle={isWaitingToResume
+          ? `Connexion validée pour ${me.email}. Réouverture automatique de l’app iOS.`
+          : `Session active pour ${me.email}.`}
       >
         {authError ? (
           <p className="mobile-auth-error" role="alert">
             {authError}
           </p>
         ) : null}
-        <div className="mobile-auth-spinner" aria-hidden="true" />
+        {isWaitingToResume ? <div className="mobile-auth-spinner" aria-hidden="true" /> : null}
       </MobileAuthCard>
     )
   }
