@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { api } from '../api'
 import { apiUrl } from '../apiClient'
 import { toErrorMessage } from '../errors'
+import { readMobileAuthResumeAttempts, writeMobileAuthResumeAttempts } from '../features/mobileAuthResume'
 import { useAuth } from '../useAuth'
 import brandLogo from '../assets/izifoot-logo-header.png'
 import brandLogoDark from '../assets/izifoot-logo-header-dark.png'
@@ -85,10 +86,27 @@ export default function MobileAuthPage() {
   const [authLoading, setAuthLoading] = React.useState(false)
   const [isConfirmingSession, setIsConfirmingSession] = React.useState(false)
   const [canAutoContinue, setCanAutoContinue] = React.useState(false)
+  const [autoResumeAttempts, setAutoResumeAttempts] = React.useState(0)
 
   React.useEffect(() => {
     setAuthError(serverError)
   }, [serverError])
+
+  React.useEffect(() => {
+    hasAutoContinuedRef.current = false
+    submittedAuthRef.current = false
+    setCanAutoContinue(false)
+    setIsConfirmingSession(false)
+    if (typeof window === 'undefined') {
+      setAutoResumeAttempts(0)
+      return
+    }
+    try {
+      setAutoResumeAttempts(readMobileAuthResumeAttempts(window.sessionStorage, state))
+    } catch {
+      setAutoResumeAttempts(0)
+    }
+  }, [state])
 
   const isValidRequest = platform === 'ios' && state.length >= 16
   const callbackUrl = React.useMemo(() => {
@@ -100,6 +118,8 @@ export default function MobileAuthPage() {
   const pageSubtitle = mode === 'login'
     ? 'Connectez-vous à votre compte izifoot.'
     : 'Rejoignez izifoot pour gérer votre équipe.'
+  const canAttemptAutoResume = canAutoContinue && autoResumeAttempts === 0
+  const hasAutoResumeFailed = canAutoContinue && autoResumeAttempts > 0 && !isConfirmingSession
 
   React.useEffect(() => {
     if (!me) {
@@ -112,15 +132,32 @@ export default function MobileAuthPage() {
   }, [loading, me])
 
   React.useEffect(() => {
-    if (!me || !callbackUrl || !canAutoContinue || hasAutoContinuedRef.current) return
+    if (!me || !callbackUrl || !canAttemptAutoResume || hasAutoContinuedRef.current) return
     hasAutoContinuedRef.current = true
+    if (typeof window !== 'undefined') {
+      try {
+        writeMobileAuthResumeAttempts(window.sessionStorage, state, autoResumeAttempts + 1)
+      } catch {
+        // Ignore storage access issues and keep the in-memory guard.
+      }
+    }
+    setAutoResumeAttempts((current) => current + 1)
     window.location.assign(callbackUrl)
-  }, [callbackUrl, canAutoContinue, me])
+  }, [autoResumeAttempts, callbackUrl, canAttemptAutoResume, me, state])
 
   async function submitAuth(event: React.FormEvent) {
     event.preventDefault()
     setAuthError(null)
     setAuthLoading(true)
+    setCanAutoContinue(false)
+    setAutoResumeAttempts(0)
+    if (typeof window !== 'undefined') {
+      try {
+        writeMobileAuthResumeAttempts(window.sessionStorage, state, 0)
+      } catch {
+        // Ignore storage access issues and continue with the in-memory reset.
+      }
+    }
 
     try {
       if (mode === 'login') {
@@ -146,6 +183,22 @@ export default function MobileAuthPage() {
       setIsConfirmingSession(false)
       setAuthLoading(false)
     }
+  }
+
+  function retryReturnToApp() {
+    if (!callbackUrl) return
+    window.location.assign(callbackUrl)
+  }
+
+  function restartFromAppFlow() {
+    if (typeof window !== 'undefined') {
+      try {
+        writeMobileAuthResumeAttempts(window.sessionStorage, state, 0)
+      } catch {
+        // Ignore storage access issues and let the new flow reset state server-side.
+      }
+    }
+    window.location.replace(apiUrl('/auth/mobile/start?platform=ios'))
   }
 
   function toggleMode() {
@@ -174,13 +227,17 @@ export default function MobileAuthPage() {
   }
 
   if (me) {
-    const isWaitingToResume = isConfirmingSession || canAutoContinue
+    const isWaitingToResume = isConfirmingSession || canAttemptAutoResume
     return (
       <MobileAuthCard
-        title={isWaitingToResume ? 'Retour vers l’app' : 'Connexion confirmée'}
-        subtitle={isWaitingToResume
-          ? `Connexion validée pour ${me.email}. Réouverture automatique de l’app iOS.`
-          : `Session active pour ${me.email}.`}
+        title={isWaitingToResume ? 'Retour vers l’app' : hasAutoResumeFailed ? 'Retour automatique interrompu' : 'Connexion confirmée'}
+        subtitle={
+          isWaitingToResume
+            ? `Connexion validée pour ${me.email}. Réouverture automatique de l’app iOS.`
+            : hasAutoResumeFailed
+              ? `La session web est active pour ${me.email}, mais l’app iOS ne s’est pas rouverte automatiquement.`
+              : `Session active pour ${me.email}.`
+        }
       >
         {authError ? (
           <p className="mobile-auth-error" role="alert">
@@ -188,6 +245,16 @@ export default function MobileAuthPage() {
           </p>
         ) : null}
         {isWaitingToResume ? <div className="mobile-auth-spinner" aria-hidden="true" /> : null}
+        {hasAutoResumeFailed ? (
+          <div className="mobile-auth-button-stack">
+            <button type="button" className="mobile-auth-primary-button" onClick={retryReturnToApp}>
+              Réessayer le retour
+            </button>
+            <button type="button" className="mobile-auth-secondary-button" onClick={restartFromAppFlow}>
+              Relancer la connexion
+            </button>
+          </div>
+        ) : null}
       </MobileAuthCard>
     )
   }

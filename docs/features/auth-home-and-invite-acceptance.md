@@ -62,6 +62,7 @@ Restrictions: dependent on backend auth endpoints.
 ## 6. User Flows
 - Main flow: user submits login/register -> `useAuth` refresh -> routed by role.
 - Mobile flow: `/auth/mobile/start` delegates to backend state creation, `/auth/mobile` reuses web auth, then redirects automatically to `/auth/mobile/callback` on the API domain as soon as the web session exists.
+- Mobile fallback: if the same mobile auth `state` returns to `/auth/mobile` after one auto-return attempt, the page stops retrying silently and switches to explicit retry/restart actions.
 - Mobile auth UI defaults to login, exposes a discreet bottom action labeled `Vous êtes coach ? Inscrivez votre club à izifoot.`, and follows the device light/dark appearance until the app hand-off starts.
 - Variants: invite token accepted before normal login.
 - Back navigation: can return to home and re-attempt.
@@ -71,7 +72,7 @@ Restrictions: dependent on backend auth endpoints.
 
 ## 7. Functional Behavior
 - UI behavior: form modes for login/register with async submission.
-- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, moves the logo above the card, switches to the iOS white-wordmark asset in dark mode, highlights the club-name field first in coach account creation, and auto-resumes iOS once authentication succeeds.
+- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, moves the logo above the card, switches to the iOS white-wordmark asset in dark mode, highlights the club-name field first in coach account creation, auto-resumes iOS once authentication succeeds, and blocks repeated auto-resume loops for the same mobile auth state.
 - Actions: call auth endpoints and load session user.
 - States: idle/loading/success/error.
 - Conditions: valid token required for invite accept.
@@ -143,7 +144,7 @@ Constraints: `platform=ios`, opaque `state`.
 
 ## 17. UX Requirements
 - Feedback: clear success/error messages per submission.
-- Mobile auth: brand-consistent lockup, `prefers-color-scheme` support, a low-friction default login path for iOS web authentication, and no extra confirmation step once the account is authenticated.
+- Mobile auth: brand-consistent lockup, `prefers-color-scheme` support, a low-friction default login path for iOS web authentication, no extra confirmation step once the account is authenticated, and an explicit fallback instead of silent retry loops when the app hand-off fails.
 - Empty states: invite not found/expired.
 - Loading: disable submit while request pending.
 - Responsive: form must render on mobile.
@@ -170,11 +171,13 @@ Constraints: `platform=ios`, opaque `state`.
 2. Invite token page can validate and accept invitation.
 3. Success redirects user to role default route.
 4. Mobile auth success returns automatically to iOS without requiring an extra tap.
-5. Invalid token shows deterministic error state.
+5. A failed first auto-return for the same mobile auth `state` stops auto-looping and exposes explicit retry actions.
+6. Invalid token shows deterministic error state.
 
 ## 21. Test Scenarios
 - Happy path: login and reach `/planning`.
 - Happy path: iOS mobile auth logs in on web then returns automatically to the app callback.
+- Edge case: a bounced mobile auth callback for the same `state` stops auto-retrying and stays on an explicit fallback state.
 - Permissions: unauthenticated access to protected route redirects.
 - Errors: wrong password and expired invite token.
 - Edge cases: accept invite then refresh page.
