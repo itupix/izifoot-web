@@ -67,7 +67,8 @@ export function MobileAuthStartPage() {
 
 export default function MobileAuthPage() {
   const location = useLocation()
-  const { me, loading, login, register, logout } = useAuth()
+  const { me, loading, login, register } = useAuth()
+  const hasAutoContinuedRef = React.useRef(false)
 
   const searchParams = React.useMemo(() => new URLSearchParams(location.search), [location.search])
   const platform = (searchParams.get('platform') || '').toLowerCase()
@@ -80,7 +81,6 @@ export default function MobileAuthPage() {
   const [clubName, setClubName] = React.useState('')
   const [authError, setAuthError] = React.useState<string | null>(serverError)
   const [authLoading, setAuthLoading] = React.useState(false)
-  const [isContinuing, setIsContinuing] = React.useState(false)
 
   React.useEffect(() => {
     setAuthError(serverError)
@@ -96,6 +96,12 @@ export default function MobileAuthPage() {
   const pageSubtitle = mode === 'login'
     ? 'Connectez-vous à votre compte izifoot.'
     : 'Rejoignez izifoot pour gérer votre équipe.'
+
+  React.useEffect(() => {
+    if (!me || !callbackUrl || hasAutoContinuedRef.current) return
+    hasAutoContinuedRef.current = true
+    window.location.assign(callbackUrl)
+  }, [callbackUrl, me])
 
   async function submitAuth(event: React.FormEvent) {
     event.preventDefault()
@@ -118,24 +124,6 @@ export default function MobileAuthPage() {
     } finally {
       setAuthLoading(false)
     }
-  }
-
-  async function switchAccount() {
-    setAuthError(null)
-    setAuthLoading(true)
-    try {
-      await logout()
-    } catch (error: unknown) {
-      setAuthError(toErrorMessage(error))
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
-  function continueToApp() {
-    if (!callbackUrl) return
-    setIsContinuing(true)
-    window.location.assign(callbackUrl)
   }
 
   function toggleMode() {
@@ -166,27 +154,15 @@ export default function MobileAuthPage() {
   if (me) {
     return (
       <MobileAuthCard
-        title="Prêt à revenir dans l’app"
-        subtitle={`Vous êtes connecté en tant que ${me.email}. Finalisez maintenant la connexion iOS.`}
+        title="Retour vers l’app"
+        subtitle={`Connexion validée pour ${me.email}. Réouverture automatique de l’app iOS.`}
       >
         {authError ? (
           <p className="mobile-auth-error" role="alert">
             {authError}
           </p>
         ) : null}
-        <div className="mobile-auth-button-stack">
-          <button type="button" className="mobile-auth-primary-button" onClick={continueToApp} disabled={isContinuing}>
-            {isContinuing ? 'Retour vers l’app…' : 'Ouvrir l’app'}
-          </button>
-          <button
-            type="button"
-            className="mobile-auth-secondary-button"
-            onClick={switchAccount}
-            disabled={authLoading || isContinuing}
-          >
-            Utiliser un autre compte
-          </button>
-        </div>
+        <div className="mobile-auth-spinner" aria-hidden="true" />
       </MobileAuthCard>
     )
   }
