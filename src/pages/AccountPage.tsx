@@ -1,5 +1,6 @@
 // src/pages/AccountPage.tsx
 import { useEffect, useMemo, useState } from 'react'
+import type { Me } from '../api'
 import { apiGet, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
@@ -18,11 +19,14 @@ type LinkedChild = {
 }
 
 export default function AccountPage() {
-  const { me, refresh } = useAuth()
+  const { me, updateMe } = useAuth()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [saving, setSaving] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [teamNameById, setTeamNameById] = useState<Map<string, string>>(new Map())
@@ -87,6 +91,12 @@ export default function AccountPage() {
     return teamNameById.get(me.teamId) || me.teamId
   }, [me?.teamId, teamNameById])
 
+  function resetPasswordDraft() {
+    setCurrentPassword('')
+    setNewPassword('')
+    setPasswordConfirmation('')
+  }
+
   async function saveProfile(event: React.FormEvent) {
     event.preventDefault()
     if (!me) return
@@ -101,18 +111,63 @@ export default function AccountPage() {
       return
     }
 
+    const wantsPasswordChange = Boolean(currentPassword || newPassword || passwordConfirmation)
+    if (wantsPasswordChange) {
+      if (!currentPassword || !newPassword || !passwordConfirmation) {
+        uiAlert('Pour changer votre mot de passe, renseignez le mot de passe actuel, le nouveau et sa confirmation.')
+        return
+      }
+      if (newPassword.length < 6) {
+        uiAlert('Le nouveau mot de passe doit contenir au moins 6 caractères.')
+        return
+      }
+      if (newPassword !== passwordConfirmation) {
+        uiAlert('La confirmation du nouveau mot de passe ne correspond pas.')
+        return
+      }
+      if (currentPassword === newPassword) {
+        uiAlert('Le nouveau mot de passe doit être différent du mot de passe actuel.')
+        return
+      }
+    }
+
+    const hasProfileChanges =
+      normalizedFirstName !== (me.firstName || '').trim()
+      || normalizedLastName !== (me.lastName || '').trim()
+      || normalizedEmail !== (me.email || '')
+      || (normalizedPhone || null) !== me.phone
+
     setSaving(true)
     try {
-      const payload: Record<string, unknown> = {
-        firstName: normalizedFirstName,
-        lastName: normalizedLastName,
-        phone: normalizedPhone || null,
+      if (hasProfileChanges) {
+        const payload: Record<string, unknown> = {
+          firstName: normalizedFirstName,
+          lastName: normalizedLastName,
+          phone: normalizedPhone || null,
+        }
+        if (normalizedEmail) payload.email = normalizedEmail
+        const updatedMe = await apiPut<Me>(apiRoutes.meProfile, payload)
+        updateMe(updatedMe)
       }
-      if (normalizedEmail) payload.email = normalizedEmail
-      await apiPut(apiRoutes.meProfile, payload)
-      await refresh()
+
+      if (wantsPasswordChange) {
+        try {
+          await apiPut<{ ok: boolean }>(apiRoutes.mePassword, {
+            currentPassword,
+            newPassword,
+          })
+        } catch (err: unknown) {
+          if (hasProfileChanges) {
+            uiAlert(`Le profil a été mis à jour, mais le mot de passe n'a pas pu être modifié: ${toErrorMessage(err)}`)
+          } else {
+            uiAlert(`Erreur mise à jour mot de passe: ${toErrorMessage(err)}`)
+          }
+          return
+        }
+      }
+
+      resetPasswordDraft()
       setIsEditOpen(false)
-      uiAlert('Profil mis à jour.')
     } catch (err: unknown) {
       uiAlert(`Erreur mise à jour profil: ${toErrorMessage(err)}`)
     } finally {
@@ -134,7 +189,10 @@ export default function AccountPage() {
           <h3 style={{ margin: 0 }}>Moi</h3>
           <button
             type="button"
-            onClick={() => setIsEditOpen(true)}
+            onClick={() => {
+              resetPasswordDraft()
+              setIsEditOpen(true)
+            }}
             style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
           >
             Modifier
@@ -177,7 +235,10 @@ export default function AccountPage() {
             zIndex: 30,
             padding: 12,
           }}
-          onClick={() => setIsEditOpen(false)}
+          onClick={() => {
+            resetPasswordDraft()
+            setIsEditOpen(false)
+          }}
         >
           <section
             className="panel"
@@ -186,7 +247,16 @@ export default function AccountPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
               <h3 style={{ margin: 0 }}>Modifier mon profil</h3>
-              <button type="button" onClick={() => setIsEditOpen(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}>Fermer</button>
+              <button
+                type="button"
+                onClick={() => {
+                  resetPasswordDraft()
+                  setIsEditOpen(false)
+                }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+              >
+                Fermer
+              </button>
             </div>
             <form onSubmit={saveProfile} style={{ display: 'grid', gap: 10 }}>
               <label style={{ display: 'grid', gap: 4 }}>
@@ -205,6 +275,24 @@ export default function AccountPage() {
                 <span>Téléphone</span>
                 <input value={phone} onChange={(event) => setPhone(event.target.value)} />
               </label>
+              <div style={{ display: 'grid', gap: 10, paddingTop: 8 }}>
+                <strong>Changer mon mot de passe</strong>
+                <span style={{ color: '#64748b', fontSize: 13 }}>
+                  Laissez ces champs vides si vous ne souhaitez pas modifier votre mot de passe.
+                </span>
+                <label style={{ display: 'grid', gap: 4 }}>
+                  <span>Mot de passe actuel</span>
+                  <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                </label>
+                <label style={{ display: 'grid', gap: 4 }}>
+                  <span>Nouveau mot de passe</span>
+                  <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                </label>
+                <label style={{ display: 'grid', gap: 4 }}>
+                  <span>Confirmer le nouveau mot de passe</span>
+                  <input type="password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} />
+                </label>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button type="submit" disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</button>
               </div>

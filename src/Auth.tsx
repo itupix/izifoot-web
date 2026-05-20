@@ -70,6 +70,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMe(null);
   };
 
+  const updateMe = (nextMe: Me) => {
+    setMe(nextMe);
+  };
+
   const role = me?.role ?? null;
   const isDirection = role === 'DIRECTION';
   const isCoach = role === 'COACH';
@@ -90,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         refresh,
+        updateMe,
       }}
     >
       {children}

@@ -15,6 +15,7 @@ type AuthState = {
   register: (email: string, password: string, clubName: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  updateMe: (me: Me) => void;
 };
 
 export const AuthCtx = createContext<AuthState | null>(null);

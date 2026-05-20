@@ -10,6 +10,7 @@ export const apiRoutes = {
   },
   me: '/me',
   meProfile: '/me/profile',
+  mePassword: '/me/password',
   meChild: '/me/child',
   clubs: {
     me: '/clubs/me',
