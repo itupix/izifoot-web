@@ -61,8 +61,8 @@ Restrictions: dependent on backend auth endpoints.
 
 ## 6. User Flows
 - Main flow: user submits login/register -> `useAuth` refresh -> routed by role.
-- Mobile flow: `/auth/mobile/start` delegates to backend state creation, `/auth/mobile` reuses web auth, then redirects automatically to `/auth/mobile/callback` on the API domain as soon as the web session exists.
-- Mobile fallback: if the same mobile auth `state` returns to `/auth/mobile` after one auto-return attempt, the page stops retrying silently and switches to explicit retry/restart actions.
+- Mobile flow: `/auth/mobile/start` delegates to backend state creation, `/auth/mobile` performs one initial session check, then shows the auth form when no reusable session is available; only a successful login/register on that page triggers the automatic redirect to `/auth/mobile/callback` on the API domain.
+- Mobile fallback: if the same mobile auth `state` returns to `/auth/mobile` after one auto-return attempt and the web session is still active, the page stops retrying silently and switches to explicit retry/restart actions.
 - Mobile auth UI defaults to login, exposes a discreet bottom action labeled `Vous êtes coach ? Inscrivez votre club à izifoot.`, and follows the device light/dark appearance until the app hand-off starts.
 - Variants: invite token accepted before normal login.
 - Back navigation: can return to home and re-attempt.
@@ -72,7 +72,7 @@ Restrictions: dependent on backend auth endpoints.
 
 ## 7. Functional Behavior
 - UI behavior: form modes for login/register with async submission.
-- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, moves the logo above the card, switches to the iOS white-wordmark asset in dark mode, highlights the club-name field first in coach account creation, auto-resumes iOS once authentication succeeds, and blocks repeated auto-resume loops for the same mobile auth state.
+- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, moves the logo above the card, switches to the iOS white-wordmark asset in dark mode, highlights the club-name field first in coach account creation, auto-resumes iOS only after an auth submitted on that page succeeds, and blocks repeated auto-resume loops for the same mobile auth state.
 - Actions: call auth endpoints and load session user.
 - States: idle/loading/success/error.
 - Conditions: valid token required for invite accept.

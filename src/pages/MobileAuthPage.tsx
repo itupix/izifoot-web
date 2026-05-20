@@ -119,17 +119,13 @@ export default function MobileAuthPage() {
     ? 'Connectez-vous à votre compte izifoot.'
     : 'Rejoignez izifoot pour gérer votre équipe.'
   const canAttemptAutoResume = canAutoContinue && autoResumeAttempts === 0
-  const hasAutoResumeFailed = canAutoContinue && autoResumeAttempts > 0 && !isConfirmingSession
+  const isFinishingAuth = submittedAuthRef.current && authLoading
+  const hasAutoResumeFailed = Boolean(me) && autoResumeAttempts > 0 && !isConfirmingSession
+  const shouldShowResumeCard = Boolean(me) && (isFinishingAuth || isConfirmingSession || canAttemptAutoResume || hasAutoResumeFailed)
 
   React.useEffect(() => {
-    if (!me) {
-      setCanAutoContinue(false)
-      return
-    }
-    if (!submittedAuthRef.current && !loading) {
-      setCanAutoContinue(true)
-    }
-  }, [loading, me])
+    if (!me) setCanAutoContinue(false)
+  }, [me])
 
   React.useEffect(() => {
     if (!me || !callbackUrl || !canAttemptAutoResume || hasAutoContinuedRef.current) return
@@ -226,17 +222,17 @@ export default function MobileAuthPage() {
     )
   }
 
-  if (me) {
-    const isWaitingToResume = isConfirmingSession || canAttemptAutoResume
+  if (me && shouldShowResumeCard) {
+    const isWaitingToResume = isFinishingAuth || isConfirmingSession || canAttemptAutoResume
     return (
       <MobileAuthCard
-        title={isWaitingToResume ? 'Retour vers l’app' : hasAutoResumeFailed ? 'Retour automatique interrompu' : 'Connexion confirmée'}
+        title={hasAutoResumeFailed ? 'Retour automatique interrompu' : 'Retour vers l’app'}
         subtitle={
-          isWaitingToResume
-            ? `Connexion validée pour ${me.email}. Réouverture automatique de l’app iOS.`
-            : hasAutoResumeFailed
-              ? `La session web est active pour ${me.email}, mais l’app iOS ne s’est pas rouverte automatiquement.`
-              : `Session active pour ${me.email}.`
+          hasAutoResumeFailed
+            ? `La session web est active pour ${me.email}, mais l’app iOS ne s’est pas rouverte automatiquement.`
+            : isFinishingAuth || isConfirmingSession
+              ? `Finalisation de la connexion pour ${me.email}. Réouverture automatique de l’app iOS.`
+              : `Connexion validée pour ${me.email}. Réouverture automatique de l’app iOS.`
         }
       >
         {authError ? (
