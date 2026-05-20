@@ -62,6 +62,7 @@ Restrictions: dependent on backend auth endpoints.
 ## 6. User Flows
 - Main flow: user submits login/register -> `useAuth` refresh -> routed by role.
 - Mobile flow: `/auth/mobile/start` delegates to backend state creation, `/auth/mobile` reuses web auth then forwards to `/auth/mobile/callback` on the API domain.
+- Mobile auth UI defaults to login, exposes a discreet bottom action for coach account creation, and follows the device light/dark appearance.
 - Variants: invite token accepted before normal login.
 - Back navigation: can return to home and re-attempt.
 - Interruptions: expired/invalid invite token.
@@ -70,6 +71,7 @@ Restrictions: dependent on backend auth endpoints.
 
 ## 7. Functional Behavior
 - UI behavior: form modes for login/register with async submission.
+- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, and switches to coach account creation through a secondary text action below the form.
 - Actions: call auth endpoints and load session user.
 - States: idle/loading/success/error.
 - Conditions: valid token required for invite accept.
@@ -108,6 +110,7 @@ Constraints: `platform=ios`, opaque `state`.
 
 ## 11. UI Components
 - Home auth forms.
+- Mobile auth card with izifoot lockup, theme-aware surfaces, and bottom login/register switch action.
 - Invite acceptance page with status feedback.
 - Route guards.
 
@@ -140,6 +143,7 @@ Constraints: `platform=ios`, opaque `state`.
 
 ## 17. UX Requirements
 - Feedback: clear success/error messages per submission.
+- Mobile auth: brand-consistent lockup, `prefers-color-scheme` support, and a low-friction default login path for iOS web authentication.
 - Empty states: invite not found/expired.
 - Loading: disable submit while request pending.
 - Responsive: form must render on mobile.

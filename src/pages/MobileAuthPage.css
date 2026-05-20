@@ -1,0 +1,268 @@
+.mobile-auth-shell {
+  color-scheme: light dark;
+  --mobile-auth-bg-start: #f4f6f8;
+  --mobile-auth-bg-end: #dfe6ef;
+  --mobile-auth-glow: rgba(15, 122, 67, 0.12);
+  --mobile-auth-card: rgba(255, 255, 255, 0.92);
+  --mobile-auth-card-border: rgba(15, 23, 42, 0.08);
+  --mobile-auth-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+  --mobile-auth-text: #16181d;
+  --mobile-auth-muted: #5f6978;
+  --mobile-auth-logo-bg: rgba(255, 255, 255, 0.96);
+  --mobile-auth-logo-border: rgba(15, 23, 42, 0.08);
+  --mobile-auth-input-bg: rgba(255, 255, 255, 0.9);
+  --mobile-auth-input-border: rgba(15, 23, 42, 0.14);
+  --mobile-auth-input-placeholder: #9ca3af;
+  --mobile-auth-primary-start: #0f7a43;
+  --mobile-auth-primary-end: #095a31;
+  --mobile-auth-primary-shadow: rgba(15, 122, 67, 0.28);
+  --mobile-auth-focus-ring: rgba(15, 122, 67, 0.22);
+  --mobile-auth-secondary-bg: rgba(15, 122, 67, 0.08);
+  --mobile-auth-secondary-text: #0f7a43;
+  --mobile-auth-link: #0f7a43;
+  --mobile-auth-spinner-trail: rgba(15, 122, 67, 0.42);
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, var(--mobile-auth-glow), transparent 34%),
+    linear-gradient(180deg, var(--mobile-auth-bg-start) 0%, var(--mobile-auth-bg-end) 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mobile-auth-shell {
+    --mobile-auth-bg-start: #091018;
+    --mobile-auth-bg-end: #131d29;
+    --mobile-auth-glow: rgba(34, 197, 94, 0.18);
+    --mobile-auth-card: rgba(15, 20, 27, 0.92);
+    --mobile-auth-card-border: rgba(255, 255, 255, 0.09);
+    --mobile-auth-shadow: 0 28px 70px rgba(0, 0, 0, 0.44);
+    --mobile-auth-text: #f3f5f7;
+    --mobile-auth-muted: #a8b0bd;
+    --mobile-auth-logo-bg: rgba(247, 249, 251, 0.98);
+    --mobile-auth-logo-border: rgba(255, 255, 255, 0.12);
+    --mobile-auth-input-bg: rgba(7, 10, 15, 0.62);
+    --mobile-auth-input-border: rgba(255, 255, 255, 0.12);
+    --mobile-auth-input-placeholder: #7d8795;
+    --mobile-auth-primary-start: #1ea85d;
+    --mobile-auth-primary-end: #137244;
+    --mobile-auth-primary-shadow: rgba(30, 168, 93, 0.24);
+    --mobile-auth-focus-ring: rgba(124, 225, 164, 0.18);
+    --mobile-auth-secondary-bg: rgba(30, 168, 93, 0.14);
+    --mobile-auth-secondary-text: #7ce1a4;
+    --mobile-auth-link: #7ce1a4;
+    --mobile-auth-spinner-trail: rgba(124, 225, 164, 0.4);
+  }
+}
+
+.mobile-auth-card {
+  width: min(100%, 460px);
+  display: grid;
+  gap: 18px;
+  padding: 26px;
+  border-radius: 30px;
+  border: 1px solid var(--mobile-auth-card-border);
+  background: var(--mobile-auth-card);
+  box-shadow: var(--mobile-auth-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.mobile-auth-header {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-auth-eyebrow {
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--mobile-auth-secondary-bg);
+  color: var(--mobile-auth-secondary-text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.mobile-auth-brand {
+  display: flex;
+}
+
+.mobile-auth-brand-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--mobile-auth-logo-border);
+  background: var(--mobile-auth-logo-bg);
+}
+
+.mobile-auth-brand-logo {
+  width: min(100%, 188px);
+  display: block;
+}
+
+.mobile-auth-title {
+  margin: 0;
+  color: var(--mobile-auth-text);
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+}
+
+.mobile-auth-subtitle {
+  margin: 0;
+  color: var(--mobile-auth-muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.mobile-auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-auth-field {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--mobile-auth-input-border);
+  background: var(--mobile-auth-input-bg);
+  color: var(--mobile-auth-text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.mobile-auth-field::placeholder {
+  color: var(--mobile-auth-input-placeholder);
+}
+
+.mobile-auth-field:focus-visible {
+  border-color: var(--mobile-auth-primary-start);
+  box-shadow: 0 0 0 4px var(--mobile-auth-focus-ring);
+}
+
+.mobile-auth-primary-button,
+.mobile-auth-secondary-button,
+.mobile-auth-switch-button {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.mobile-auth-primary-button:disabled,
+.mobile-auth-secondary-button:disabled,
+.mobile-auth-switch-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.mobile-auth-primary-button {
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  padding: 15px 18px;
+  background: linear-gradient(180deg, var(--mobile-auth-primary-start) 0%, var(--mobile-auth-primary-end) 100%);
+  box-shadow: 0 16px 28px var(--mobile-auth-primary-shadow);
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.mobile-auth-primary-button:not(:disabled):hover,
+.mobile-auth-secondary-button:not(:disabled):hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
+.mobile-auth-secondary-button {
+  width: 100%;
+  border: 1px solid var(--mobile-auth-input-border);
+  border-radius: 16px;
+  padding: 13px 16px;
+  background: transparent;
+  color: var(--mobile-auth-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mobile-auth-error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mobile-auth-switch {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding-top: 6px;
+}
+
+.mobile-auth-switch-label {
+  color: var(--mobile-auth-muted);
+  font-size: 12px;
+}
+
+.mobile-auth-switch-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--mobile-auth-link);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.mobile-auth-switch-button:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+.mobile-auth-button-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.mobile-auth-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--mobile-auth-primary-start);
+  box-shadow: 18px 0 0 var(--mobile-auth-spinner-trail);
+  animation: mobile-auth-pulse 800ms ease-in-out infinite alternate;
+}
+
+@keyframes mobile-auth-pulse {
+  from {
+    transform: translateX(0);
+    opacity: 0.55;
+  }
+
+  to {
+    transform: translateX(6px);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .mobile-auth-shell {
+    padding: 16px;
+  }
+
+  .mobile-auth-card {
+    padding: 22px;
+    border-radius: 24px;
+  }
+
+  .mobile-auth-brand-logo {
+    width: min(100%, 172px);
+  }
+
+  .mobile-auth-title {
+    font-size: 25px;
+  }
+}

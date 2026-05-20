@@ -3,61 +3,10 @@ import { useLocation } from 'react-router-dom'
 import { apiUrl } from '../apiClient'
 import { toErrorMessage } from '../errors'
 import { useAuth } from '../useAuth'
+import brandLogo from '../assets/izifoot-logo-header.png'
+import './MobileAuthPage.css'
 
 type AuthMode = 'login' | 'register'
-
-const shellStyle: React.CSSProperties = {
-  minHeight: '100dvh',
-  display: 'grid',
-  placeItems: 'center',
-  padding: 20,
-  background: 'linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)',
-}
-
-const cardStyle: React.CSSProperties = {
-  width: '100%',
-  maxWidth: 420,
-  background: '#ffffff',
-  border: '1px solid #dbe7ff',
-  borderRadius: 18,
-  boxShadow: '0 20px 40px rgba(15, 23, 42, 0.08)',
-  padding: 20,
-  display: 'grid',
-  gap: 14,
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '12px 14px',
-  borderRadius: 12,
-  border: '1px solid #cbd5e1',
-  fontSize: 14,
-  outline: 'none',
-}
-
-const primaryButtonStyle: React.CSSProperties = {
-  width: '100%',
-  border: 0,
-  borderRadius: 12,
-  padding: '13px 16px',
-  background: '#0f172a',
-  color: '#ffffff',
-  fontWeight: 700,
-  fontSize: 15,
-  cursor: 'pointer',
-}
-
-const secondaryButtonStyle: React.CSSProperties = {
-  width: '100%',
-  borderRadius: 12,
-  padding: '12px 16px',
-  background: '#ffffff',
-  color: '#0f172a',
-  border: '1px solid #cbd5e1',
-  fontWeight: 600,
-  fontSize: 14,
-  cursor: 'pointer',
-}
 
 function errorMessageForCode(code: string | null) {
   switch (code) {
@@ -72,14 +21,25 @@ function errorMessageForCode(code: string | null) {
   }
 }
 
-function MobileAuthCard(props: { title: string, subtitle: string, children?: React.ReactNode }) {
+function IzifootBrand() {
   return (
-    <div style={shellStyle}>
-      <div style={cardStyle}>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a' }}>izifoot</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{props.title}</div>
-          <div style={{ fontSize: 14, lineHeight: 1.5, color: '#475569' }}>{props.subtitle}</div>
+    <div className="mobile-auth-brand">
+      <div className="mobile-auth-brand-badge">
+        <img src={brandLogo} alt="izifoot" className="mobile-auth-brand-logo" />
+      </div>
+    </div>
+  )
+}
+
+function MobileAuthCard(props: { eyebrow?: string, title: string, subtitle: string, children?: React.ReactNode }) {
+  return (
+    <div className="mobile-auth-shell">
+      <div className="mobile-auth-card">
+        <div className="mobile-auth-header">
+          {props.eyebrow ? <div className="mobile-auth-eyebrow">{props.eyebrow}</div> : null}
+          <IzifootBrand />
+          <h1 className="mobile-auth-title">{props.title}</h1>
+          <p className="mobile-auth-subtitle">{props.subtitle}</p>
         </div>
         {props.children}
       </div>
@@ -94,9 +54,12 @@ export function MobileAuthStartPage() {
 
   return (
     <MobileAuthCard
+      eyebrow="Connexion sécurisée"
       title="Ouverture sécurisée"
       subtitle="Préparation de la connexion izifoot.fr avant le retour vers l’app."
-    />
+    >
+      <div className="mobile-auth-spinner" aria-hidden="true" />
+    </MobileAuthCard>
   )
 }
 
@@ -126,6 +89,11 @@ export default function MobileAuthPage() {
     if (!isValidRequest) return ''
     return apiUrl(`/auth/mobile/callback?state=${encodeURIComponent(state)}`)
   }, [isValidRequest, state])
+
+  const pageTitle = mode === 'login' ? 'Connexion' : 'Création de compte coach'
+  const pageSubtitle = mode === 'login'
+    ? 'Connectez-vous à votre compte izifoot.'
+    : 'Rejoignez izifoot pour gérer votre équipe.'
 
   async function submitAuth(event: React.FormEvent) {
     event.preventDefault()
@@ -168,9 +136,15 @@ export default function MobileAuthPage() {
     window.location.assign(callbackUrl)
   }
 
+  function toggleMode() {
+    setAuthError(null)
+    setMode((currentMode) => (currentMode === 'login' ? 'register' : 'login'))
+  }
+
   if (!isValidRequest) {
     return (
       <MobileAuthCard
+        eyebrow="Connexion sécurisée"
         title="Lien invalide"
         subtitle="Cette tentative de connexion mobile n’est pas exploitable. Relancez l’authentification depuis l’app iOS."
       />
@@ -180,69 +154,55 @@ export default function MobileAuthPage() {
   if (loading && !me) {
     return (
       <MobileAuthCard
+        eyebrow="Connexion sécurisée"
         title="Vérification en cours"
         subtitle="Nous vérifions si une session web izifoot est déjà active pour ce navigateur."
-      />
+      >
+        <div className="mobile-auth-spinner" aria-hidden="true" />
+      </MobileAuthCard>
     )
   }
 
   if (me) {
     return (
       <MobileAuthCard
+        eyebrow="Connexion sécurisée"
         title="Prêt à revenir dans l’app"
         subtitle={`Vous êtes connecté en tant que ${me.email}. Finalisez maintenant la connexion iOS.`}
       >
         {authError ? (
-          <div style={{ color: '#b91c1c', fontSize: 13 }}>{authError}</div>
+          <p className="mobile-auth-error" role="alert">
+            {authError}
+          </p>
         ) : null}
-        <button type="button" style={primaryButtonStyle} onClick={continueToApp} disabled={isContinuing}>
-          {isContinuing ? 'Retour vers l’app…' : 'Ouvrir l’app'}
-        </button>
-        <button type="button" style={secondaryButtonStyle} onClick={switchAccount} disabled={authLoading || isContinuing}>
-          Utiliser un autre compte
-        </button>
+        <div className="mobile-auth-button-stack">
+          <button type="button" className="mobile-auth-primary-button" onClick={continueToApp} disabled={isContinuing}>
+            {isContinuing ? 'Retour vers l’app…' : 'Ouvrir l’app'}
+          </button>
+          <button
+            type="button"
+            className="mobile-auth-secondary-button"
+            onClick={switchAccount}
+            disabled={authLoading || isContinuing}
+          >
+            Utiliser un autre compte
+          </button>
+        </div>
       </MobileAuthCard>
     )
   }
 
   return (
-    <MobileAuthCard
-      title="Connexion iPhone"
-      subtitle="Connectez-vous sur izifoot.fr. Une fois authentifié, vous reviendrez dans l’app iOS pour terminer l’échange sécurisé."
-    >
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
-          type="button"
-          onClick={() => setMode('login')}
-          style={{
-            ...secondaryButtonStyle,
-            background: mode === 'login' ? '#0f172a' : '#ffffff',
-            color: mode === 'login' ? '#ffffff' : '#0f172a',
-          }}
-        >
-          Connexion
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('register')}
-          style={{
-            ...secondaryButtonStyle,
-            background: mode === 'register' ? '#0f172a' : '#ffffff',
-            color: mode === 'register' ? '#ffffff' : '#0f172a',
-          }}
-        >
-          Inscription
-        </button>
-      </div>
-
-      <form onSubmit={submitAuth} style={{ display: 'grid', gap: 10 }}>
+    <MobileAuthCard eyebrow="Connexion sécurisée" title={pageTitle} subtitle={pageSubtitle}>
+      <form onSubmit={submitAuth} className="mobile-auth-form">
         <input
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           type="email"
           required
+          autoComplete="email"
           placeholder="Email"
-          style={inputStyle}
+          className="mobile-auth-field"
         />
         <input
           value={password}
@@ -250,8 +210,9 @@ export default function MobileAuthPage() {
           type="password"
           required
           minLength={6}
+          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
           placeholder="Mot de passe"
-          style={inputStyle}
+          className="mobile-auth-field"
         />
         {mode === 'register' ? (
           <input
@@ -260,17 +221,29 @@ export default function MobileAuthPage() {
             type="text"
             required
             minLength={2}
+            autoComplete="organization"
             placeholder="Nom du club"
-            style={inputStyle}
+            className="mobile-auth-field"
           />
         ) : null}
         {authError ? (
-          <div style={{ color: '#b91c1c', fontSize: 13 }}>{authError}</div>
+          <p className="mobile-auth-error" role="alert">
+            {authError}
+          </p>
         ) : null}
-        <button type="submit" style={primaryButtonStyle} disabled={authLoading}>
-          {authLoading ? 'Connexion…' : mode === 'login' ? 'Se connecter' : 'Créer le compte'}
+        <button type="submit" className="mobile-auth-primary-button" disabled={authLoading}>
+          {authLoading ? (mode === 'login' ? 'Connexion…' : 'Création…') : mode === 'login' ? 'Se connecter' : 'Créer le compte'}
         </button>
       </form>
+
+      <div className="mobile-auth-switch">
+        <span className="mobile-auth-switch-label">
+          {mode === 'login' ? 'Vous n’avez pas encore de compte coach ?' : 'Vous avez déjà un compte ?'}
+        </span>
+        <button type="button" className="mobile-auth-switch-button" onClick={toggleMode} disabled={authLoading}>
+          {mode === 'login' ? 'Création de compte coach' : 'Revenir à la connexion'}
+        </button>
+      </div>
     </MobileAuthCard>
   )
 }
