@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import DiagramComposer from '../components/DiagramComposer'
 import DiagramPlayer from '../components/DiagramPlayer'
-import { ChevronLeftIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
+import { ChevronLeftIcon, CloseIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { apiGetAllItems } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
@@ -126,8 +126,10 @@ export default function DrillDetailsPage() {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
   const [description, setDescription] = useState('')
-  const [diagramData, setDiagramData] = useState<DiagramData>(createEmptyDiagramData())
-  const writable = me ? canWrite(me.role) && (!requiresSelection || Boolean(selectedTeamId)) : false
+  const canManage = me ? canWrite(me.role) : false
+  const missingActiveTeam = canManage && requiresSelection && !selectedTeamId
+  const writable = canManage && !missingActiveTeam
+  const readOnly = !canManage
 
   const loadDrill = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
     const diagramsPath = fromTrainingDrillId
@@ -153,7 +155,6 @@ export default function DrillDetailsPage() {
     setTitle(drill.title)
     setCategory(drill.category)
     setDescription(drill.description)
-    setDiagramData(diagram ? normalizeDiagramData(diagram.data) : createEmptyDiagramData())
     setEditError(null)
     setEditing(true)
   }
@@ -178,20 +179,7 @@ export default function DrillDetailsPage() {
         tags: drill.tags,
       }
       const updated = await updateDrillCompat(drill.id, payload)
-      let nextDiagram = diagram
-      if (diagram?.id) {
-        nextDiagram = await apiPut<Diagram>(apiRoutes.diagrams.byId(diagram.id), {
-          title: 'Diagramme',
-          data: diagramData,
-        })
-      } else {
-        nextDiagram = await apiPost<Diagram>(apiRoutes.drills.diagrams(drill.id), {
-          title: 'Diagramme',
-          data: diagramData,
-        })
-      }
       setDrill(updated)
-      setDiagram(nextDiagram)
       setEditing(false)
     } catch (err: unknown) {
       setEditError(toErrorMessage(err))
@@ -239,24 +227,34 @@ export default function DrillDetailsPage() {
     }
   }
 
-  function openManualDiagramModal() {
+  function openDiagramModal() {
     if (!writable) return
-    setManualDiagramData(createEmptyDiagramData())
+    setManualDiagramData(diagram ? normalizeDiagramData(diagram.data) : createEmptyDiagramData())
     setManualDiagramError(null)
     setManualDiagramOpen(true)
   }
 
-  async function createManualDiagram() {
+  async function saveDiagram() {
     if (!drill || manualDiagramSaving) return
     try {
       setManualDiagramSaving(true)
       setManualDiagramError(null)
-      const payload = { title: 'Diagramme', data: manualDiagramData }
       let saved: Diagram
-      if (fromTrainingDrillId) {
-        saved = await apiPost<Diagram>(apiRoutes.trainingDrills.diagrams(fromTrainingDrillId), payload)
+      if (diagram?.id) {
+        saved = await apiPut<Diagram>(apiRoutes.diagrams.byId(diagram.id), {
+          title: 'Diagramme',
+          data: manualDiagramData,
+        })
+      } else if (fromTrainingDrillId) {
+        saved = await apiPost<Diagram>(apiRoutes.trainingDrills.diagrams(fromTrainingDrillId), {
+          title: 'Diagramme',
+          data: manualDiagramData,
+        })
       } else {
-        saved = await apiPost<Diagram>(apiRoutes.drills.diagrams(drill.id), payload)
+        saved = await apiPost<Diagram>(apiRoutes.drills.diagrams(drill.id), {
+          title: 'Diagramme',
+          data: manualDiagramData,
+        })
       }
       setDiagram(saved)
       setManualDiagramOpen(false)
@@ -267,102 +265,166 @@ export default function DrillDetailsPage() {
     }
   }
 
-  if (loading) return <div>Chargement…</div>
-  if (error) return <div style={{ color: 'crimson' }}>{error}</div>
-  if (!drill) return <div>Exercice introuvable.</div>
+  if (loading) {
+    return (
+      <div className="drill-state-shell">
+        <section className="drill-state-card">
+          <span className="drill-state-kicker">Exercice</span>
+          <h1>Chargement…</h1>
+          <p>La fiche de l&apos;exercice est en cours de préparation.</p>
+        </section>
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="drill-state-shell">
+        <section className="drill-state-card drill-state-card--error">
+          <span className="drill-state-kicker">Exercice</span>
+          <h1>Impossible de charger la fiche</h1>
+          <p>{error}</p>
+        </section>
+      </div>
+    )
+  }
+  if (!drill) {
+    return (
+      <div className="drill-state-shell">
+        <section className="drill-state-card">
+          <span className="drill-state-kicker">Exercice</span>
+          <h1>Exercice introuvable</h1>
+          <p>Cette fiche n&apos;existe plus ou n&apos;est plus accessible dans votre périmètre.</p>
+        </section>
+      </div>
+    )
+  }
 
   const materials = diagram ? summarizeDiagramMaterials(diagram.data) : []
   const drillDescriptionHtml = drill.descriptionHtml?.trim()
     ? drill.descriptionHtml
     : markdownToHtml(drill.description || '')
+  const tags = drill.tags.filter((tag) => tag.trim().length > 0)
+  const diagramLabel = diagram ? 'Diagramme disponible' : 'Diagramme à créer'
+  const diagramActionLabel = diagram ? 'Modifier le diagramme' : 'Créer un diagramme'
+  const diagramAiLabel = generatingDiagram
+    ? 'Génération…'
+    : diagram
+      ? 'Régénérer avec l’IA'
+      : 'Générer avec l’IA'
+  const contextLabel = fromTrainingId ? 'Exercice lié à un entraînement' : 'Bibliothèque d’exercices'
+  const materialsEmptyMessage = diagram
+    ? 'Aucun matériel détecté dans ce diagramme.'
+    : 'Le matériel sera proposé automatiquement dès qu’un diagramme sera ajouté.'
+  const diagramEmptyMessage = writable
+    ? 'Ajoutez un diagramme manuel ou générez une première proposition avec l’IA.'
+    : 'Aucun diagramme disponible pour cet exercice.'
 
   return (
     <div className="drill-details-page">
-      <header className="drill-details-head">
+      <header className="drill-details-head drill-hero">
         <button type="button" className="drill-back-link-button" onClick={() => navigate(backTarget)}>
           <ChevronLeftIcon size={18} />
           <span>{backLabel}</span>
         </button>
-        <div className="drill-details-mainrow">
-          <div className="drill-details-title-wrap">
+        <div className="drill-details-mainrow drill-hero-mainrow">
+          <div className="drill-details-title-wrap drill-hero-copy">
+            <span className="drill-hero-kicker">{contextLabel}</span>
             <h1 className="drill-details-title">{drill.title}</h1>
-            <p className="drill-details-subtitle">{drill.category}</p>
+            <div className="drill-summary-row">
+              <span className="drill-category-badge">{drill.category}</span>
+              <div className="drill-summary-chip">
+                <span>Durée</span>
+                <strong>{formatDuration(drill.duration)}</strong>
+              </div>
+              <div className="drill-summary-chip">
+                <span>Joueurs</span>
+                <strong>{drill.players?.trim() || 'Variable'}</strong>
+              </div>
+              <div className="drill-summary-chip">
+                <span>Statut</span>
+                <strong>{diagramLabel}</strong>
+              </div>
+            </div>
+            {tags.length > 0 && (
+              <div className="drill-tags-row" aria-label="Tags de l'exercice">
+                {tags.map((tag) => (
+                  <span key={tag} className="drill-tag-pill">{tag}</span>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="drill-menu-wrap">
+          <div className="drill-hero-actions">
             {writable && (
               <>
-                <RoundIconButton
-                  ariaLabel="Ouvrir le menu d'actions"
-                  className="drill-menu-button"
-                  onClick={() => setActionsMenuOpen((prev) => !prev)}
-                >
-                  <DotsHorizontalIcon size={18} />
-                </RoundIconButton>
-                {actionsMenuOpen && (
-                  <>
-                    <button
-                      type="button"
-                      className="drill-menu-backdrop"
-                      aria-label="Fermer le menu"
-                      onClick={() => setActionsMenuOpen(false)}
-                    />
-                    <div className="drill-floating-menu">
-                      <button type="button" onClick={openEditModal}>Modifier l'exercice</button>
-                      <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
-                        {deleting ? 'Suppression…' : "Supprimer l'exercice"}
-                      </button>
-                    </div>
-                  </>
-                )}
+                <button type="button" className="drill-primary-button" onClick={openEditModal}>
+                  Modifier la fiche
+                </button>
+                <div className="drill-menu-wrap">
+                  <RoundIconButton
+                    ariaLabel="Ouvrir le menu d'actions"
+                    className="drill-menu-button"
+                    onClick={() => setActionsMenuOpen((prev) => !prev)}
+                  >
+                    <DotsHorizontalIcon size={18} />
+                  </RoundIconButton>
+                  {actionsMenuOpen && (
+                    <>
+                      <button
+                        type="button"
+                        className="drill-menu-backdrop"
+                        aria-label="Fermer le menu"
+                        onClick={() => setActionsMenuOpen(false)}
+                      />
+                      <div className="drill-floating-menu">
+                        <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
+                          {deleting ? 'Suppression…' : "Supprimer l'exercice"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </>
             )}
           </div>
         </div>
       </header>
 
-      <div className="drill-details-grid">
-        {!writable && (
-          <section className="drill-card">
-            <p className="drill-empty-text">Sélectionnez une équipe active pour modifier cet exercice.</p>
+      <div className="drill-status-stack">
+        {missingActiveTeam && (
+          <section className="drill-notice drill-notice--warning">
+            <p>Sélectionnez une équipe active pour modifier la fiche et le diagramme de cet exercice.</p>
           </section>
         )}
-        <section className="drill-card">
-          <h3>Description</h3>
+        {readOnly && (
+          <section className="drill-notice">
+            <p>Cette fiche est disponible en lecture seule. Seuls les membres du staff peuvent la modifier.</p>
+          </section>
+        )}
+        {editError && !editing && <section className="drill-notice drill-notice--danger"><p>{editError}</p></section>}
+      </div>
+
+      <div className="drill-details-layout">
+        <div className="drill-details-main">
+          <section className="drill-card">
+            <div className="drill-card-head">
+              <div>
+                <h2>Description</h2>
+                <p>Objectif, consignes et déroulé de l&apos;exercice.</p>
+              </div>
+            </div>
           {!!drillDescriptionHtml && (
             <div className="drill-description-text" dangerouslySetInnerHTML={{ __html: drillDescriptionHtml }} />
           )}
           {!drillDescriptionHtml && <p className="drill-empty-text">Aucune description renseignée.</p>}
-        </section>
+          </section>
 
-        <section className="drill-card">
-          <h3>Diagramme</h3>
-          <div className="drill-diagram-content">
-            {diagram ? <DiagramPlayer data={diagram.data} /> : <p className="drill-empty-text">Aucun diagramme disponible.</p>}
-          </div>
-          {writable && (
-            <div className="drill-diagram-actions">
-              <button
-                type="button"
-                className="drill-create-manual-button"
-                onClick={openManualDiagramModal}
-              >
-                Creer un diagramme
-              </button>
-              <button
-                type="button"
-                className="drill-generate-ai-button"
-                disabled={generatingDiagram}
-                onClick={() => void generateAiDiagram()}
-              >
-                <SparklesIcon size={14} />
-                <span>{generatingDiagram ? 'Generation…' : 'Generer diagramme'}</span>
-              </button>
+          <section className="drill-card">
+            <div className="drill-card-head">
+              <div>
+                <h2>Matériel</h2>
+                <p>Déduit automatiquement à partir du diagramme.</p>
+              </div>
             </div>
-          )}
-        </section>
-
-        <section className="drill-card">
-          <h3>Matériel</h3>
           {materials.length > 0 ? (
             <ul className="drill-materials-list">
               {materials.map((material) => (
@@ -370,28 +432,72 @@ export default function DrillDetailsPage() {
               ))}
             </ul>
           ) : (
-            <p className="drill-empty-text">Aucun matériel renseigné.</p>
+            <p className="drill-empty-text">{materialsEmptyMessage}</p>
           )}
-        </section>
+          </section>
+        </div>
 
-        {editError && !editing && <div style={{ color: 'crimson' }}>{editError}</div>}
+        <aside className="drill-details-aside">
+          <section className="drill-card drill-card--diagram">
+            <div className="drill-card-head">
+              <div>
+                <h2>Diagramme</h2>
+                <p>Visualisation tactique et placement du matériel.</p>
+              </div>
+            </div>
+            <div className="drill-diagram-content">
+              {diagram ? <DiagramPlayer data={diagram.data} /> : <p className="drill-empty-text">{diagramEmptyMessage}</p>}
+            </div>
+            {writable && (
+              <div className="drill-diagram-actions">
+                <button
+                  type="button"
+                  className="drill-primary-button"
+                  onClick={openDiagramModal}
+                >
+                  {diagramActionLabel}
+                </button>
+                <button
+                  type="button"
+                  className="drill-secondary-button"
+                  disabled={generatingDiagram}
+                  onClick={() => void generateAiDiagram()}
+                >
+                  <SparklesIcon size={14} />
+                  <span>{diagramAiLabel}</span>
+                </button>
+              </div>
+            )}
+          </section>
+        </aside>
       </div>
 
       {writable && manualDiagramOpen && (
         <div className="drill-modal-overlay" role="dialog" aria-modal="true" onClick={() => !manualDiagramSaving && setManualDiagramOpen(false)}>
-          <div className="drill-manual-diagram-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="drill-manual-diagram-head">
-              <h3>Creer un diagramme</h3>
-              <button type="button" onClick={() => setManualDiagramOpen(false)} disabled={manualDiagramSaving}>×</button>
+          <div className="drill-modal drill-modal--wide" onClick={(e) => e.stopPropagation()}>
+            <div className="drill-modal-head">
+              <div>
+                <h3>{diagram ? 'Modifier le diagramme' : 'Créer un diagramme'}</h3>
+                <p>Préparez une vue claire pour la séance et le matériel.</p>
+              </div>
+              <button
+                type="button"
+                className="drill-modal-close"
+                aria-label="Fermer la fenetre"
+                onClick={() => setManualDiagramOpen(false)}
+                disabled={manualDiagramSaving}
+              >
+                <CloseIcon size={18} />
+              </button>
             </div>
-            {manualDiagramError && <p className="drill-manual-diagram-error">{manualDiagramError}</p>}
+            {manualDiagramError && <p className="drill-modal-error">{manualDiagramError}</p>}
             <DiagramComposer value={manualDiagramData} onChange={setManualDiagramData} minHeight={320} />
-            <div className="drill-manual-diagram-actions">
-              <button type="button" className="drill-modal-secondary" onClick={() => setManualDiagramOpen(false)} disabled={manualDiagramSaving}>
+            <div className="drill-modal-actions">
+              <button type="button" className="drill-secondary-button" onClick={() => setManualDiagramOpen(false)} disabled={manualDiagramSaving}>
                 Annuler
               </button>
-              <button type="button" className="drill-modal-primary" onClick={() => void createManualDiagram()} disabled={manualDiagramSaving}>
-                {manualDiagramSaving ? 'Creation…' : 'Creer'}
+              <button type="button" className="drill-primary-button" onClick={() => void saveDiagram()} disabled={manualDiagramSaving}>
+                {manualDiagramSaving ? 'Enregistrement…' : diagram ? 'Enregistrer le diagramme' : 'Créer le diagramme'}
               </button>
             </div>
           </div>
@@ -400,49 +506,49 @@ export default function DrillDetailsPage() {
 
       {writable && editing && (
         <div
+          className="drill-modal-overlay"
           role="dialog"
           aria-modal="true"
           onClick={() => !saving && setEditing(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 2000,
-            background: 'rgba(17, 24, 39, 0.35)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            padding: '76px 12px 12px',
-            overflowY: 'auto',
-            overscrollBehavior: 'contain',
-            WebkitOverflowScrolling: 'touch',
-          }}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 560, background: '#fff', borderRadius: 10, padding: 16, marginBottom: 12 }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>Modifier l'exercice</h3>
-              <button type="button" onClick={() => setEditing(false)} style={closeButtonStyle}>×</button>
-            </div>
-            {editError && <div style={{ color: 'crimson', fontSize: 12, marginBottom: 8 }}>{editError}</div>}
-            <form onSubmit={saveEdit}>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre *" style={fieldStyle} />
-              <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Catégorie *" style={fieldStyle} />
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description (optionnel)"
-                rows={4}
-                style={{ ...fieldStyle, resize: 'vertical' }}
-              />
-              <div style={{ marginBottom: 12 }}>
-                <strong style={{ display: 'block', marginBottom: 8 }}>Diagramme</strong>
-                <DiagramComposer value={diagramData} onChange={setDiagramData} minHeight={300} />
+          <div className="drill-modal drill-modal--narrow" onClick={(e) => e.stopPropagation()}>
+            <div className="drill-modal-head">
+              <div>
+                <h3>Modifier la fiche</h3>
+                <p>Ajustez le titre, la catégorie et la description.</p>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                <button type="button" onClick={() => setEditing(false)} style={secondaryButtonStyle}>Annuler</button>
-                <button type="submit" disabled={saving} style={primaryButtonStyle}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+              <button
+                type="button"
+                className="drill-modal-close"
+                aria-label="Fermer la fenetre"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
+                <CloseIcon size={18} />
+              </button>
+            </div>
+            {editError && <p className="drill-modal-error">{editError}</p>}
+            <form onSubmit={saveEdit} className="drill-form-grid">
+              <label className="drill-form-field">
+                <span>Titre</span>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre *" />
+              </label>
+              <label className="drill-form-field">
+                <span>Catégorie</span>
+                <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Catégorie *" />
+              </label>
+              <label className="drill-form-field">
+                <span>Description</span>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Description (optionnel)"
+                  rows={6}
+                />
+              </label>
+              <div className="drill-modal-actions">
+                <button type="button" className="drill-secondary-button" onClick={() => setEditing(false)}>Annuler</button>
+                <button type="submit" disabled={saving} className="drill-primary-button">{saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
               </div>
             </form>
           </div>
@@ -470,35 +576,6 @@ function isLikelyNotFound(err: unknown): boolean {
   return lower.includes('404') || lower.includes('not found') || lower.includes('cannot put')
 }
 
-const fieldStyle: React.CSSProperties = {
-  width: '100%',
-  padding: 8,
-  border: '1px solid #e5e7eb',
-  borderRadius: 6,
-  marginBottom: 8,
-}
-
-const closeButtonStyle: React.CSSProperties = {
-  border: 'none',
-  background: 'transparent',
-  fontSize: 20,
-  cursor: 'pointer',
-  color: '#6b7280',
-}
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  borderRadius: 6,
-  border: '1px solid #16a34a',
-  background: '#16a34a',
-  color: '#fff',
-  cursor: 'pointer',
-}
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  borderRadius: 6,
-  border: '1px solid #d1d5db',
-  background: '#fff',
-  cursor: 'pointer',
+function formatDuration(value: number): string {
+  return value > 0 ? `${value} min` : 'Variable'
 }
