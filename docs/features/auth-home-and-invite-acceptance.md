@@ -71,7 +71,7 @@ Restrictions: dependent on backend auth endpoints.
 
 ## 7. Functional Behavior
 - UI behavior: form modes for login/register with async submission.
-- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, moves the logo above the card, and highlights the club-name field first in coach account creation.
+- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, moves the logo above the card, switches to the iOS white-wordmark asset in dark mode, and highlights the club-name field first in coach account creation.
 - Actions: call auth endpoints and load session user.
 - States: idle/loading/success/error.
 - Conditions: valid token required for invite accept.

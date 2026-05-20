@@ -89,6 +89,10 @@
   padding-left: 6px;
 }
 
+.mobile-auth-brand picture {
+  display: block;
+}
+
 .mobile-auth-brand-logo {
   width: min(100%, 208px);
   display: block;

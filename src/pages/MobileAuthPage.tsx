@@ -4,6 +4,7 @@ import { apiUrl } from '../apiClient'
 import { toErrorMessage } from '../errors'
 import { useAuth } from '../useAuth'
 import brandLogo from '../assets/izifoot-logo-header.png'
+import brandLogoDark from '../assets/izifoot-logo-header-dark.png'
 import './MobileAuthPage.css'
 
 type AuthMode = 'login' | 'register'
@@ -24,7 +25,10 @@ function errorMessageForCode(code: string | null) {
 function IzifootBrand() {
   return (
     <div className="mobile-auth-brand">
-      <img src={brandLogo} alt="izifoot" className="mobile-auth-brand-logo" />
+      <picture>
+        <source srcSet={brandLogoDark} media="(prefers-color-scheme: dark)" />
+        <img src={brandLogo} alt="izifoot" className="mobile-auth-brand-logo" />
+      </picture>
     </div>
   )
 }
