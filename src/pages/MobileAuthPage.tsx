@@ -24,24 +24,23 @@ function errorMessageForCode(code: string | null) {
 function IzifootBrand() {
   return (
     <div className="mobile-auth-brand">
-      <div className="mobile-auth-brand-badge">
-        <img src={brandLogo} alt="izifoot" className="mobile-auth-brand-logo" />
-      </div>
+      <img src={brandLogo} alt="izifoot" className="mobile-auth-brand-logo" />
     </div>
   )
 }
 
-function MobileAuthCard(props: { eyebrow?: string, title: string, subtitle: string, children?: React.ReactNode }) {
+function MobileAuthCard(props: { title: string, subtitle: string, children?: React.ReactNode }) {
   return (
     <div className="mobile-auth-shell">
-      <div className="mobile-auth-card">
-        <div className="mobile-auth-header">
-          {props.eyebrow ? <div className="mobile-auth-eyebrow">{props.eyebrow}</div> : null}
-          <IzifootBrand />
-          <h1 className="mobile-auth-title">{props.title}</h1>
-          <p className="mobile-auth-subtitle">{props.subtitle}</p>
+      <div className="mobile-auth-stage">
+        <IzifootBrand />
+        <div className="mobile-auth-card">
+          <div className="mobile-auth-header">
+            <h1 className="mobile-auth-title">{props.title}</h1>
+            <p className="mobile-auth-subtitle">{props.subtitle}</p>
+          </div>
+          {props.children}
         </div>
-        {props.children}
       </div>
     </div>
   )
@@ -54,7 +53,6 @@ export function MobileAuthStartPage() {
 
   return (
     <MobileAuthCard
-      eyebrow="Connexion sécurisée"
       title="Ouverture sécurisée"
       subtitle="Préparation de la connexion izifoot.fr avant le retour vers l’app."
     >
@@ -144,7 +142,6 @@ export default function MobileAuthPage() {
   if (!isValidRequest) {
     return (
       <MobileAuthCard
-        eyebrow="Connexion sécurisée"
         title="Lien invalide"
         subtitle="Cette tentative de connexion mobile n’est pas exploitable. Relancez l’authentification depuis l’app iOS."
       />
@@ -154,7 +151,6 @@ export default function MobileAuthPage() {
   if (loading && !me) {
     return (
       <MobileAuthCard
-        eyebrow="Connexion sécurisée"
         title="Vérification en cours"
         subtitle="Nous vérifions si une session web izifoot est déjà active pour ce navigateur."
       >
@@ -166,7 +162,6 @@ export default function MobileAuthPage() {
   if (me) {
     return (
       <MobileAuthCard
-        eyebrow="Connexion sécurisée"
         title="Prêt à revenir dans l’app"
         subtitle={`Vous êtes connecté en tant que ${me.email}. Finalisez maintenant la connexion iOS.`}
       >
@@ -193,8 +188,20 @@ export default function MobileAuthPage() {
   }
 
   return (
-    <MobileAuthCard eyebrow="Connexion sécurisée" title={pageTitle} subtitle={pageSubtitle}>
+    <MobileAuthCard title={pageTitle} subtitle={pageSubtitle}>
       <form onSubmit={submitAuth} className="mobile-auth-form">
+        {mode === 'register' ? (
+          <input
+            value={clubName}
+            onChange={(event) => setClubName(event.target.value)}
+            type="text"
+            required
+            minLength={2}
+            autoComplete="organization"
+            placeholder="Nom de votre club"
+            className="mobile-auth-field mobile-auth-field-emphasis"
+          />
+        ) : null}
         <input
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -214,18 +221,6 @@ export default function MobileAuthPage() {
           placeholder="Mot de passe"
           className="mobile-auth-field"
         />
-        {mode === 'register' ? (
-          <input
-            value={clubName}
-            onChange={(event) => setClubName(event.target.value)}
-            type="text"
-            required
-            minLength={2}
-            autoComplete="organization"
-            placeholder="Nom du club"
-            className="mobile-auth-field"
-          />
-        ) : null}
         {authError ? (
           <p className="mobile-auth-error" role="alert">
             {authError}
@@ -237,11 +232,8 @@ export default function MobileAuthPage() {
       </form>
 
       <div className="mobile-auth-switch">
-        <span className="mobile-auth-switch-label">
-          {mode === 'login' ? 'Vous n’avez pas encore de compte coach ?' : 'Vous avez déjà un compte ?'}
-        </span>
         <button type="button" className="mobile-auth-switch-button" onClick={toggleMode} disabled={authLoading}>
-          {mode === 'login' ? 'Création de compte coach' : 'Revenir à la connexion'}
+          {mode === 'login' ? 'Vous êtes coach ? Inscrivez votre club à izifoot.' : 'Revenir à la connexion'}
         </button>
       </div>
     </MobileAuthCard>

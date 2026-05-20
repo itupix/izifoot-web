@@ -62,7 +62,7 @@ Restrictions: dependent on backend auth endpoints.
 ## 6. User Flows
 - Main flow: user submits login/register -> `useAuth` refresh -> routed by role.
 - Mobile flow: `/auth/mobile/start` delegates to backend state creation, `/auth/mobile` reuses web auth then forwards to `/auth/mobile/callback` on the API domain.
-- Mobile auth UI defaults to login, exposes a discreet bottom action for coach account creation, and follows the device light/dark appearance.
+- Mobile auth UI defaults to login, exposes a discreet bottom action labeled `Vous êtes coach ? Inscrivez votre club à izifoot.`, and follows the device light/dark appearance.
 - Variants: invite token accepted before normal login.
 - Back navigation: can return to home and re-attempt.
 - Interruptions: expired/invalid invite token.
@@ -71,7 +71,7 @@ Restrictions: dependent on backend auth endpoints.
 
 ## 7. Functional Behavior
 - UI behavior: form modes for login/register with async submission.
-- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, and switches to coach account creation through a secondary text action below the form.
+- Mobile auth UI uses izifoot branding, removes tab switching, starts on login by default, moves the logo above the card, and highlights the club-name field first in coach account creation.
 - Actions: call auth endpoints and load session user.
 - States: idle/loading/success/error.
 - Conditions: valid token required for invite accept.

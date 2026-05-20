@@ -3,16 +3,18 @@
   --mobile-auth-bg-start: #f4f6f8;
   --mobile-auth-bg-end: #dfe6ef;
   --mobile-auth-glow: rgba(15, 122, 67, 0.12);
+  --mobile-auth-logo-glow: rgba(255, 255, 255, 0.45);
   --mobile-auth-card: rgba(255, 255, 255, 0.92);
   --mobile-auth-card-border: rgba(15, 23, 42, 0.08);
   --mobile-auth-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+  --mobile-auth-logo-shadow: rgba(15, 23, 42, 0.12);
   --mobile-auth-text: #16181d;
   --mobile-auth-muted: #5f6978;
-  --mobile-auth-logo-bg: rgba(255, 255, 255, 0.96);
-  --mobile-auth-logo-border: rgba(15, 23, 42, 0.08);
   --mobile-auth-input-bg: rgba(255, 255, 255, 0.9);
   --mobile-auth-input-border: rgba(15, 23, 42, 0.14);
   --mobile-auth-input-placeholder: #9ca3af;
+  --mobile-auth-input-emphasis-bg: rgba(15, 122, 67, 0.08);
+  --mobile-auth-input-emphasis-border: rgba(15, 122, 67, 0.32);
   --mobile-auth-primary-start: #0f7a43;
   --mobile-auth-primary-end: #095a31;
   --mobile-auth-primary-shadow: rgba(15, 122, 67, 0.28);
@@ -26,6 +28,7 @@
   place-items: center;
   padding: 24px;
   background:
+    radial-gradient(circle at 50% 14%, var(--mobile-auth-logo-glow), transparent 26%),
     radial-gradient(circle at top left, var(--mobile-auth-glow), transparent 34%),
     linear-gradient(180deg, var(--mobile-auth-bg-start) 0%, var(--mobile-auth-bg-end) 100%);
 }
@@ -35,16 +38,18 @@
     --mobile-auth-bg-start: #091018;
     --mobile-auth-bg-end: #131d29;
     --mobile-auth-glow: rgba(34, 197, 94, 0.18);
+    --mobile-auth-logo-glow: rgba(255, 255, 255, 0.14);
     --mobile-auth-card: rgba(15, 20, 27, 0.92);
     --mobile-auth-card-border: rgba(255, 255, 255, 0.09);
     --mobile-auth-shadow: 0 28px 70px rgba(0, 0, 0, 0.44);
+    --mobile-auth-logo-shadow: rgba(0, 0, 0, 0.28);
     --mobile-auth-text: #f3f5f7;
     --mobile-auth-muted: #a8b0bd;
-    --mobile-auth-logo-bg: rgba(247, 249, 251, 0.98);
-    --mobile-auth-logo-border: rgba(255, 255, 255, 0.12);
     --mobile-auth-input-bg: rgba(7, 10, 15, 0.62);
     --mobile-auth-input-border: rgba(255, 255, 255, 0.12);
     --mobile-auth-input-placeholder: #7d8795;
+    --mobile-auth-input-emphasis-bg: rgba(30, 168, 93, 0.12);
+    --mobile-auth-input-emphasis-border: rgba(124, 225, 164, 0.26);
     --mobile-auth-primary-start: #1ea85d;
     --mobile-auth-primary-end: #137244;
     --mobile-auth-primary-shadow: rgba(30, 168, 93, 0.24);
@@ -56,8 +61,14 @@
   }
 }
 
-.mobile-auth-card {
+.mobile-auth-stage {
   width: min(100%, 460px);
+  display: grid;
+  gap: 18px;
+}
+
+.mobile-auth-card {
+  width: 100%;
   display: grid;
   gap: 18px;
   padding: 26px;
@@ -70,36 +81,18 @@
 
 .mobile-auth-header {
   display: grid;
-  gap: 12px;
-}
-
-.mobile-auth-eyebrow {
-  width: fit-content;
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: var(--mobile-auth-secondary-bg);
-  color: var(--mobile-auth-secondary-text);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  gap: 10px;
 }
 
 .mobile-auth-brand {
   display: flex;
-}
-
-.mobile-auth-brand-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 10px 14px;
-  border-radius: 18px;
-  border: 1px solid var(--mobile-auth-logo-border);
-  background: var(--mobile-auth-logo-bg);
+  padding-left: 6px;
 }
 
 .mobile-auth-brand-logo {
-  width: min(100%, 188px);
+  width: min(100%, 208px);
   display: block;
+  filter: drop-shadow(0 10px 24px var(--mobile-auth-logo-shadow));
 }
 
 .mobile-auth-title {
@@ -138,6 +131,13 @@
 
 .mobile-auth-field::placeholder {
   color: var(--mobile-auth-input-placeholder);
+}
+
+.mobile-auth-field-emphasis {
+  background: var(--mobile-auth-input-emphasis-bg);
+  border-color: var(--mobile-auth-input-emphasis-border);
+  box-shadow: inset 0 0 0 1px var(--mobile-auth-input-emphasis-border);
+  font-weight: 600;
 }
 
 .mobile-auth-field:focus-visible {
@@ -199,14 +199,8 @@
 
 .mobile-auth-switch {
   display: grid;
-  gap: 6px;
   justify-items: center;
-  padding-top: 6px;
-}
-
-.mobile-auth-switch-label {
-  color: var(--mobile-auth-muted);
-  font-size: 12px;
+  padding-top: 4px;
 }
 
 .mobile-auth-switch-button {
@@ -216,6 +210,8 @@
   color: var(--mobile-auth-link);
   font-size: 14px;
   font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .mobile-auth-switch-button:not(:disabled):hover {
@@ -259,7 +255,7 @@
   }
 
   .mobile-auth-brand-logo {
-    width: min(100%, 172px);
+    width: min(100%, 184px);
   }
 
   .mobile-auth-title {
