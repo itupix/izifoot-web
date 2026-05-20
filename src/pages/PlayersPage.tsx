@@ -611,11 +611,6 @@ export default function PlayersPage() {
                         Nom <span>{sortIndicator('name')}</span>
                       </button>
                     </th>
-                    <th>
-                      <button type="button" className="players-sort-btn" onClick={() => toggleSort('position')}>
-                        Poste principal <span>{sortIndicator('position')}</span>
-                      </button>
-                    </th>
                     <th className="players-row-actions-head">Actions</th>
                   </tr>
                 </thead>
@@ -640,7 +635,6 @@ export default function PlayersPage() {
                           <span>{getPlayerDisplayName(player)}</span>
                         </div>
                       </td>
-                      <td>{formatPositionLabel(player.primary_position || POSITION_UNDEFINED)}</td>
                       <td className="players-row-actions">
                         <button
                           type="button"

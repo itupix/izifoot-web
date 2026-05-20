@@ -129,6 +129,7 @@ Constraints: normalized in adapters/components.
 - Empty states: no players in selected team.
 - Loading: independent loaders for detail subrequests.
 - Responsive: profile form sections stack on mobile.
+- Roster list rows show only the player first name + last name alongside the avatar; playing position stays available in profile/edit flows, not in the list row.
 
 ## 18. Ambiguities & Gaps
 - Observed
