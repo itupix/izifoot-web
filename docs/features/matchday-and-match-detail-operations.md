@@ -67,6 +67,8 @@ Restrictions: depends on backend contract stability.
 ## 7. Functional Behavior
 - UI behavior: combines many data sources and mutation paths.
 - Actions: edit matchday metadata, share link, mutate matches, manage scorers/events.
+- Manual plateau matches can be renamed from the quick match editor and deleted from a confirmed destructive action inside that editor.
+- Matches linked to rotation/planning keep score/composition editing but do not expose manual-only rename/delete affordances.
 - States: loading, save in progress, conflict/error states.
 - Conditions: role and scope checks in backend.
 - Validations: payload shaping before PUT/POST.
@@ -124,6 +126,7 @@ Constraints: backend scope and enum constraints.
 
 ## 17. UX Requirements
 - Feedback: immediate save/error feedback on scores/events.
+- Manual match destructive actions require confirmation and stay separated from planning-generated match flows.
 - Empty states: no matches configured.
 - Loading: progressive data load with refresh.
 - Responsive: complex layouts remain navigable on mobile.

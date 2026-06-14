@@ -554,6 +554,18 @@
   letter-spacing: 0.04em;
 }
 
+.match-edit-inline-trigger {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .match-edit-modal .editor-inline-row {
   margin-bottom: 2px;
 }
@@ -596,6 +608,22 @@
   margin-top: 2px;
 }
 
+.match-edit-delete-button {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff1f2;
+  color: #be123c;
+  font: inherit;
+  font-weight: 700;
+}
+
+.match-edit-delete-button:disabled,
+.match-edit-inline-trigger:disabled {
+  opacity: 0.6;
+}
+
 .modal-score-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -611,9 +639,28 @@
   gap: 6px;
 }
 
-.modal-score-item>span {
+.modal-score-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.modal-score-item-head>span {
   font-size: 12px;
   color: #64748b;
+  font-weight: 700;
+}
+
+.match-edit-opponent-input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 12px;
+  font: inherit;
+  color: #0f172a;
 }
 
 .modal-score-controls {

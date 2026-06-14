@@ -12,6 +12,7 @@ import {
   Menu,
   MoreHorizontal,
   Pause,
+  Pencil,
   Plus,
   Play,
   RotateCw,
@@ -62,6 +63,10 @@ export function DotsHorizontalIcon(props: IconProps) {
 
 export function PlusIcon(props: IconProps) {
   return renderIcon(Plus, props)
+}
+
+export function PencilIcon(props: IconProps) {
+  return renderIcon(Pencil, props)
 }
 
 export function GripVerticalIcon(props: IconProps) {

@@ -4,7 +4,7 @@ import { apiDelete, apiGet, apiPut, apiUrl } from '../apiClient'
 import { apiGetAllItems, appendQueryParams } from '../adapters/pagination'
 import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
-import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
+import { ChevronLeftIcon, DotsHorizontalIcon, PencilIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
 import { buildPointsMap, buildTacticalFormations, buildTacticalTokens, type TacticalPoint } from '../features/tactical'
@@ -353,6 +353,9 @@ export default function MatchDetailsPage() {
   const [editHomeScore, setEditHomeScore] = useState(0)
   const [editAwayScore, setEditAwayScore] = useState(0)
   const [editIsPlayed, setEditIsPlayed] = useState(false)
+  const [editOpponentName, setEditOpponentName] = useState('')
+  const [opponentNameDraft, setOpponentNameDraft] = useState('')
+  const [isOpponentNameModalOpen, setIsOpponentNameModalOpen] = useState(false)
   const [selectedHomeScorer, setSelectedHomeScorer] = useState('')
   const [savedTactics, setSavedTactics] = useState<SavedTactic[]>([])
   const [tacticalPresetValue, setTacticalPresetValue] = useState(defaultFormation ? `formation:${defaultFormation.key}` : '')
@@ -695,6 +698,7 @@ export default function MatchDetailsPage() {
   const outcomeClass = cancelled ? 'loss' : (pending ? 'pending' : homeScore > awayScore ? 'win' : homeScore < awayScore ? 'loss' : 'draw')
   const homeLabel = clubName
   const awayLabel = match?.opponentName || 'Adversaire'
+  const isManualMatch = Boolean(match && !(match.rotationGameKey || '').trim())
   const matchDate = useMemo(() => {
     const source = plateauDateISO || match?.createdAt
     if (!source) return ''
@@ -1068,12 +1072,16 @@ export default function MatchDetailsPage() {
     setEditHomeScore(homeScore)
     setEditAwayScore(awayScore)
     setEditIsPlayed(!pending)
+    setEditOpponentName(match?.opponentName ?? '')
+    setOpponentNameDraft(match?.opponentName ?? '')
+    setIsOpponentNameModalOpen(false)
     setSelectedHomeScorer('')
     setIsEditModalOpen(true)
   }
 
   function closeEditModal() {
     if (saving) return
+    setIsOpponentNameModalOpen(false)
     setIsEditModalOpen(false)
   }
 
@@ -1085,6 +1093,24 @@ export default function MatchDetailsPage() {
   function closeDeleteModal() {
     if (deleting) return
     setIsDeleteModalOpen(false)
+  }
+
+  function openOpponentNameModal() {
+    setOpponentNameDraft(editOpponentName)
+    setIsOpponentNameModalOpen(true)
+  }
+
+  function closeOpponentNameModal() {
+    if (saving) return
+    setOpponentNameDraft(editOpponentName)
+    setIsOpponentNameModalOpen(false)
+  }
+
+  function applyOpponentNameDraft() {
+    const normalized = opponentNameDraft.trim()
+    if (!normalized) return
+    setEditOpponentName(normalized)
+    setIsOpponentNameModalOpen(false)
   }
 
   function formatClock(totalSeconds: number) {
@@ -1444,6 +1470,8 @@ export default function MatchDetailsPage() {
 
   async function saveDraft() {
     if (!match || !id || !draft) return
+    const normalizedOpponentName = editOpponentName.trim()
+    const resolvedOpponentName = normalizedOpponentName || (match.opponentName ?? '')
     setSaving(true)
     try {
       const sanitizedHomeStarters = draft.home.starters
@@ -1474,7 +1502,7 @@ export default function MatchDetailsPage() {
             .filter((s) => s.side === 'home')
             .map((s) => ({ side: s.side, playerId: s.playerId, assistId: s.assistId }))
           : [],
-        opponentName: match.opponentName ?? '',
+        opponentName: isManualMatch ? resolvedOpponentName : (match.opponentName ?? ''),
         played: editIsPlayed,
         tactic: {
           preset: tacticalPresetValue,
@@ -1493,6 +1521,9 @@ export default function MatchDetailsPage() {
         : getFormationPointsMap(tacticalTokens, fallbackFormationKey, tacticalFormations)
       setTacticalPresetValue(updatedPreset)
       setTacticalPoints(updatedPoints)
+      setEditOpponentName(updated.opponentName ?? '')
+      setOpponentNameDraft(updated.opponentName ?? '')
+      setIsOpponentNameModalOpen(false)
       setIsEditModalOpen(false)
     } catch (err: unknown) {
       uiAlert(`Erreur mise à jour du match: ${toErrorMessage(err)}`)
@@ -1980,7 +2011,9 @@ export default function MatchDetailsPage() {
               <button type="button" className="menu-backdrop" aria-label="Fermer le menu" onClick={() => setMenuOpen(false)} />
               <div className="floating-menu">
                 <button type="button" onClick={openEditModal}>Modifier</button>
-                <button type="button" className="danger" onClick={openDeleteModal}>Supprimer</button>
+                {isManualMatch && (
+                  <button type="button" className="danger" onClick={openDeleteModal}>Supprimer</button>
+                )}
               </div>
             </>
           )}
@@ -2524,7 +2557,9 @@ export default function MatchDetailsPage() {
               <p>Score</p>
               <div className="modal-score-grid">
                 <div className="modal-score-item">
-                  <span>Nous</span>
+                  <div className="modal-score-item-head">
+                    <span>Nous</span>
+                  </div>
                   <div className="modal-score-controls">
                     <button type="button" disabled={!editIsPlayed} onClick={() => setEditHomeScore((v) => Math.max(0, v - 1))}>-</button>
                     <strong>{editHomeScore}</strong>
@@ -2532,7 +2567,20 @@ export default function MatchDetailsPage() {
                   </div>
                 </div>
                 <div className="modal-score-item">
-                  <span>Adversaire</span>
+                  <div className="modal-score-item-head">
+                    <span>{isManualMatch ? (editOpponentName.trim() || 'Adversaire') : 'Adversaire'}</span>
+                    {isManualMatch && (
+                      <button
+                        type="button"
+                        className="match-edit-inline-trigger"
+                        aria-label="Modifier le nom de l'adversaire"
+                        onClick={openOpponentNameModal}
+                        disabled={saving}
+                      >
+                        <PencilIcon size={14} />
+                      </button>
+                    )}
+                  </div>
                   <div className="modal-score-controls">
                     <button type="button" disabled={!editIsPlayed} onClick={() => setEditAwayScore((v) => Math.max(0, v - 1))}>-</button>
                     <strong>{editAwayScore}</strong>
@@ -2584,6 +2632,55 @@ export default function MatchDetailsPage() {
               <button type="button" className="edit-secondary" onClick={closeEditModal} disabled={saving}>Annuler</button>
               <button type="button" className="edit-primary" onClick={() => void saveDraft()} disabled={saving}>
                 Enregistrer
+              </button>
+            </div>
+
+            {isManualMatch && (
+              <button
+                type="button"
+                className="match-edit-delete-button"
+                onClick={() => {
+                  closeEditModal()
+                  openDeleteModal()
+                }}
+                disabled={saving || deleting}
+              >
+                Supprimer le match
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {isOpponentNameModalOpen && (
+        <>
+          <div className="modal-overlay" onClick={closeOpponentNameModal} />
+          <div className="drill-modal" role="dialog" aria-modal="true" aria-label="Modifier le nom de l'adversaire">
+            <div className="drill-modal-head">
+              <h3>Modifier l'adversaire</h3>
+              <button type="button" onClick={closeOpponentNameModal} disabled={saving}>✕</button>
+            </div>
+            <div className="lineup-stack">
+              <p>Nom de l'adversaire</p>
+              <input
+                className="match-edit-opponent-input"
+                type="text"
+                value={opponentNameDraft}
+                onChange={(e) => setOpponentNameDraft(e.target.value)}
+                placeholder="Nom de l'adversaire"
+                maxLength={100}
+                autoFocus
+              />
+            </div>
+            <div className="edit-action-group">
+              <button type="button" className="edit-secondary" onClick={closeOpponentNameModal} disabled={saving}>Annuler</button>
+              <button
+                type="button"
+                className="edit-primary"
+                onClick={applyOpponentNameDraft}
+                disabled={saving || !opponentNameDraft.trim()}
+              >
+                Valider
               </button>
             </div>
           </div>
