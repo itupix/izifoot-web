@@ -1,11 +1,12 @@
 
 
 import { useCallback, useMemo, useState } from 'react'
-import { apiGetAllItems } from '../adapters/pagination'
+import { apiGetAllItems, appendQueryParams } from '../adapters/pagination'
 import { apiRoutes } from '../apiRoutes'
+import { apiGet } from '../apiClient'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchNotPlayed } from '../matchStatus'
-import type { AttendanceRow, MatchLite, Matchday, Player } from '../types/api'
+import type { AttendanceRow, ClubMe, MatchLite, Matchday, Player, Season } from '../types/api'
 
 // ---- Helpers ----
 function sortByDateAsc<T extends { createdAt: string }>(arr: T[]) { return arr.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) }
@@ -33,21 +34,26 @@ export default function StatsPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [matchdays, setMatchdays] = useState<Matchday[]>([])
   const [attendance, setAttendance] = useState<AttendanceRow[]>([])
+  const [season, setSeason] = useState<Season | null>(null)
   const [viewMode, setViewMode] = useState<'match' | 'plateau'>('match')
   const [rankTab, setRankTab] = useState<'buteurs' | 'entrainements' | 'plateaux'>('buteurs')
 
   const loadStats = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
+    const clubData = await apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null)
+    const currentSeasonId = clubData?.currentSeason?.id ?? null
+    const withSeason = (path: string) => currentSeasonId ? appendQueryParams(path, { seasonId: currentSeasonId }) : path
     const [rows, plist, plats, attends] = await Promise.all([
-      apiGetAllItems<MatchLite>(apiRoutes.matches.list),
-      apiGetAllItems<Player>(apiRoutes.players.list),
-      apiGetAllItems<Matchday>(apiRoutes.matchday.list),
-      apiGetAllItems<AttendanceRow>(apiRoutes.attendance.list),
+      apiGetAllItems<MatchLite>(withSeason(apiRoutes.matches.list)),
+      apiGetAllItems<Player>(appendQueryParams(apiRoutes.players.list, { rosterStatus: 'all' })),
+      apiGetAllItems<Matchday>(withSeason(apiRoutes.matchday.list)),
+      apiGetAllItems<AttendanceRow>(withSeason(apiRoutes.attendance.list)),
     ])
     if (isCancelled()) return
     setMatches(rows)
     setPlayers(plist)
     setMatchdays(plats)
     setAttendance(attends)
+    setSeason(clubData?.currentSeason ?? null)
   }, [])
 
   const { loading, error } = useAsyncLoader(loadStats)
@@ -153,18 +159,22 @@ export default function StatsPage() {
   const scorerTable = useMemo(() => {
     // Map playerId -> goals (we count only 'home' side as notre équipe)
     const tally = new Map<string, number>()
+    const scorerNameById = new Map<string, string>()
     for (const m of playedMatches) {
       const list = m.scorers || []
       for (const s of list) {
         if (s.side !== 'home') continue
         tally.set(s.playerId, (tally.get(s.playerId) || 0) + 1)
+        if (!scorerNameById.has(s.playerId) && typeof s.playerName === 'string' && s.playerName.trim()) {
+          scorerNameById.set(s.playerId, s.playerName.trim())
+        }
       }
     }
     // Join with player names
     const nameById = new Map(players.map(p => [p.id, p.name] as const))
     const rows = Array.from(tally.entries()).map(([playerId, goals]) => ({
       playerId,
-      name: nameById.get(playerId) || playerId,
+      name: nameById.get(playerId) || scorerNameById.get(playerId) || playerId,
       goals
     }))
     rows.sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name))
@@ -214,7 +224,10 @@ export default function StatsPage() {
           <h2 className="page-title">Statistiques</h2>
           <p className="panel-note">{playedMatches.length} match(s) joué(s) analysé(s)</p>
         </div>
-        <p className="page-subtitle">Vue synthétique des résultats, classements et évolutions.</p>
+        <p className="page-subtitle">
+          Vue synthétique des résultats, classements et évolutions.
+          {season ? ` Saison active: ${season.label} (${new Date(season.startDate).toLocaleDateString('fr-FR')} - ${new Date(season.endDate).toLocaleDateString('fr-FR')}).` : ''}
+        </p>
       </header>
 
       {loading && <div style={{ color: '#9ca3af' }}>Chargement…</div>}

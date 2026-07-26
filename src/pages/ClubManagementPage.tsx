@@ -17,7 +17,7 @@ import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useNavigate } from 'react-router-dom'
 import { useTeamScope } from '../useTeamScope'
-import type { ClubCoach, ClubMe, Team } from '../types/api'
+import type { ClubCoach, ClubMe, ClubSeasonConfig, Team } from '../types/api'
 import './ClubManagementPage.css'
 
 const AGE_CATEGORY_OPTIONS = [
@@ -62,6 +62,27 @@ type CoachInviteMutationResponse = {
 const AGE_CATEGORY_INDEX_BY_VALUE = new Map(AGE_CATEGORY_OPTIONS.map((option, index) => [option.value, index]))
 const AGE_CATEGORY_LABEL_BY_VALUE = new Map(AGE_CATEGORY_OPTIONS.map((option) => [option.value, option.label]))
 const coachInviteRoute = (id: string) => `/coaches/${encodeURIComponent(id)}/invite`
+const DEFAULT_SEASON_CONFIG: ClubSeasonConfig = {
+  startMonth: 8,
+  startDay: 1,
+  endMonth: 7,
+  endDay: 31,
+  timezone: 'Europe/Paris',
+}
+
+function formatSeasonBoundary(value?: string | null): string {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+function formatMonthDay(month?: number | null, day?: number | null): string {
+  if (!month || !day) return '—'
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}`
+}
 
 function normalizeCategoryToken(value: string): string {
   return value
@@ -198,8 +219,11 @@ export default function ClubManagementPage() {
 
   const [clubName, setClubName] = useState('')
   const [renamingClub, setRenamingClub] = useState(false)
+  const [savingSeason, setSavingSeason] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false)
+  const [isSeasonModalOpen, setIsSeasonModalOpen] = useState(false)
+  const [seasonDraft, setSeasonDraft] = useState<ClubSeasonConfig>(DEFAULT_SEASON_CONFIG)
 
   const [teamName, setTeamName] = useState('')
   const [selectedAgeCategories, setSelectedAgeCategories] = useState<AgeCategoryValue[]>([])
@@ -247,6 +271,7 @@ export default function ClubManagementPage() {
 
     setClub(clubData)
     setClubName(clubData?.name ?? '')
+    setSeasonDraft(clubData?.seasonConfig ?? DEFAULT_SEASON_CONFIG)
     setTeams(
       (Array.isArray(teamData) ? teamData : [])
         .map(normalizeTeam)
@@ -370,6 +395,37 @@ export default function ClubManagementPage() {
       openInfoModal(toErrorMessage(err, 'Erreur lors du renommage du club'), 'Erreur')
     } finally {
       setRenamingClub(false)
+    }
+  }
+
+  async function saveSeasonConfig(e: React.FormEvent) {
+    e.preventDefault()
+    if (!club) return
+
+    setSavingSeason(true)
+    try {
+      const updated = await apiPut<ClubMe>(apiRoutes.clubs.me, {
+        seasonConfig: {
+          startMonth: seasonDraft.startMonth,
+          startDay: seasonDraft.startDay,
+          endMonth: seasonDraft.endMonth,
+          endDay: seasonDraft.endDay,
+        },
+      })
+      setClub(updated)
+      setSeasonDraft(updated.seasonConfig ?? seasonDraft)
+      setIsSeasonModalOpen(false)
+      openInfoModal('Fenetre de saison mise a jour. Les nouvelles saisons s appliqueront aux matchs et aux statistiques.', 'Succes')
+    } catch (err: unknown) {
+      if (handleProtectedRouteErrors(err)) return
+      const status = extractStatusCode(err)
+      if (status === 409) {
+        openInfoModal('Impossible de modifier une configuration de saison deja materialisee avec des donnees historiques.', 'Erreur')
+        return
+      }
+      openInfoModal(toErrorMessage(err, 'Erreur mise a jour saison'), 'Erreur')
+    } finally {
+      setSavingSeason(false)
     }
   }
 
@@ -698,6 +754,37 @@ export default function ClubManagementPage() {
 
       <section className="panel" style={cardStyle}>
         <div className="panel-head">
+          <h3 className="panel-title">Saison</h3>
+          {isDirection ? (
+            <button
+              type="button"
+              style={buttonStyle}
+              onClick={() => {
+                setSeasonDraft(club?.seasonConfig ?? DEFAULT_SEASON_CONFIG)
+                setIsSeasonModalOpen(true)
+              }}
+            >
+              Modifier la saison
+            </button>
+          ) : null}
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <p className="club-inline-hint">Saison active du club</p>
+          <strong style={{ fontSize: 20 }}>{club?.currentSeason?.label || 'Non definie'}</strong>
+          <p className="club-team-card-meta">
+            {club?.currentSeason
+              ? `Du ${formatSeasonBoundary(club.currentSeason.startDate)} au ${formatSeasonBoundary(club.currentSeason.endDate)}`
+              : 'Aucune saison active.'}
+          </p>
+          <p className="club-inline-hint">
+            Configuration: debut {formatMonthDay(club?.seasonConfig?.startMonth, club?.seasonConfig?.startDay)}, fin {formatMonthDay(club?.seasonConfig?.endMonth, club?.seasonConfig?.endDay)}.
+            Cette fenetre rattache automatiquement les matchs et les statistiques a une saison.
+          </p>
+        </div>
+      </section>
+
+      <section className="panel" style={cardStyle}>
+        <div className="panel-head">
           <h3 className="panel-title">Mes equipes</h3>
           <RoundIconButton
             ariaLabel="Ajouter une equipe"
@@ -943,6 +1030,92 @@ export default function ClubManagementPage() {
                   }}
                 >
                   {renamingClub ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {isSeasonModalOpen && (
+        <>
+          <div className="club-modal-overlay" onClick={() => !savingSeason && setIsSeasonModalOpen(false)} />
+          <div className="club-modal" role="dialog" aria-modal="true" aria-label="Configurer la saison du club">
+            <div className="club-modal-head">
+              <h3>Configurer la saison</h3>
+              <button
+                type="button"
+                aria-label="Fermer"
+                className="club-modal-close"
+                onClick={() => !savingSeason && setIsSeasonModalOpen(false)}
+                disabled={savingSeason}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={saveSeasonConfig} style={formStyle}>
+              <p className="club-inline-hint">
+                Cette fenetre sert a rattacher automatiquement les matchs et les statistiques a une saison.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={seasonDraft.startMonth}
+                  onChange={(event) => setSeasonDraft((prev) => ({ ...prev, startMonth: Number(event.target.value) || prev.startMonth }))}
+                  style={inputStyle}
+                  placeholder="Mois debut"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={seasonDraft.startDay}
+                  onChange={(event) => setSeasonDraft((prev) => ({ ...prev, startDay: Number(event.target.value) || prev.startDay }))}
+                  style={inputStyle}
+                  placeholder="Jour debut"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={seasonDraft.endMonth}
+                  onChange={(event) => setSeasonDraft((prev) => ({ ...prev, endMonth: Number(event.target.value) || prev.endMonth }))}
+                  style={inputStyle}
+                  placeholder="Mois fin"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={seasonDraft.endDay}
+                  onChange={(event) => setSeasonDraft((prev) => ({ ...prev, endDay: Number(event.target.value) || prev.endDay }))}
+                  style={inputStyle}
+                  placeholder="Jour fin"
+                />
+              </div>
+              <p className="club-inline-hint">
+                Apercu: {formatMonthDay(seasonDraft.startMonth, seasonDraft.startDay)} → {formatMonthDay(seasonDraft.endMonth, seasonDraft.endDay)}
+              </p>
+              <div className="club-rename-actions">
+                <button
+                  type="button"
+                  onClick={() => setIsSeasonModalOpen(false)}
+                  style={secondaryButtonStyle}
+                  disabled={savingSeason}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    ...buttonStyle,
+                    ...(savingSeason ? disabledButtonStyle : {}),
+                  }}
+                  disabled={savingSeason}
+                >
+                  {savingSeason ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
               </div>
             </form>

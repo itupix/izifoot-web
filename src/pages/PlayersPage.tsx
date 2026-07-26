@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FloatingPlusButton from '../components/FloatingPlusButton'
 import SearchInput from '../components/SearchInput'
-import { canLoadMore, mergeById, nextOffset, normalizePaginatedResponse, withPagination } from '../adapters/pagination'
-import { apiDelete, apiGet, apiPost } from '../apiClient'
+import { appendQueryParams, canLoadMore, mergeById, nextOffset, normalizePaginatedResponse, withPagination } from '../adapters/pagination'
+import { apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
@@ -153,6 +153,23 @@ function getPlayerDisplayName(player: Player): string {
   return fullName || player.name || '—'
 }
 
+function isPlayerActive(player: Player): boolean {
+  if (typeof player.isActive === 'boolean') return player.isActive
+  if (typeof player.is_active === 'boolean') return player.is_active
+  return true
+}
+
+function getPlayerTeamLabel(player: Player): string {
+  const teamName = typeof player.teamName === 'string' ? player.teamName.trim() : ''
+  if (teamName) return teamName
+  const teamId = typeof player.teamId === 'string' ? player.teamId.trim() : ''
+  return teamId || 'Équipe non renseignée'
+}
+
+function formatPlayersCount(count: number): string {
+  return count === 1 ? '1 joueur' : `${count} joueurs`
+}
+
 function formatPositionLabel(position: string): string {
   const normalized = position.trim().toUpperCase()
   if (normalized === 'GARDIEN') return 'Gardien'
@@ -167,6 +184,10 @@ export default function PlayersPage() {
   const { me } = useAuth()
   const { selectedTeamId, selectedTeamFormat, requiresSelection } = useTeamScope()
   const navigate = useNavigate()
+  const playersListPath = useMemo(
+    () => appendQueryParams(apiRoutes.players.list, { rosterStatus: 'all' }),
+    [],
+  )
 
   const playersOnField = useMemo(() => playersOnFieldFromGameFormat(selectedTeamFormat, 5), [selectedTeamFormat])
   const tacticalTokens = useMemo(() => buildTacticalTokens(playersOnField), [playersOnField])
@@ -208,12 +229,12 @@ export default function PlayersPage() {
   const teamScopedWritable = writable && (!requiresSelection || Boolean(selectedTeamId))
 
   const loadPlayers = useCallback(async ({ isCancelled }: { isCancelled: () => boolean }) => {
-    const raw = await apiGet<unknown>(withPagination(apiRoutes.players.list, { limit: PLAYERS_PAGE_LIMIT, offset: 0 }))
+    const raw = await apiGet<unknown>(withPagination(playersListPath, { limit: PLAYERS_PAGE_LIMIT, offset: 0 }))
     const page = normalizePaginatedResponse<Player>(raw, { limit: PLAYERS_PAGE_LIMIT, offset: 0 })
     if (isCancelled()) return
     setPlayers(page.items)
     setPlayersPagination(page.pagination)
-  }, [])
+  }, [playersListPath])
 
   const { loading, error } = useAsyncLoader(loadPlayers)
   const canLoadMorePlayers = useMemo(() => canLoadMore(playersPagination), [playersPagination])
@@ -223,7 +244,7 @@ export default function PlayersPage() {
     const offset = nextOffset(playersPagination)
     setLoadingMorePlayers(true)
     try {
-      const raw = await apiGet<unknown>(withPagination(apiRoutes.players.list, { limit: PLAYERS_PAGE_LIMIT, offset }))
+      const raw = await apiGet<unknown>(withPagination(playersListPath, { limit: PLAYERS_PAGE_LIMIT, offset }))
       const page = normalizePaginatedResponse<Player>(raw, { limit: PLAYERS_PAGE_LIMIT, offset })
       setPlayers((prev) => mergeById(prev, page.items))
       setPlayersPagination(page.pagination)
@@ -272,7 +293,17 @@ export default function PlayersPage() {
   }, [filtered, sortDir, sortKey])
 
   const hasActiveFilters = Boolean(q.trim() || posFilter)
-  const playersCountLabel = sortedPlayers.length === 1 ? '1 joueur' : `${sortedPlayers.length} joueurs`
+  const activePlayers = useMemo(
+    () => sortedPlayers.filter(isPlayerActive),
+    [sortedPlayers],
+  )
+  const inactivePlayers = useMemo(
+    () => sortedPlayers.filter((player) => !isPlayerActive(player)),
+    [sortedPlayers],
+  )
+  const playersCountLabel = formatPlayersCount(sortedPlayers.length)
+  const activePlayersCountLabel = formatPlayersCount(activePlayers.length)
+  const inactivePlayersCountLabel = formatPlayersCount(inactivePlayers.length)
   const canSaveTactic = tacticName.trim().length > 0
   const currentTacticSignature = useMemo(
     () => JSON.stringify({ preset: tacticalPresetValue, points: tacticalPoints }),
@@ -420,14 +451,18 @@ export default function PlayersPage() {
     }
   }
 
-  async function removePlayer(id: string) {
+  async function updatePlayerRosterStatus(player: Player, nextIsActive: boolean) {
     if (!teamScopedWritable) return
-    if (!uiConfirm('Supprimer ce joueur ?')) return
+    const playerName = getPlayerDisplayName(player)
+    const confirmed = nextIsActive
+      ? uiConfirm(`Réintégrer ${playerName} dans l'effectif ?`)
+      : uiConfirm(`Retirer ${playerName} de l'effectif ?`)
+    if (!confirmed) return
     try {
-      await apiDelete(apiRoutes.players.byId(id))
-      setPlayers((prev) => prev.filter((player) => player.id !== id))
+      const updated = await apiPut<Player>(apiRoutes.players.rosterStatus(player.id), { isActive: nextIsActive })
+      setPlayers((prev) => prev.map((entry) => (entry.id === updated.id ? updated : entry)))
     } catch (err: unknown) {
-      uiAlert(`Erreur suppression: ${toErrorMessage(err)}`)
+      uiAlert(`Erreur mise à jour effectif: ${toErrorMessage(err)}`)
     }
   }
 
@@ -589,7 +624,7 @@ export default function PlayersPage() {
 
           <section className="players-panel players-panel--effectif">
             <div className="players-meta-row">
-              <p className="panel-note">{playersCountLabel}</p>
+              <p className="panel-note">{inactivePlayers.length > 0 ? `${activePlayersCountLabel} dans l'effectif` : playersCountLabel}</p>
               <div className="players-meta-actions">
                 {hasActiveFilters && (
                   <button type="button" className="players-secondary-btn" onClick={resetFilters}>
@@ -602,7 +637,7 @@ export default function PlayersPage() {
 
             {error && <div className="inline-alert error">{error}</div>}
 
-            {sortedPlayers.length > 0 ? (
+            {activePlayers.length > 0 ? (
               <table className="players-table">
                 <thead>
                   <tr>
@@ -615,7 +650,7 @@ export default function PlayersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedPlayers.map((player) => (
+                  {activePlayers.map((player) => (
                     <tr
                       key={player.id}
                       className="players-row-clickable"
@@ -642,13 +677,13 @@ export default function PlayersPage() {
                           disabled={!teamScopedWritable}
                           onClick={(event) => {
                             event.stopPropagation()
-                            void removePlayer(player.id)
+                            void updatePlayerRosterStatus(player, false)
                           }}
                           onKeyDown={(event) => {
                             event.stopPropagation()
                           }}
                         >
-                          Supprimer
+                          Retirer
                         </button>
                       </td>
                     </tr>
@@ -658,7 +693,13 @@ export default function PlayersPage() {
             ) : (
               <div className="players-empty-state">
                 <p className="players-empty-title">
-                  {hasActiveFilters ? 'Aucun joueur ne correspond aux filtres.' : 'Aucun joueur pour le moment.'}
+                  {inactivePlayers.length > 0
+                    ? (hasActiveFilters
+                        ? 'Aucun joueur actif ne correspond aux filtres.'
+                        : 'Aucun joueur actif dans l’effectif.')
+                    : (hasActiveFilters
+                        ? 'Aucun joueur ne correspond aux filtres.'
+                        : 'Aucun joueur pour le moment.')}
                 </p>
                 <div className="players-empty-actions">
                   {hasActiveFilters && (
@@ -687,6 +728,66 @@ export default function PlayersPage() {
               </div>
             )}
           </section>
+
+          {inactivePlayers.length > 0 && (
+            <section className="players-panel players-panel--effectif">
+              <div className="players-meta-row">
+                <p className="panel-note">{inactivePlayersCountLabel} hors effectif</p>
+              </div>
+
+              <table className="players-table">
+                <thead>
+                  <tr>
+                    <th>Nom</th>
+                    <th className="players-row-actions-head">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inactivePlayers.map((player) => (
+                    <tr
+                      key={player.id}
+                      className="players-row-clickable"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Voir la fiche de ${getPlayerDisplayName(player)}`}
+                      onClick={() => navigate(`/effectif/${encodeURIComponent(player.id)}`)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return
+                        event.preventDefault()
+                        navigate(`/effectif/${encodeURIComponent(player.id)}`)
+                      }}
+                    >
+                      <td>
+                        <div className="players-name-cell players-name-cell--stacked">
+                          <PlayerAvatar player={player} />
+                          <span className="players-name-block">
+                            <span>{getPlayerDisplayName(player)}</span>
+                            <span className="players-name-subtext">{getPlayerTeamLabel(player)}</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="players-row-actions">
+                        <button
+                          type="button"
+                          className="players-icon-btn"
+                          disabled={!teamScopedWritable}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void updatePlayerRosterStatus(player, true)
+                          }}
+                          onKeyDown={(event) => {
+                            event.stopPropagation()
+                          }}
+                        >
+                          Réintégrer
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
         </>
       ) : (
         <section className="panel players-panel">

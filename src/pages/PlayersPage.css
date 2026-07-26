@@ -123,6 +123,20 @@
   gap: 10px;
 }
 
+.players-name-cell--stacked {
+  align-items: flex-start;
+}
+
+.players-name-block {
+  display: grid;
+  gap: 2px;
+}
+
+.players-name-subtext {
+  font-size: 12px;
+  color: #64748b;
+}
+
 .players-avatar {
   width: 30px;
   height: 30px;

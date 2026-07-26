@@ -14,6 +14,7 @@ export const apiRoutes = {
   meChild: '/me/child',
   clubs: {
     me: '/clubs/me',
+    seasons: '/clubs/me/seasons',
     coaches: '/clubs/me/coaches',
   },
   coaches: {
@@ -36,6 +37,7 @@ export const apiRoutes = {
   players: {
     list: '/players',
     byId: (id: string) => `/players/${enc(id)}`,
+    rosterStatus: (id: string) => `/players/${enc(id)}/roster-status`,
     parentById: (id: string, parentId: string) => `/players/${enc(id)}/parents/${enc(parentId)}`,
     invite: (id: string) => `/players/${enc(id)}/invite`,
     inviteQr: (id: string) => `/players/${enc(id)}/invite/qr`,

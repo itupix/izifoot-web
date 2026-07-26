@@ -301,6 +301,24 @@
   grid-column: 1 / -1;
 }
 
+.player-details-roster-card {
+  grid-column: 1 / -1;
+}
+
+.player-roster-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.player-roster-note {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .player-parent-list {
   display: grid;
   gap: 8px;

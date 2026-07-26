@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Building2, CalendarCheck2, IdCard, Mail, Phone, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { API_BASE, HttpError } from '../api'
-import { apiGetAllItems } from '../adapters/pagination'
+import { apiGetAllItems, appendQueryParams } from '../adapters/pagination'
 import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon } from '../components/icons'
@@ -44,6 +44,12 @@ function getPlayerDisplayName(player: Player): string {
   const { firstName, lastName } = getPlayerNames(player)
   const fullName = `${firstName} ${lastName}`.trim()
   return fullName || player.name || 'Joueur'
+}
+
+function isPlayerActive(player: Player): boolean {
+  if (typeof player.isActive === 'boolean') return player.isActive
+  if (typeof player.is_active === 'boolean') return player.is_active
+  return true
 }
 
 function getInitials(fullName: string) {
@@ -207,9 +213,9 @@ export default function PlayerDetailsPage() {
   const [error, setError] = useState<string | null>(null)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [rosterStatusAction, setRosterStatusAction] = useState<'remove' | 'reintegrate' | null>(null)
   const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [updatingRosterStatus, setUpdatingRosterStatus] = useState(false)
   const [matches, setMatches] = useState<MatchLite[]>([])
   const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([])
   const [trainings, setTrainings] = useState<Training[]>([])
@@ -263,12 +269,15 @@ export default function PlayerDetailsPage() {
       setInvitationStatusError(null)
       setInviteUrl(null)
       try {
+        const clubPayload = await apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null)
+        const seasonId = clubPayload?.currentSeason?.id ?? null
+        const withSeason = (path: string) => seasonId ? appendQueryParams(path, { seasonId }) : path
         const [playerData, matchData, attendanceData, trainingData, clubData] = await Promise.all([
           apiGet<Player>(apiRoutes.players.byId(id)),
-          apiGetAllItems<MatchLite>(apiRoutes.matches.list).catch(() => []),
-          apiGetAllItems<AttendanceRow>(apiRoutes.attendance.list).catch(() => []),
-          apiGetAllItems<Training>(apiRoutes.trainings.list).catch(() => []),
-          apiGet<ClubMe>(apiRoutes.clubs.me).catch(() => null),
+          apiGetAllItems<MatchLite>(withSeason(apiRoutes.matches.list)).catch(() => []),
+          apiGetAllItems<AttendanceRow>(withSeason(apiRoutes.attendance.list)).catch(() => []),
+          apiGetAllItems<Training>(withSeason(apiRoutes.trainings.list)).catch(() => []),
+          Promise.resolve(clubPayload),
         ])
         if (!cancelled) {
           setPlayer(playerData)
@@ -297,6 +306,7 @@ export default function PlayerDetailsPage() {
   }, [id])
 
   const playerName = useMemo(() => (player ? getPlayerDisplayName(player) : 'Joueur'), [player])
+  const playerIsActive = useMemo(() => (player ? isPlayerActive(player) : true), [player])
   const playerPosition = useMemo(() => formatPositionLabel(player?.primary_position || POSITION_UNDEFINED), [player])
   const teamNameById = useMemo(() => new Map(teamOptions.map((team) => [team.id, team.name])), [teamOptions])
   const availableTeamOptions = useMemo(() => {
@@ -379,6 +389,15 @@ export default function PlayerDetailsPage() {
     if (totalActiveTrainings <= 0) return 0
     return Math.round((attendedTrainings / totalActiveTrainings) * 100)
   }, [attendedTrainings, totalActiveTrainings])
+  const rosterStatusLabel = playerIsActive ? 'Dans l’effectif' : 'Hors effectif'
+  const rosterStatusButtonLabel = playerIsActive ? 'Retirer de l’effectif' : 'Réintégrer dans l’effectif'
+  const rosterStatusModalTitle = rosterStatusAction === 'reintegrate'
+    ? 'Réintégrer le joueur'
+    : 'Retirer le joueur de l’effectif'
+  const rosterStatusModalMessage = rosterStatusAction === 'reintegrate'
+    ? `Confirmer la réintégration de ${playerName} dans l’effectif ?`
+    : `Confirmer le retrait de ${playerName} de l’effectif ?`
+  const rosterStatusModalConfirmLabel = rosterStatusAction === 'reintegrate' ? 'Réintégrer' : 'Retirer'
 
   function openEditModal() {
     if (!player) return
@@ -467,16 +486,21 @@ export default function PlayerDetailsPage() {
     }
   }
 
-  async function deletePlayer() {
+  async function updatePlayerRosterStatus() {
     if (!player?.id) return
-    setDeleting(true)
+    if (!rosterStatusAction) return
+    setUpdatingRosterStatus(true)
     try {
-      await apiDelete(apiRoutes.players.byId(player.id))
-      navigate('/effectif')
+      const updated = await apiPut<Player>(
+        apiRoutes.players.rosterStatus(player.id),
+        { isActive: rosterStatusAction === 'reintegrate' },
+      )
+      setPlayer(updated)
+      setRosterStatusAction(null)
     } catch (err: unknown) {
-      uiAlert(`Erreur suppression joueur: ${toErrorMessage(err)}`)
+      uiAlert(`Erreur mise à jour effectif: ${toErrorMessage(err)}`)
     } finally {
-      setDeleting(false)
+      setUpdatingRosterStatus(false)
     }
   }
 
@@ -613,6 +637,7 @@ export default function PlayerDetailsPage() {
                   <span><UserRoundCheck size={13} />{isChildPlayer(player) ? 'Enfant' : 'Adulte'}</span>
                   <span><ShieldCheck size={13} />{hasLicence ? 'Licence OK' : 'Licence manquante'}</span>
                   <span><CalendarCheck2 size={13} />{trainingAttendanceRate}% assiduité</span>
+                  <span><Users size={13} />{rosterStatusLabel}</span>
                 </div>
                 {!isChildPlayer(player) && invitationLoading && (
                   <div className="player-invite-row">
@@ -697,13 +722,13 @@ export default function PlayerDetailsPage() {
                       </button>
                       <button
                         type="button"
-                        className="danger"
+                        className={playerIsActive ? 'danger' : ''}
                         onClick={() => {
                           setActionsMenuOpen(false)
-                          setDeleteModalOpen(true)
+                          setRosterStatusAction(playerIsActive ? 'remove' : 'reintegrate')
                         }}
                       >
-                        Supprimer
+                        {rosterStatusButtonLabel}
                       </button>
                     </div>
                   </>
@@ -732,6 +757,28 @@ export default function PlayerDetailsPage() {
           </div>
 
           <div className="player-details-grid">
+            <div className="player-details-roster-card">
+              <span className="player-info-icon"><Users size={15} /></span>
+              <strong>Effectif</strong>
+              <p>{rosterStatusLabel}</p>
+              <div className="player-roster-actions">
+                <button
+                  type="button"
+                  className={playerIsActive ? 'players-danger-btn' : 'players-primary-btn'}
+                  onClick={() => setRosterStatusAction(playerIsActive ? 'remove' : 'reintegrate')}
+                  disabled={updatingRosterStatus}
+                >
+                  {updatingRosterStatus
+                    ? (playerIsActive ? 'Retrait...' : 'Réintégration...')
+                    : rosterStatusButtonLabel}
+                </button>
+              </div>
+              {!playerIsActive && (
+                <p className="player-roster-note">
+                  Le joueur reste visible dans les statistiques déjà enregistrées, mais n’apparaît plus dans les convocations et entraînements disponibles.
+                </p>
+              )}
+            </div>
             {isChildPlayer(player) && (
               <div className="player-details-parent-card">
                 <span className="player-info-icon"><Users size={15} /></span>
@@ -932,19 +979,26 @@ export default function PlayerDetailsPage() {
         </>
       )}
 
-      {deleteModalOpen && (
+      {rosterStatusAction && (
         <>
-          <div className="player-modal-overlay" onClick={() => !deleting && setDeleteModalOpen(false)} />
-          <div className="player-modal" role="dialog" aria-modal="true" aria-label="Supprimer le joueur">
+          <div className="player-modal-overlay" onClick={() => !updatingRosterStatus && setRosterStatusAction(null)} />
+          <div className="player-modal" role="dialog" aria-modal="true" aria-label={rosterStatusModalTitle}>
             <div className="player-modal-head">
-              <h3>Supprimer le joueur</h3>
-              <button type="button" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>x</button>
+              <h3>{rosterStatusModalTitle}</h3>
+              <button type="button" onClick={() => setRosterStatusAction(null)} disabled={updatingRosterStatus}>x</button>
             </div>
-            <p>Confirmer la suppression de {playerName} ?</p>
+            <p>{rosterStatusModalMessage}</p>
             <div className="player-modal-actions">
-              <button type="button" className="players-secondary-btn" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>Annuler</button>
-              <button type="button" className="players-danger-btn" onClick={() => { void deletePlayer() }} disabled={deleting}>
-                {deleting ? 'Suppression...' : 'Supprimer'}
+              <button type="button" className="players-secondary-btn" onClick={() => setRosterStatusAction(null)} disabled={updatingRosterStatus}>Annuler</button>
+              <button
+                type="button"
+                className={rosterStatusAction === 'remove' ? 'players-danger-btn' : 'players-primary-btn'}
+                onClick={() => { void updatePlayerRosterStatus() }}
+                disabled={updatingRosterStatus}
+              >
+                {updatingRosterStatus
+                  ? (rosterStatusAction === 'remove' ? 'Retrait...' : 'Réintégration...')
+                  : rosterStatusModalConfirmLabel}
               </button>
             </div>
           </div>

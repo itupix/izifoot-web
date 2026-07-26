@@ -9,6 +9,24 @@ export interface PaginatedResponse<T> {
   pagination: PaginationMeta
 }
 
+export interface ClubSeasonConfig {
+  startMonth: number
+  startDay: number
+  endMonth: number
+  endDay: number
+  timezone?: 'Europe/Paris' | string
+}
+
+export interface Season {
+  id: string
+  clubId: string
+  key: string
+  label: string
+  startDate: string
+  endDate: string
+  isCurrent?: boolean
+}
+
 export interface Player {
   id: string
   name: string
@@ -47,11 +65,17 @@ export interface Player {
   clubName?: string | null
   teamId?: string | null
   teamName?: string | null
+  isActive?: boolean | null
+  is_active?: boolean | null
+  deactivatedAt?: string | null
+  deactivated_at?: string | null
 }
 
 export interface Training {
   id: string
   date: string
+  seasonId?: string | null
+  season?: Season | null
   endTime?: string | null
   status: string
   teamId?: string | null
@@ -68,6 +92,8 @@ export interface Training {
 export interface Matchday {
   id: string
   date: string
+  seasonId?: string | null
+  season?: Season | null
   lieu: string
   address?: string | null
   startTime?: string | null
@@ -82,6 +108,8 @@ export interface ClubMe {
   id: string
   name: string
   createdAt?: string
+  seasonConfig?: ClubSeasonConfig | null
+  currentSeason?: Season | null
 }
 
 export interface Team {
@@ -236,8 +264,11 @@ export interface MatchScorer {
 export interface MatchLite {
   id: string
   createdAt: string
+  date?: string | null
   type: 'ENTRAINEMENT' | 'PLATEAU' | 'MATCH' | 'TOURNOI'
   matchdayId?: string | null
+  seasonId?: string | null
+  season?: Season | null
   rotationGameKey?: string | null
   status?: 'PLANNED' | 'PLAYED' | 'CANCELLED' | string
   played?: boolean
