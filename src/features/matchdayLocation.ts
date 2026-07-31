@@ -6,11 +6,16 @@ export function normalizeCompetitionType(value?: string | null) {
   return (value || 'PLATEAU').toUpperCase()
 }
 
+function isHomeMatch(matchday: MatchdayLocationLike) {
+  const location = matchday.lieu?.trim() || ''
+  return normalizeCompetitionType(matchday.competitionType) === 'MATCH'
+    && (matchday.matchVenue === 'HOME' || location.length === 0)
+}
+
 export function formatMatchdayLocationLabel(matchday: MatchdayLocationLike, fallback = 'À définir') {
-  const normalizedType = normalizeCompetitionType(matchday.competitionType)
   const location = matchday.lieu?.trim() || ''
 
-  if (normalizedType === 'MATCH' && matchday.matchVenue === 'HOME') {
+  if (isHomeMatch(matchday)) {
     return 'À domicile'
   }
 
@@ -20,7 +25,7 @@ export function formatMatchdayLocationLabel(matchday: MatchdayLocationLike, fall
 export function getMatchdayMapQuery(matchday: MatchdayLocationLike) {
   const address = matchday.address?.trim() || ''
   if (address) return address
-  if (normalizeCompetitionType(matchday.competitionType) === 'MATCH' && matchday.matchVenue === 'HOME') {
+  if (isHomeMatch(matchday)) {
     return null
   }
   const location = matchday.lieu?.trim() || ''
