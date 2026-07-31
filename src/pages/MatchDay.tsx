@@ -8,6 +8,7 @@ import { appendQueryParams } from '../adapters/pagination'
 import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
+import { formatMatchdayLocationLabel } from '../features/matchdayLocation'
 import { uiAlert } from '../ui'
 import type { Matchday, Player } from '../types/api'
 function useQuery() {
@@ -196,7 +197,7 @@ export default function MatchDay() {
         <p className="page-subtitle">Convocations, RSVP et résultats des matchs du plateau.</p>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div><strong>Date:</strong> {dateLabel}</div>
-          <div><strong>Lieu:</strong> {matchday.lieu}</div>
+          <div><strong>Lieu:</strong> {formatMatchdayLocationLabel(matchday)}</div>
           {/* <div><strong>Adresse:</strong> {plateau.adresse || '—'}</div> */}
         </div>
       </header>

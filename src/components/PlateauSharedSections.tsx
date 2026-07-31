@@ -31,6 +31,7 @@ type PlateauInfoSectionProps = {
   tab: 'LIEU' | 'HORAIRES'
   onTabChange: (tab: 'LIEU' | 'HORAIRES') => void
   addressLabel: string
+  mapQuery?: string | null
   startTimeLabel: string
   meetingTimeLabel: string
   addressAction?: ReactNode
@@ -67,6 +68,7 @@ export function PlateauInfoSection({
   tab,
   onTabChange,
   addressLabel,
+  mapQuery,
   startTimeLabel,
   meetingTimeLabel,
   addressAction,
@@ -98,12 +100,19 @@ export function PlateauInfoSection({
       {tab === 'LIEU' ? (
         <div className="info-pane-grid">
           <div className="map-preview-wrap">
-            <iframe
-              title="Aperçu carte du lieu"
-              src={`https://maps.google.com/maps?q=${encodeURIComponent(addressLabel)}&z=14&output=embed`}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
+            {mapQuery ? (
+              <iframe
+                title="Aperçu carte du lieu"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(mapQuery)}&z=14&output=embed`}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            ) : (
+              <div className="info-hour-card">
+                <p className="info-label">Carte</p>
+                <p className="info-value">Aucune carte pour un match à domicile.</p>
+              </div>
+            )}
           </div>
           <div className="info-address">
             <div className="info-row-head">

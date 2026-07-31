@@ -8,6 +8,7 @@ import CtaButton from '../components/CtaButton'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SoccerBallIcon, TrophyIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
+import { formatMatchdayLocationLabel } from '../features/matchdayLocation'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
@@ -18,6 +19,7 @@ import './TrainingsPage.css'
 const LAST_PLANNING_DATE_KEY = 'izifoot.planning.lastDate'
 const TRAININGS_PAGE_LIMIT = 30
 const MATCHDAYS_PAGE_LIMIT = 30
+type MatchVenueChoice = 'HOME' | 'AWAY'
 
 function yyyyMmDd(d: Date) {
   const y = d.getFullYear()
@@ -97,6 +99,7 @@ export default function TrainingsPage() {
   const [competitionLocation, setCompetitionLocation] = useState('')
   const [competitionOpponent, setCompetitionOpponent] = useState('')
   const [competitionType, setCompetitionType] = useState<'PLATEAU' | 'MATCH' | 'TOURNOI'>('PLATEAU')
+  const [competitionMatchVenue, setCompetitionMatchVenue] = useState<MatchVenueChoice | ''>('')
   const [isCreatingCompetition, setIsCreatingCompetition] = useState(false)
   const [pickerMonth, setPickerMonth] = useState<Date>(() => {
     const now = new Date()
@@ -249,6 +252,11 @@ export default function TrainingsPage() {
     )
     return Array.from(uniqueLocations).sort((a, b) => a.localeCompare(b, 'fr-FR'))
   }, [matchdays])
+  const shouldShowCompetitionLocationField = competitionType !== 'MATCH' || competitionMatchVenue === 'AWAY'
+  const isCompetitionSubmitDisabled = isCreatingCompetition
+    || (competitionType === 'MATCH' && !competitionOpponent.trim())
+    || (competitionType === 'MATCH' && !competitionMatchVenue)
+    || (shouldShowCompetitionLocationField && !competitionLocation.trim())
   const monthLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('fr-FR', {
@@ -270,6 +278,7 @@ export default function TrainingsPage() {
     setCompetitionType('PLATEAU')
     setCompetitionLocation('')
     setCompetitionOpponent('')
+    setCompetitionMatchVenue('')
     setIsCompetitionModalOpen(true)
   }
 
@@ -277,16 +286,24 @@ export default function TrainingsPage() {
     if (isCreatingCompetition) return
     setCompetitionLocation('')
     setCompetitionOpponent('')
+    setCompetitionMatchVenue('')
     setIsCompetitionModalOpen(false)
   }
 
-  async function createCompetitionForDay(day: Date, lieu: string, opponentName: string) {
+  async function createCompetitionForDay(day: Date, lieu: string, opponentName: string, matchVenue: MatchVenueChoice | '') {
     if (!teamScopedWritable) return
     const normalizedLieu = lieu.trim()
     const normalizedOpponentName = opponentName.trim()
-    if (!normalizedLieu) return
     if (competitionType === 'MATCH' && !normalizedOpponentName) {
       uiAlert('Merci de renseigner le nom de l’adversaire.')
+      return
+    }
+    if (competitionType === 'MATCH' && !matchVenue) {
+      uiAlert('Merci de choisir si le match se joue à domicile ou à l’extérieur.')
+      return
+    }
+    if ((competitionType !== 'MATCH' || matchVenue === 'AWAY') && !normalizedLieu) {
+      uiAlert(competitionType === 'TOURNOI' ? 'Merci de renseigner le nom du tournoi.' : 'Merci de renseigner le lieu.')
       return
     }
     setIsCreatingCompetition(true)
@@ -294,9 +311,9 @@ export default function TrainingsPage() {
       const activeTeam = teamOptions.find((team) => team.id === selectedTeamId)
       const created = await apiPost<Matchday>(apiRoutes.matchday.list, {
         date: day.toISOString(),
-        lieu: normalizedLieu,
+        lieu: competitionType === 'MATCH' && matchVenue === 'HOME' ? '' : normalizedLieu,
         competitionType,
-        ...(competitionType === 'MATCH' ? { opponentName: normalizedOpponentName } : {}),
+        ...(competitionType === 'MATCH' ? { opponentName: normalizedOpponentName, matchVenue } : {}),
         teamId: selectedTeamId || undefined,
         team_id: selectedTeamId || undefined,
         teamName: activeTeam?.name || undefined,
@@ -306,6 +323,7 @@ export default function TrainingsPage() {
       setMatchdays(prev => [created, ...prev])
       setCompetitionLocation('')
       setCompetitionOpponent('')
+      setCompetitionMatchVenue('')
       setIsCompetitionModalOpen(false)
       navigate(`/matchday/${created.id}?date=${selectedDayKey}`)
     } catch (err: unknown) {
@@ -531,7 +549,7 @@ export default function TrainingsPage() {
                   <span className="trainings-item-left">
                     <TrophyIcon size={24} />
                     <span style={{ display: 'grid', gap: 2 }}>
-                      <span>{competitionTypeLabel(p.competitionType)} — {p.lieu}</span>
+                      <span>{competitionTypeLabel(p.competitionType)} — {formatMatchdayLocationLabel(p)}</span>
                       {me?.role === 'DIRECTION' && (
                         <small style={{ color: '#64748b' }}>
                           Équipe: {p.teamId ? (teamNameById.get(p.teamId) || p.teamId) : 'Non renseignée'}
@@ -667,7 +685,7 @@ export default function TrainingsPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                void createCompetitionForDay(selectedDate, competitionLocation, competitionOpponent)
+                void createCompetitionForDay(selectedDate, competitionLocation, competitionOpponent, competitionMatchVenue)
               }}
               className="trainings-plateau-form"
             >
@@ -680,7 +698,10 @@ export default function TrainingsPage() {
                 onChange={(e) => {
                   const nextType = e.target.value as 'PLATEAU' | 'MATCH' | 'TOURNOI'
                   setCompetitionType(nextType)
-                  if (nextType !== 'MATCH') setCompetitionOpponent('')
+                  if (nextType !== 'MATCH') {
+                    setCompetitionOpponent('')
+                    setCompetitionMatchVenue('')
+                  }
                 }}
                 className="trainings-text-input"
                 disabled={isCreatingCompetition}
@@ -689,19 +710,6 @@ export default function TrainingsPage() {
                 <option value="MATCH">Match</option>
                 <option value="TOURNOI">Tournoi</option>
               </select>
-
-              <label htmlFor="plateau-location" className="trainings-field-label">
-                {competitionType === 'MATCH' ? 'Lieu du match' : competitionType === 'TOURNOI' ? 'Nom du tournoi' : 'Lieu du plateau'}
-              </label>
-              <input
-                id="plateau-location"
-                value={competitionLocation}
-                onChange={(e) => setCompetitionLocation(e.target.value)}
-                placeholder={competitionType === 'TOURNOI' ? 'Ex. Tournoi de printemps U11' : 'Ex. Stade municipal'}
-                className="trainings-text-input"
-                autoFocus
-                disabled={isCreatingCompetition}
-              />
 
               {competitionType === 'MATCH' && (
                 <>
@@ -714,12 +722,49 @@ export default function TrainingsPage() {
                     onChange={(e) => setCompetitionOpponent(e.target.value)}
                     placeholder="Ex. FC Montfermeil"
                     className="trainings-text-input"
+                    autoFocus
+                    disabled={isCreatingCompetition}
+                  />
+
+                  <label htmlFor="competition-match-venue" className="trainings-field-label">
+                    Réception ou déplacement
+                  </label>
+                  <select
+                    id="competition-match-venue"
+                    value={competitionMatchVenue}
+                    onChange={(e) => {
+                      const nextVenue = e.target.value as MatchVenueChoice | ''
+                      setCompetitionMatchVenue(nextVenue)
+                      if (nextVenue === 'HOME') setCompetitionLocation('')
+                    }}
+                    className="trainings-text-input"
+                    disabled={isCreatingCompetition}
+                  >
+                    <option value="">Choisir</option>
+                    <option value="HOME">À domicile</option>
+                    <option value="AWAY">À l’extérieur</option>
+                  </select>
+                </>
+              )}
+
+              {shouldShowCompetitionLocationField && (
+                <>
+                  <label htmlFor="plateau-location" className="trainings-field-label">
+                    {competitionType === 'MATCH' ? 'Lieu du match' : competitionType === 'TOURNOI' ? 'Nom du tournoi' : 'Lieu du plateau'}
+                  </label>
+                  <input
+                    id="plateau-location"
+                    value={competitionLocation}
+                    onChange={(e) => setCompetitionLocation(e.target.value)}
+                    placeholder={competitionType === 'TOURNOI' ? 'Ex. Tournoi de printemps U11' : 'Ex. Stade municipal'}
+                    className="trainings-text-input"
+                    autoFocus={competitionType !== 'MATCH'}
                     disabled={isCreatingCompetition}
                   />
                 </>
               )}
 
-              {competitionType !== 'TOURNOI' && matchdayLocations.length > 0 && (
+              {shouldShowCompetitionLocationField && competitionType !== 'TOURNOI' && matchdayLocations.length > 0 && (
                 <div className="trainings-location-picker">
                   <span className="trainings-location-picker-label">Lieux déjà utilisés</span>
                   <div className="trainings-location-chips">
@@ -750,7 +795,7 @@ export default function TrainingsPage() {
                 <button
                   type="submit"
                   className="trainings-primary-btn"
-                  disabled={isCreatingCompetition || !competitionLocation.trim() || (competitionType === 'MATCH' && !competitionOpponent.trim())}
+                  disabled={isCompetitionSubmitDisabled}
                 >
                   {isCreatingCompetition ? 'Création…' : 'Créer'}
                 </button>

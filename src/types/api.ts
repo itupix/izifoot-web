@@ -100,6 +100,7 @@ export interface Matchday {
   meetingTime?: string | null
   teamId?: string | null
   competitionType?: 'PLATEAU' | 'MATCH' | 'TOURNOI' | null
+  matchVenue?: 'HOME' | 'AWAY' | null
   tournamentHasGroupStage?: boolean | null
   tournamentKnockoutMode?: 'NONE' | 'SINGLE' | 'HOME_AWAY' | null
 }

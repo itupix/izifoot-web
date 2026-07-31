@@ -6,6 +6,7 @@ import { normalizeMatchdayPayload } from '../adapters/matchday'
 import { apiRoutes } from '../apiRoutes'
 import { PlateauInfoSection, PlateauPageHeader, PlateauRotationContent } from '../components/PlateauSharedSections'
 import { WarningIcon } from '../components/icons'
+import { formatMatchdayLocationLabel, getMatchdayMapQuery } from '../features/matchdayLocation'
 import { linkRotationSlotsToMatches } from '../features/rotationLinking'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { isMatchCancelled } from '../matchStatus'
@@ -148,9 +149,10 @@ export default function PublicPlateauPage() {
     return `${hh}:${mm}`
   }, [matchday?.date, matchday?.startTime, rotation?.slots])
   const plateauAddressLabel = useMemo(
-    () => matchday?.address?.trim() || matchday?.lieu || 'À définir',
-    [matchday?.address, matchday?.lieu]
+    () => matchday ? (matchday.address?.trim() || formatMatchdayLocationLabel(matchday)) : 'À définir',
+    [matchday]
   )
+  const plateauMapQuery = useMemo(() => (matchday ? getMatchdayMapQuery(matchday) : null), [matchday])
   const rendezVousTimeLabel = useMemo(() => {
     if (matchday?.meetingTime) return matchday.meetingTime
     const source = plateauStartTimeLabel
@@ -269,6 +271,7 @@ export default function PublicPlateauPage() {
               tab={infoTab}
               onTabChange={setInfoTab}
               addressLabel={plateauAddressLabel}
+              mapQuery={plateauMapQuery}
               startTimeLabel={plateauStartTimeLabel}
               meetingTimeLabel={rendezVousTimeLabel}
             />

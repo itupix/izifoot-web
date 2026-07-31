@@ -58,7 +58,7 @@ Restrictions: dependent on API contract.
 
 ## 6. User Flows
 - Main flow: open planning -> view upcoming items -> open detail.
-- Variants: create training or matchday from page actions; `MATCH` creation asks for location and opponent in the same modal.
+- Variants: create training or matchday from page actions; `MATCH` creation asks for opponent plus a home/away choice in the same modal, and only asks for location when the match is away.
 - Back navigation: from detail pages back to timeline.
 - Interruptions: pagination load failures.
 - Errors: create failure and intent failure states.
@@ -69,7 +69,7 @@ Restrictions: dependent on API contract.
 - Actions: create sessions and submit intent.
 - States: loading, partial loading more, empty, error.
 - Conditions: creation actions hidden/disabled for read-only roles.
-- Validations: planning day supplies the matchday date; creation form validates location for every competition and opponent for `MATCH`.
+- Validations: planning day supplies the matchday date; creation form validates location for plateaux/tournaments, validates opponent for `MATCH`, requires a home/away choice for `MATCH`, and only requires location when the match is away.
 - Blocking rules: backend forbids unauthorized writes.
 - Automations: none.
 

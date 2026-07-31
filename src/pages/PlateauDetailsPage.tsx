@@ -29,6 +29,7 @@ import {
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
+import { formatMatchdayLocationLabel, getMatchdayMapQuery } from '../features/matchdayLocation'
 import type { AttendanceRow, ClubMe, MatchLite, Matchday, Player } from '../types/api'
 import './TrainingDetailsPage.css'
 
@@ -658,7 +659,11 @@ export default function PlateauDetailsPage() {
     if (hh === '00' && mm === '00') return 'À définir'
     return `${hh}:${mm}`
   }, [plateau?.date, plateau?.startTime, plateauPlanningData?.start])
-  const plateauAddressLabel = useMemo(() => plateau?.address?.trim() || plateau?.lieu || 'À définir', [plateau?.address, plateau?.lieu])
+  const plateauAddressLabel = useMemo(() => {
+    if (!plateau) return 'À définir'
+    return plateau.address?.trim() || formatMatchdayLocationLabel(plateau)
+  }, [plateau])
+  const plateauMapQuery = useMemo(() => (plateau ? getMatchdayMapQuery(plateau) : null), [plateau])
   const rendezVousTimeLabel = useMemo(() => {
     if (plateau?.meetingTime) return plateau.meetingTime
     const fromPlanning = plateauPlanningData?.start ?? null
@@ -1214,6 +1219,7 @@ export default function PlateauDetailsPage() {
               tab={infoTab}
               onTabChange={setInfoTab}
               addressLabel={plateauAddressLabel}
+              mapQuery={plateauMapQuery}
               startTimeLabel={plateauStartTimeLabel}
               meetingTimeLabel={rendezVousTimeLabel}
               addressAction={writable ? (
