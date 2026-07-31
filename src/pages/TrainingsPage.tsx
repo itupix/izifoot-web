@@ -95,6 +95,7 @@ export default function TrainingsPage() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [isCompetitionModalOpen, setIsCompetitionModalOpen] = useState(false)
   const [competitionLocation, setCompetitionLocation] = useState('')
+  const [competitionOpponent, setCompetitionOpponent] = useState('')
   const [competitionType, setCompetitionType] = useState<'PLATEAU' | 'MATCH' | 'TOURNOI'>('PLATEAU')
   const [isCreatingCompetition, setIsCreatingCompetition] = useState(false)
   const [pickerMonth, setPickerMonth] = useState<Date>(() => {
@@ -268,19 +269,26 @@ export default function TrainingsPage() {
   function openCompetitionModal() {
     setCompetitionType('PLATEAU')
     setCompetitionLocation('')
+    setCompetitionOpponent('')
     setIsCompetitionModalOpen(true)
   }
 
   function closeCompetitionModal() {
     if (isCreatingCompetition) return
     setCompetitionLocation('')
+    setCompetitionOpponent('')
     setIsCompetitionModalOpen(false)
   }
 
-  async function createCompetitionForDay(day: Date, lieu: string) {
+  async function createCompetitionForDay(day: Date, lieu: string, opponentName: string) {
     if (!teamScopedWritable) return
     const normalizedLieu = lieu.trim()
+    const normalizedOpponentName = opponentName.trim()
     if (!normalizedLieu) return
+    if (competitionType === 'MATCH' && !normalizedOpponentName) {
+      uiAlert('Merci de renseigner le nom de l’adversaire.')
+      return
+    }
     setIsCreatingCompetition(true)
     try {
       const activeTeam = teamOptions.find((team) => team.id === selectedTeamId)
@@ -288,6 +296,7 @@ export default function TrainingsPage() {
         date: day.toISOString(),
         lieu: normalizedLieu,
         competitionType,
+        ...(competitionType === 'MATCH' ? { opponentName: normalizedOpponentName } : {}),
         teamId: selectedTeamId || undefined,
         team_id: selectedTeamId || undefined,
         teamName: activeTeam?.name || undefined,
@@ -296,6 +305,7 @@ export default function TrainingsPage() {
       })
       setMatchdays(prev => [created, ...prev])
       setCompetitionLocation('')
+      setCompetitionOpponent('')
       setIsCompetitionModalOpen(false)
       navigate(`/matchday/${created.id}?date=${selectedDayKey}`)
     } catch (err: unknown) {
@@ -657,7 +667,7 @@ export default function TrainingsPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                void createCompetitionForDay(selectedDate, competitionLocation)
+                void createCompetitionForDay(selectedDate, competitionLocation, competitionOpponent)
               }}
               className="trainings-plateau-form"
             >
@@ -667,7 +677,11 @@ export default function TrainingsPage() {
               <select
                 id="competition-type"
                 value={competitionType}
-                onChange={(e) => setCompetitionType(e.target.value as 'PLATEAU' | 'MATCH' | 'TOURNOI')}
+                onChange={(e) => {
+                  const nextType = e.target.value as 'PLATEAU' | 'MATCH' | 'TOURNOI'
+                  setCompetitionType(nextType)
+                  if (nextType !== 'MATCH') setCompetitionOpponent('')
+                }}
                 className="trainings-text-input"
                 disabled={isCreatingCompetition}
               >
@@ -688,6 +702,22 @@ export default function TrainingsPage() {
                 autoFocus
                 disabled={isCreatingCompetition}
               />
+
+              {competitionType === 'MATCH' && (
+                <>
+                  <label htmlFor="competition-opponent" className="trainings-field-label">
+                    Adversaire
+                  </label>
+                  <input
+                    id="competition-opponent"
+                    value={competitionOpponent}
+                    onChange={(e) => setCompetitionOpponent(e.target.value)}
+                    placeholder="Ex. FC Montfermeil"
+                    className="trainings-text-input"
+                    disabled={isCreatingCompetition}
+                  />
+                </>
+              )}
 
               {competitionType !== 'TOURNOI' && matchdayLocations.length > 0 && (
                 <div className="trainings-location-picker">
@@ -720,9 +750,9 @@ export default function TrainingsPage() {
                 <button
                   type="submit"
                   className="trainings-primary-btn"
-                  disabled={isCreatingCompetition || !competitionLocation.trim()}
+                  disabled={isCreatingCompetition || !competitionLocation.trim() || (competitionType === 'MATCH' && !competitionOpponent.trim())}
                 >
-                  {isCreatingCompetition ? 'Création…' : 'Continuer'}
+                  {isCreatingCompetition ? 'Création…' : 'Créer'}
                 </button>
               </div>
             </form>
