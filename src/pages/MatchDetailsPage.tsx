@@ -7,6 +7,7 @@ import { apiRoutes } from '../apiRoutes'
 import { ChevronLeftIcon, DotsHorizontalIcon, PencilIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
+import { readDefaultTactic } from '../features/defaultTactic'
 import { buildPointsMap, buildTacticalFormations, buildTacticalTokens, type TacticalPoint } from '../features/tactical'
 import { playersOnFieldFromGameFormat } from '../features/teamFormat'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
@@ -320,6 +321,69 @@ function readBackendTactic(match: MatchDetailsData): BackendMatchTactic | null {
   return source
 }
 
+function isTacticalPoint(value: unknown): value is TacticalPoint {
+  if (!value || typeof value !== 'object') return false
+  const point = value as { x?: unknown; y?: unknown }
+  return typeof point.x === 'number' && Number.isFinite(point.x) && typeof point.y === 'number' && Number.isFinite(point.y)
+}
+
+function readExactTacticPoints(
+  value: unknown,
+  tokens: string[],
+): Record<string, TacticalPoint> | null {
+  if (!value || typeof value !== 'object') return null
+  const rawPoints = value as Record<string, unknown>
+  const pointKeys = Object.keys(rawPoints)
+  if (pointKeys.length !== tokens.length) return null
+  const allowedTokens = new Set(tokens)
+  const nextPoints: Record<string, TacticalPoint> = {}
+  for (const key of pointKeys) {
+    if (!allowedTokens.has(key)) return null
+    const point = rawPoints[key]
+    if (!isTacticalPoint(point)) return null
+    nextPoints[key] = point
+  }
+  return nextPoints
+}
+
+function resolveInitialTacticState(
+  match: MatchDetailsData,
+  {
+    defaultFormationKey,
+    tacticalFormations,
+    tacticalTokens,
+  }: {
+    defaultFormationKey: string
+    tacticalFormations: Array<{ key: string; points: TacticalPoint[] }>
+    tacticalTokens: string[]
+  },
+) {
+  const backendTactic = readBackendTactic(match)
+  const backendPoints = readExactTacticPoints(backendTactic?.points, tacticalTokens)
+  if (backendPoints) {
+    return {
+      preset: typeof backendTactic?.preset === 'string' && backendTactic.preset.trim()
+        ? backendTactic.preset
+        : `formation:${defaultFormationKey}`,
+      points: buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => backendPoints[tokenId])),
+    }
+  }
+
+  const savedDefault = readDefaultTactic(match.teamId ?? null, tacticalTokens.length)
+  const savedDefaultPoints = readExactTacticPoints(savedDefault?.points, tacticalTokens)
+  if (savedDefaultPoints) {
+    return {
+      preset: savedDefault?.preset?.trim() || `formation:${defaultFormationKey}`,
+      points: buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => savedDefaultPoints[tokenId])),
+    }
+  }
+
+  return {
+    preset: `formation:${defaultFormationKey}`,
+    points: getFormationPointsMap(tacticalTokens, defaultFormationKey, tacticalFormations),
+  }
+}
+
 type WakeLockSentinelLike = {
   release: () => Promise<void>
   released?: boolean
@@ -507,13 +571,11 @@ export default function MatchDetailsPage() {
       const detailedMatch = matchesById.get(orderedMatch.id)
       if (!detailedMatch) continue
       const detailsAsMatch = detailedMatch as MatchDetailsData
-      const backendTactic = readBackendTactic(detailsAsMatch)
-      const nextPreset = typeof backendTactic?.preset === 'string' && backendTactic.preset.trim()
-        ? backendTactic.preset
-        : `formation:${fallbackFormationKey}`
-      const nextPoints = backendTactic?.points && typeof backendTactic.points === 'object'
-        ? buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => backendTactic.points?.[tokenId] || { x: 50, y: 50 }))
-        : getFormationPointsMap(tacticalTokens, fallbackFormationKey, tacticalFormations)
+      const { preset: nextPreset, points: nextPoints } = resolveInitialTacticState(detailsAsMatch, {
+        defaultFormationKey: fallbackFormationKey,
+        tacticalFormations,
+        tacticalTokens,
+      })
 
       const playersMap = new Map<string, Player>(basePlayersMap)
       for (const player of Object.values(detailsAsMatch.playersById || {})) {
@@ -548,13 +610,11 @@ export default function MatchDetailsPage() {
     }
 
     const payloadAsMatch = payload as MatchDetailsData
-    const backendTactic = readBackendTactic(payloadAsMatch)
-    const nextPreset = typeof backendTactic?.preset === 'string' && backendTactic.preset.trim()
-      ? backendTactic.preset
-      : `formation:${fallbackFormationKey}`
-    const nextPoints = backendTactic?.points && typeof backendTactic.points === 'object'
-      ? buildPointsMap(tacticalTokens, tacticalTokens.map((tokenId) => backendTactic.points?.[tokenId] || { x: 50, y: 50 }))
-      : getFormationPointsMap(tacticalTokens, fallbackFormationKey, tacticalFormations)
+    const { preset: nextPreset, points: nextPoints } = resolveInitialTacticState(payloadAsMatch, {
+      defaultFormationKey: fallbackFormationKey,
+      tacticalFormations,
+      tacticalTokens,
+    })
     const playersMap = new Map<string, Player>(basePlayersMap)
     for (const player of Object.values(payloadAsMatch.playersById || {})) {
       if (player?.id) playersMap.set(player.id, player)

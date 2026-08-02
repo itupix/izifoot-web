@@ -482,16 +482,24 @@ export default function PlateauDetailsPage() {
     if (!id) return
     setPlateauRotationTeamFilter(id, selectedPlanningTeam)
   }, [id, selectedPlanningTeam])
+
+  const matchdayTeamId = plateau?.teamId ?? selectedTeamId ?? null
+  const matchdayTeamFormat = useMemo(() => {
+    if (!matchdayTeamId) return selectedTeamFormat
+    const scopedFormat = teamOptions.find((team) => team.id === matchdayTeamId)?.format
+    if (scopedFormat) return scopedFormat
+    return matchdayTeamId === selectedTeamId ? selectedTeamFormat : null
+  }, [matchdayTeamId, selectedTeamFormat, selectedTeamId, teamOptions])
+
   const defaultMatchTactic = useMemo(() => {
-    const teamId = selectedTeamId || plateau?.teamId || null
-    const playersOnField = playersOnFieldFromGameFormat(selectedTeamFormat, 5)
-    const saved = readDefaultTactic(teamId, playersOnField)
+    const playersOnField = playersOnFieldFromGameFormat(matchdayTeamFormat, 5)
+    const saved = readDefaultTactic(matchdayTeamId, playersOnField)
     if (!saved) return undefined
     return {
       preset: saved.preset,
       points: saved.points,
     }
-  }, [plateau?.teamId, selectedTeamFormat, selectedTeamId])
+  }, [matchdayTeamFormat, matchdayTeamId])
   const rotationDisplaySlots = useMemo(() => (
     visibleRotationMatches.map((slot) => ({
       key: slot.time,
