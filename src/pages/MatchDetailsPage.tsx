@@ -329,12 +329,14 @@ export default function MatchDetailsPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { selectedTeamId, selectedTeamFormat } = useTeamScope()
-  const playersOnField = useMemo(() => playersOnFieldFromGameFormat(selectedTeamFormat, 5), [selectedTeamFormat])
+
+  const [match, setMatch] = useState<MatchDetailsData | null>(null)
+  const matchTeamId = match?.teamId ?? selectedTeamId ?? null
+  const matchTeamFormat = match?.teamFormat ?? match?.gameFormat ?? match?.game_format ?? selectedTeamFormat
+  const playersOnField = useMemo(() => playersOnFieldFromGameFormat(matchTeamFormat, 5), [matchTeamFormat])
   const tacticalTokens = useMemo(() => buildTacticalTokens(playersOnField), [playersOnField])
   const tacticalFormations = useMemo(() => buildTacticalFormations(playersOnField), [playersOnField])
   const defaultFormation = tacticalFormations[0]
-
-  const [match, setMatch] = useState<MatchDetailsData | null>(null)
   const [plateauDateISO, setPlateauDateISO] = useState<string>('')
   const [matchesOfDay, setMatchesOfDay] = useState<MatchLite[]>([])
   const [plateauMatchOrderIds, setPlateauMatchOrderIds] = useState<string[]>([])
@@ -597,7 +599,7 @@ export default function MatchDetailsPage() {
   }, [])
 
   useEffect(() => {
-    const libraryKey = `izifoot.tactical.library.${selectedTeamId || 'all'}`
+    const libraryKey = `izifoot.tactical.library.${matchTeamId || 'all'}`
     const rawLibrary = window.localStorage.getItem(libraryKey)
     if (!rawLibrary) {
       setSavedTactics([])
@@ -613,7 +615,7 @@ export default function MatchDetailsPage() {
     } catch {
       setSavedTactics([])
     }
-  }, [playersOnField, selectedTeamId])
+  }, [matchTeamId, playersOnField])
 
   useEffect(() => {
     if (!isEditModalOpen) return

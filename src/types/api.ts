@@ -267,6 +267,10 @@ export interface MatchLite {
   createdAt: string
   date?: string | null
   type: 'ENTRAINEMENT' | 'PLATEAU' | 'MATCH' | 'TOURNOI'
+  teamId?: string | null
+  teamFormat?: string | null
+  gameFormat?: string | null
+  game_format?: string | null
   matchdayId?: string | null
   seasonId?: string | null
   season?: Season | null
