@@ -102,6 +102,7 @@ Constraints: normalized from variant backend formats.
 
 ## 13. Persistence
 - Client: in-memory list state with pagination offsets.
+- Client: last visited planning date is persisted locally only for the current local calendar day; on the next local day, the default selection falls back to today.
 - Backend: training/matchday tables.
 
 ## 14. Dependencies
@@ -154,6 +155,8 @@ Constraints: normalized from variant backend formats.
 - Permissions: parent cannot create training.
 - Errors: API failure during load-more.
 - Edge cases: empty timeline with no teams.
+- Edge cases: reopen planning later the same local day and restore the last visited date.
+- Edge cases: reopen planning on the next local day and default back to today.
 
 ## 22. Technical References
 - `src/pages/TrainingsPage.tsx`

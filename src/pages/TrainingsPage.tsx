@@ -17,6 +17,7 @@ import type { Matchday, Training } from '../types/api'
 import './TrainingsPage.css'
 
 const LAST_PLANNING_DATE_KEY = 'izifoot.planning.lastDate'
+const LAST_PLANNING_DATE_SAVED_ON_KEY = 'izifoot.planning.lastDateSavedOn'
 const TRAININGS_PAGE_LIMIT = 30
 const MATCHDAYS_PAGE_LIMIT = 30
 type MatchVenueChoice = 'HOME' | 'AWAY'
@@ -46,9 +47,25 @@ function parseDateParam(value: string | null) {
   return parsed
 }
 
+function localDayKey() {
+  return yyyyMmDd(new Date())
+}
+
 function readStoredPlanningDate() {
   if (typeof window === 'undefined') return null
+  const savedOn = window.localStorage.getItem(LAST_PLANNING_DATE_SAVED_ON_KEY)
+  if (savedOn !== localDayKey()) {
+    window.localStorage.removeItem(LAST_PLANNING_DATE_KEY)
+    window.localStorage.removeItem(LAST_PLANNING_DATE_SAVED_ON_KEY)
+    return null
+  }
   return parseDateParam(window.localStorage.getItem(LAST_PLANNING_DATE_KEY))
+}
+
+function writeStoredPlanningDate(dayKey: string) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LAST_PLANNING_DATE_KEY, dayKey)
+  window.localStorage.setItem(LAST_PLANNING_DATE_SAVED_ON_KEY, localDayKey())
 }
 
 function formatDateTitle(d: Date) {
@@ -162,7 +179,7 @@ export default function TrainingsPage() {
   const isTodaySelected = selectedDayKey === todayKey
 
   useEffect(() => {
-    window.localStorage.setItem(LAST_PLANNING_DATE_KEY, selectedDayKey)
+    writeStoredPlanningDate(selectedDayKey)
   }, [selectedDayKey])
 
   useEffect(() => {
