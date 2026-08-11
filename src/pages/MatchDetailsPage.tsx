@@ -800,7 +800,6 @@ export default function MatchDetailsPage() {
     })
   }, [match?.createdAt, plateauDateISO])
 
-  const playerNameById = useMemo(() => new Map(players.map((p) => [p.id, p.name] as const)), [players])
   const historicalPlayerNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const player of players) setHistoricalPlayerName(map, player.id, player.name)

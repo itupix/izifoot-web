@@ -279,8 +279,7 @@ export default function PlateauDetailsPage() {
           map.set(row.playerId, row.player.name.trim())
         }
       }
-      const scorersDetailed = Array.isArray(match.scorersDetailed) ? match.scorersDetailed : []
-      for (const scorer of [...scorersDetailed, ...(match.scorers || [])]) {
+      for (const scorer of match.scorers || []) {
         if (!map.has(scorer.playerId) && typeof scorer.playerName === 'string' && scorer.playerName.trim()) {
           map.set(scorer.playerId, scorer.playerName.trim())
         }
