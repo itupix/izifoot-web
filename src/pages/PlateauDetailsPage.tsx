@@ -184,6 +184,10 @@ function findPlanningTeamLabel(labels: string[], preferredNames: string[]) {
   return ''
 }
 
+function getVisiblePlayerName(name?: string | null) {
+  return typeof name === 'string' && name.trim() ? name.trim() : 'Joueur inconnu'
+}
+
 type PlanningTeamEntry = {
   label: string
   color?: string
@@ -266,6 +270,24 @@ export default function PlateauDetailsPage() {
   const [newScorerPlayerId, setNewScorerPlayerId] = useState<string>('')
   const [opponentName, setOpponentName] = useState<string>('')
   const [isMatchNotPlayed, setIsMatchNotPlayed] = useState<boolean>(true)
+  const historicalScorerNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const match of plateauMatches) {
+      for (const team of match.teams || []) {
+        for (const row of team.players || []) {
+          if (!row.playerId || map.has(row.playerId) || !row.player?.name?.trim()) continue
+          map.set(row.playerId, row.player.name.trim())
+        }
+      }
+      const scorersDetailed = Array.isArray(match.scorersDetailed) ? match.scorersDetailed : []
+      for (const scorer of [...scorersDetailed, ...(match.scorers || [])]) {
+        if (!map.has(scorer.playerId) && typeof scorer.playerName === 'string' && scorer.playerName.trim()) {
+          map.set(scorer.playerId, scorer.playerName.trim())
+        }
+      }
+    }
+    return map
+  }, [plateauMatches])
   const matchResult = homeScore > awayScore ? 'WIN' : homeScore < awayScore ? 'LOSS' : 'DRAW'
   const matchResultLabel = isMatchNotPlayed
     ? 'Pas encore joué'
@@ -1551,7 +1573,7 @@ export default function PlateauDetailsPage() {
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
                     {scorers.map((playerId, i) => (
                       <li key={`${playerId}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', background: '#fff' }}>
-                        <span>{players.find(p => p.id === playerId)?.name || playerId}</span>
+                        <span>{getVisiblePlayerName(players.find(p => p.id === playerId)?.name || historicalScorerNameById.get(playerId))}</span>
                         <button
                           type="button"
                           onClick={() => removeScorer(i)}

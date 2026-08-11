@@ -67,6 +67,7 @@ Restrictions: depends on backend payload integrity.
 ## 7. Functional Behavior
 - UI behavior: stats aggregates computed client-side.
 - Actions: read-only operations only.
+- Stats ranking rows reuse historical scorer names coming from match payloads before current roster lookups and never show raw player IDs in the UI.
 - States: loading, ready, empty, error.
 - Conditions: `/stats` requires direction/coach; public route is open.
 - Validations: token presence before public fetch.

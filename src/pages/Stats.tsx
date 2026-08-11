@@ -28,6 +28,9 @@ function buildLinePath(points: SeriesPoint[], w: number, h: number, pad = 24) {
 }
 
 function prettyAvg(v: number) { return (Math.round(v * 100) / 100).toFixed(2) }
+function getVisiblePlayerName(name?: string | null) {
+  return typeof name === 'string' && name.trim() ? name.trim() : 'Joueur inconnu'
+}
 
 export default function StatsPage() {
   const [matches, setMatches] = useState<MatchLite[]>([])
@@ -174,7 +177,7 @@ export default function StatsPage() {
     const nameById = new Map(players.map(p => [p.id, p.name] as const))
     const rows = Array.from(tally.entries()).map(([playerId, goals]) => ({
       playerId,
-      name: nameById.get(playerId) || scorerNameById.get(playerId) || playerId,
+      name: getVisiblePlayerName(nameById.get(playerId) || scorerNameById.get(playerId)),
       goals
     }))
     rows.sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name))

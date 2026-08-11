@@ -47,6 +47,10 @@ interface SummaryResponse {
   playersById?: Record<string, Player>
 }
 
+function getVisiblePlayerName(name?: string | null) {
+  return typeof name === 'string' && name.trim() ? name.trim() : 'Joueur inconnu'
+}
+
 export default function MatchDay() {
   const { id } = useParams<{ id: string }>()
   const [data, setData] = useState<SummaryResponse | null>(null)
@@ -345,7 +349,7 @@ export default function MatchDay() {
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{homeLabel}</div>
                       <ul style={{ margin: 0, paddingLeft: 18 }}>
                         {(home?.players || []).map((p, index) => (
-                          <li key={p.playerId || `home-${index}`}>{p.player?.name || p.playerId || 'Joueur'}{isSub(p.role) ? ' (remp.)' : ''}</li>
+                          <li key={p.playerId || `home-${index}`}>{getVisiblePlayerName(p.player?.name || (p.playerId ? data.playersById?.[p.playerId]?.name : null))}{isSub(p.role) ? ' (remp.)' : ''}</li>
                         ))}
                       </ul>
                     </div>
@@ -353,7 +357,7 @@ export default function MatchDay() {
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{awayLabel}</div>
                       <ul style={{ margin: 0, paddingLeft: 18 }}>
                         {(away?.players || []).map((p, index) => (
-                          <li key={p.playerId || `away-${index}`}>{p.player?.name || p.playerId || 'Joueur'}{isSub(p.role) ? ' (remp.)' : ''}</li>
+                          <li key={p.playerId || `away-${index}`}>{getVisiblePlayerName(p.player?.name || (p.playerId ? data.playersById?.[p.playerId]?.name : null))}{isSub(p.role) ? ' (remp.)' : ''}</li>
                         ))}
                       </ul>
                     </div>
@@ -368,7 +372,7 @@ export default function MatchDay() {
                         const nameFromTeams = [...(home?.players || []), ...(away?.players || [])]
                           .find(p => p.playerId === s.playerId)?.player?.name
                         const nameFromMap = data.playersById?.[s.playerId]?.name
-                        const playerName = nameFromDetailed || nameFromTeams || nameFromMap || s.playerId
+                        const playerName = getVisiblePlayerName(nameFromDetailed || nameFromTeams || nameFromMap)
                         return `${playerName} (${sideLabel})`
                       }).join(', ')}
                     </div>

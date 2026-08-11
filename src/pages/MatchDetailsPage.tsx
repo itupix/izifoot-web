@@ -51,7 +51,32 @@ type SideDraft = {
 type MatchDraft = {
   home: SideDraft
   away: SideDraft
-  scorers: Array<{ playerId: string; side: 'home' | 'away'; assistId?: string }>
+  scorers: Array<{ playerId: string; side: 'home' | 'away'; assistId?: string; playerName?: string }>
+}
+
+function getVisiblePlayerName(name?: string | null) {
+  return typeof name === 'string' && name.trim() ? name.trim() : 'Joueur inconnu'
+}
+
+function setHistoricalPlayerName(target: Map<string, string>, playerId?: string, name?: string | null) {
+  if (!playerId || target.has(playerId) || typeof name !== 'string' || !name.trim()) return
+  target.set(playerId, name.trim())
+}
+
+function collectHistoricalPlayerNames(target: Map<string, string>, matchLike?: MatchLite | MatchDetailsData | null) {
+  if (!matchLike) return
+  const detailedMatch = matchLike as MatchDetailsData
+  for (const player of Object.values(detailedMatch.playersById || {})) {
+    setHistoricalPlayerName(target, player?.id, player?.name)
+  }
+  for (const team of matchLike.teams || []) {
+    for (const row of team.players || []) {
+      setHistoricalPlayerName(target, row.playerId || row.player?.id, row.player?.name)
+    }
+  }
+  for (const scorer of matchLike.scorers || []) {
+    setHistoricalPlayerName(target, scorer.playerId, scorer.playerName)
+  }
 }
 
 
@@ -115,6 +140,7 @@ function buildDraft(match: MatchDetailsData): MatchDraft {
       playerId: s.playerId,
       side: s.side,
       assistId: readScorerAssistId(s),
+      playerName: s.playerName,
     })),
   }
 }
@@ -775,6 +801,19 @@ export default function MatchDetailsPage() {
   }, [match?.createdAt, plateauDateISO])
 
   const playerNameById = useMemo(() => new Map(players.map((p) => [p.id, p.name] as const)), [players])
+  const historicalPlayerNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const player of players) setHistoricalPlayerName(map, player.id, player.name)
+    collectHistoricalPlayerNames(map, match)
+    for (const matchItem of matchesOfDay) collectHistoricalPlayerNames(map, matchItem)
+    return map
+  }, [match, matchesOfDay, players])
+  const resolvePlayerName = useCallback(
+    (playerId?: string, fallbackName?: string | null) => getVisiblePlayerName(
+      fallbackName || (playerId ? historicalPlayerNameById.get(playerId) : undefined),
+    ),
+    [historicalPlayerNameById],
+  )
   const sortedPlayers = useMemo(() => players.slice().sort((a, b) => a.name.localeCompare(b.name)), [players])
   const viewDraft = draft ?? { home: { starters: [], subs: [] }, away: { starters: [], subs: [] }, scorers: [] }
   const playerById = useMemo(() => new Map(players.map((p) => [p.id, p] as const)), [players])
@@ -822,12 +861,12 @@ export default function MatchDetailsPage() {
     () => viewDraft.scorers
       .filter((s) => s.side === 'home')
       .map((s) => {
-        const scorerName = playerNameById.get(s.playerId) || s.playerId
+        const scorerName = resolvePlayerName(s.playerId, s.playerName)
         if (!s.assistId) return scorerName
-        const assistName = playerNameById.get(s.assistId) || s.assistId
+        const assistName = resolvePlayerName(s.assistId)
         return `${scorerName} (${assistName})`
       }),
-    [viewDraft.scorers, playerNameById],
+    [resolvePlayerName, viewDraft.scorers],
   )
   const swipeMatchById = useMemo(() => {
     const map = new Map<string, MatchLite>()
@@ -1679,7 +1718,11 @@ export default function MatchDetailsPage() {
       })
       : ''
     const previewPlayerById = new Map(snapshot.players.map((player) => [player.id, player] as const))
-    const previewNameById = new Map(snapshot.players.map((player) => [player.id, player.name] as const))
+    const previewNameById = new Map<string, string>()
+    collectHistoricalPlayerNames(previewNameById, snapshot.match)
+    for (const player of snapshot.players) {
+      setHistoricalPlayerName(previewNameById, player.id, player.name)
+    }
     const previewAllowedSet = new Set(
       snapshot.plateauPlayerIds.length > 0 ? snapshot.plateauPlayerIds : snapshot.players.map((player) => player.id),
     )
@@ -1694,9 +1737,9 @@ export default function MatchDetailsPage() {
     const previewScorers = snapshot.draft.scorers
       .filter((scorer) => scorer.side === 'home')
       .map((scorer) => {
-        const scorerName = previewNameById.get(scorer.playerId) || scorer.playerId
+        const scorerName = getVisiblePlayerName(scorer.playerName || previewNameById.get(scorer.playerId))
         if (!scorer.assistId) return scorerName
-        const assistName = previewNameById.get(scorer.assistId) || scorer.assistId
+        const assistName = getVisiblePlayerName(previewNameById.get(scorer.assistId))
         return `${scorerName} (${assistName})`
       })
     const previewTacticalSlots = (() => {
@@ -1884,7 +1927,7 @@ export default function MatchDetailsPage() {
                     const assignedPlayerId = previewStarters[index] || ''
                     const assignedPlayer = assignedPlayerId ? previewPlayerById.get(assignedPlayerId) : undefined
                     const assignedAvatar = getAvatarUrl(assignedPlayer)
-                    const assignedName = assignedPlayer?.name || assignedPlayerId
+                    const assignedName = resolvePlayerName(assignedPlayerId, assignedPlayer?.name)
                     return (
                       <div
                         key={`preview-slot-${matchId}-${slot.id}`}
@@ -1986,8 +2029,9 @@ export default function MatchDetailsPage() {
       if (!snapshot) continue
       if (isMatchCancelled(snapshot.match, { localCancelledIds: cancelledIds })) continue
 
+      collectHistoricalPlayerNames(playerNameByPlayerId, snapshot.match)
       for (const player of snapshot.players) {
-        if (player?.id) playerNameByPlayerId.set(player.id, player.name)
+        setHistoricalPlayerName(playerNameByPlayerId, player?.id, player?.name)
       }
 
       const isCurrentMatchScope = relevantMatchId === match.id
@@ -2040,7 +2084,7 @@ export default function MatchDetailsPage() {
     return Array.from(totalMinutesByPlayerId.entries())
       .map(([playerId, minutes]) => ({
         playerId,
-        name: playerNameByPlayerId.get(playerId) || playerId,
+        name: getVisiblePlayerName(playerNameByPlayerId.get(playerId)),
         minutes,
         percent: Math.max(0, Math.min(100, (minutes / denominator) * 100)),
       }))
@@ -2210,7 +2254,7 @@ export default function MatchDetailsPage() {
                   const assignedPlayerId = slotAssignments[slot.id] || ''
                   const assignedPlayer = assignedPlayerId ? playerById.get(assignedPlayerId) : undefined
                   const assignedAvatar = getAvatarUrl(assignedPlayer)
-                  const assignedName = assignedPlayer?.name || assignedPlayerId
+                  const assignedName = resolvePlayerName(assignedPlayerId, assignedPlayer?.name)
                   return (
                     <div
                       key={`page-slot-${slot.id}`}
@@ -2260,7 +2304,7 @@ export default function MatchDetailsPage() {
                   {(() => {
                     const player = playerById.get(dragState.playerId)
                     const avatar = getAvatarUrl(player)
-                    const name = player?.name || dragState.playerId
+                    const name = resolvePlayerName(dragState.playerId, player?.name)
                     return avatar ? (
                       <img src={avatar} alt={name} />
                     ) : (
@@ -2378,8 +2422,8 @@ export default function MatchDetailsPage() {
                 <ul className="live-events-list">
                   {liveEventsChrono.map((event) => {
                     if (event.type === 'SUBSTITUTION') {
-                      const outName = event.outPlayerId ? (playerNameById.get(event.outPlayerId) || event.outPlayerId) : ''
-                      const inName = event.inPlayerId ? (playerNameById.get(event.inPlayerId) || event.inPlayerId) : ''
+                      const outName = event.outPlayerId ? resolvePlayerName(event.outPlayerId) : ''
+                      const inName = event.inPlayerId ? resolvePlayerName(event.inPlayerId) : ''
                       return (
                         <li key={event.id} className="live-event-item">
                           <span className="live-event-minute">{event.minute}'</span>
@@ -2399,8 +2443,8 @@ export default function MatchDetailsPage() {
                     }
 
                     if (event.type === 'GOAL_FOR') {
-                      const scorerName = event.scorerId ? (playerNameById.get(event.scorerId) || event.scorerId) : 'Nous'
-                      const assistName = event.assistId ? (playerNameById.get(event.assistId) || event.assistId) : ''
+                      const scorerName = event.scorerId ? resolvePlayerName(event.scorerId) : 'Nous'
+                      const assistName = event.assistId ? resolvePlayerName(event.assistId) : ''
                       return (
                         <li key={event.id} className="live-event-item">
                           <span className="live-event-minute">{event.minute}'</span>
@@ -2464,7 +2508,7 @@ export default function MatchDetailsPage() {
                   const assignedPlayerId = slotAssignments[slot.id] || ''
                   const assignedPlayer = assignedPlayerId ? playerById.get(assignedPlayerId) : undefined
                   const assignedAvatar = getAvatarUrl(assignedPlayer)
-                  const assignedName = assignedPlayer?.name || assignedPlayerId
+                  const assignedName = resolvePlayerName(assignedPlayerId, assignedPlayer?.name)
                   return (
                     <div
                       key={`live-slot-${slot.id}`}
@@ -2514,7 +2558,7 @@ export default function MatchDetailsPage() {
                   {(() => {
                     const player = playerById.get(dragState.playerId)
                     const avatar = getAvatarUrl(player)
-                    const name = player?.name || dragState.playerId
+                    const name = resolvePlayerName(dragState.playerId, player?.name)
                     return avatar ? (
                       <img src={avatar} alt={name} />
                     ) : (
@@ -2680,8 +2724,8 @@ export default function MatchDetailsPage() {
                   .map(({ scorer, idx }) => (
                     <li key={`modal-scorer-${scorer.playerId}-${idx}`}>
                       <span>
-                        {playerNameById.get(scorer.playerId) || scorer.playerId}
-                        {scorer.assistId ? ` (${playerNameById.get(scorer.assistId) || scorer.assistId})` : ''}
+                        {resolvePlayerName(scorer.playerId, scorer.playerName)}
+                        {scorer.assistId ? ` (${resolvePlayerName(scorer.assistId)})` : ''}
                       </span>
                       <button type="button" onClick={() => removeScorer(idx)}>Retirer</button>
                     </li>

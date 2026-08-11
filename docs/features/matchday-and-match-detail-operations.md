@@ -69,6 +69,7 @@ Restrictions: depends on backend contract stability.
 - Actions: edit matchday metadata, share link, mutate matches, manage scorers/events.
 - Manual plateau matches can be renamed from the quick match editor and deleted from a confirmed destructive action inside that editor.
 - Matches linked to rotation/planning keep score/composition editing but do not expose manual-only rename/delete affordances.
+- Matchday and match detail surfaces resolve historical player names from summary/detail payloads before current roster data and fall back to `Joueur inconnu` instead of a raw ID.
 - States: loading, save in progress, conflict/error states.
 - Conditions: role and scope checks in backend.
 - Validations: payload shaping before PUT/POST.
