@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import DiagramComposer from '../components/DiagramComposer'
 import DiagramPlayer from '../components/DiagramPlayer'
@@ -10,6 +10,7 @@ import { apiRoutes } from '../apiRoutes'
 import { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/diagramShared'
 import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
+import { updateDrillDetails } from '../features/drillEditing'
 import { mapTrainingAiError } from '../features/trainingAi'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
@@ -115,6 +116,7 @@ export default function DrillDetailsPage() {
   const [diagram, setDiagram] = useState<Diagram | null>(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const saveInFlight = useRef(false)
   const [deleting, setDeleting] = useState(false)
   const [generatingDiagram, setGeneratingDiagram] = useState(false)
   const [manualDiagramOpen, setManualDiagramOpen] = useState(false)
@@ -160,28 +162,38 @@ export default function DrillDetailsPage() {
   }
 
   async function saveEdit(e: React.FormEvent) {
-    if (!writable) return
     e.preventDefault()
-    if (!drill) return
+    if (!writable || !drill || saveInFlight.current) return
     setEditError(null)
-    if (!title.trim() || !category.trim()) {
-      setEditError('Remplis tous les champs obligatoires.')
+    const trimmedTitle = title.trim()
+    const trimmedDescription = description.trim()
+    if (!trimmedTitle || !trimmedDescription) {
+      setEditError('Le titre et la description sont obligatoires.')
       return
     }
+    if (trimmedTitle.length > 100 || trimmedDescription.length > 2000) {
+      setEditError('Le titre est limité à 100 caractères et la description à 2 000 caractères.')
+      return
+    }
+    if (!DRILL_CATEGORIES.includes(category)) {
+      setEditError('Choisissez une catégorie proposée.')
+      return
+    }
+    saveInFlight.current = true
     try {
       setSaving(true)
       const payload = {
-        title: title.trim(),
+        title: trimmedTitle,
         category,
-        description: description.trim(),
-        tags: drill.tags,
+        description: trimmedDescription,
       }
-      const updated = await updateDrillCompat(drill.id, payload)
+      const updated = await updateDrillDetails(drill.id, payload)
       setDrill(updated)
       setEditing(false)
     } catch (err: unknown) {
       setEditError(toErrorMessage(err))
     } finally {
+      saveInFlight.current = false
       setSaving(false)
     }
   }
@@ -521,11 +533,11 @@ export default function DrillDetailsPage() {
             <form onSubmit={saveEdit} className="drill-form-grid">
               <label className="drill-form-field">
                 <span>Titre</span>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre *" />
+                <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titre *" required maxLength={100} disabled={saving} />
               </label>
               <label className="drill-form-field">
                 <span>Catégorie</span>
-                <select value={category} onChange={(e) => setCategory(e.target.value as DrillCategory)}>
+                <select value={category} onChange={(e) => setCategory(e.target.value as DrillCategory)} required disabled={saving}>
                   {DRILL_CATEGORIES.map(value => <option key={value} value={value}>{DRILL_CATEGORY_LABELS[value]}</option>)}
                 </select>
               </label>
@@ -534,12 +546,15 @@ export default function DrillDetailsPage() {
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Description (optionnel)"
+                  placeholder="Description *"
+                  required
+                  maxLength={2000}
+                  disabled={saving}
                   rows={6}
                 />
               </label>
               <div className="drill-modal-actions">
-                <button type="button" className="drill-secondary-button" onClick={() => setEditing(false)}>Annuler</button>
+                <button type="button" className="drill-secondary-button" onClick={() => setEditing(false)} disabled={saving}>Annuler</button>
                 <button type="submit" disabled={saving} className="drill-primary-button">{saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
               </div>
             </form>
@@ -549,22 +564,3 @@ export default function DrillDetailsPage() {
     </div>
   )
 }
-
-async function updateDrillCompat(
-  drillId: string,
-  payload: Omit<Drill, 'id'>,
-): Promise<Drill> {
-  try {
-    return await apiPut<Drill>(apiRoutes.drills.byId(drillId), payload)
-  } catch (err: unknown) {
-    if (!isLikelyNotFound(err)) throw err
-    return apiPost<Drill>(apiRoutes.drills.list, { id: drillId, ...payload })
-  }
-}
-
-function isLikelyNotFound(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err)
-  const lower = message.toLowerCase()
-  return lower.includes('404') || lower.includes('not found') || lower.includes('cannot put')
-}
-

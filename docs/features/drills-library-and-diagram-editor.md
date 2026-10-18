@@ -68,7 +68,9 @@ Restrictions: depends on backend schema stability.
 - Actions: mutate drill metadata and diagram canvas payload.
 - States: loading, saving, generated preview ready.
 - Conditions: role guard for direction/coach.
-- Validations: required drill fields and diagram structure presence.
+- Validations: editing requires a trimmed title (1–100 characters), trimmed description (1–2,000 characters) and one of the four fixed categories. Fields enforce matching input limits. Diagram structure presence is checked separately.
+- Edit saving uses `PUT /drills/:id` with title, category and description only; omitted tags remain unchanged. The returned drill replaces the visible detail, including server-derived description HTML. Returning to the library or training selector reloads the API data.
+- While an edit saves, fields, close and cancel controls are disabled and repeated submissions are ignored. Failed requests retain the open draft and show an error.
 - Blocking rules: save disabled during requests.
 - Automations: optional AI generation.
 
