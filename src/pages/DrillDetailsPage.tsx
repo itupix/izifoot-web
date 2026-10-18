@@ -14,7 +14,7 @@ import { mapTrainingAiError } from '../features/trainingAi'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
-import type { Drill } from '../types/api'
+import { DRILL_CATEGORIES, DRILL_CATEGORY_LABELS, type DrillCategory, type Drill } from '../types/api'
 import './DrillDetailsPage.css'
 
 interface Diagram {
@@ -124,7 +124,7 @@ export default function DrillDetailsPage() {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [category, setCategory] = useState('')
+  const [category, setCategory] = useState<DrillCategory>('autres')
   const [description, setDescription] = useState('')
   const canManage = me ? canWrite(me.role) : false
   const missingActiveTeam = canManage && requiresSelection && !selectedTeamId
@@ -172,9 +172,7 @@ export default function DrillDetailsPage() {
       setSaving(true)
       const payload = {
         title: title.trim(),
-        category: category.trim(),
-        duration: drill.duration && drill.duration > 0 ? drill.duration : 1,
-        players: drill.players?.trim() ? drill.players : 'Variable',
+        category,
         description: description.trim(),
         tags: drill.tags,
       }
@@ -331,15 +329,7 @@ export default function DrillDetailsPage() {
             <span className="drill-hero-kicker">{contextLabel}</span>
             <h1 className="drill-details-title">{drill.title}</h1>
             <div className="drill-summary-row">
-              <span className="drill-category-badge">{drill.category}</span>
-              <div className="drill-summary-chip">
-                <span>Durée</span>
-                <strong>{formatDuration(drill.duration)}</strong>
-              </div>
-              <div className="drill-summary-chip">
-                <span>Joueurs</span>
-                <strong>{drill.players?.trim() || 'Variable'}</strong>
-              </div>
+              <span className="drill-category-badge">{DRILL_CATEGORY_LABELS[drill.category]}</span>
               <div className="drill-summary-chip">
                 <span>Statut</span>
                 <strong>{diagramLabel}</strong>
@@ -535,7 +525,9 @@ export default function DrillDetailsPage() {
               </label>
               <label className="drill-form-field">
                 <span>Catégorie</span>
-                <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Catégorie *" />
+                <select value={category} onChange={(e) => setCategory(e.target.value as DrillCategory)}>
+                  {DRILL_CATEGORIES.map(value => <option key={value} value={value}>{DRILL_CATEGORY_LABELS[value]}</option>)}
+                </select>
               </label>
               <label className="drill-form-field">
                 <span>Description</span>
@@ -576,6 +568,3 @@ function isLikelyNotFound(err: unknown): boolean {
   return lower.includes('404') || lower.includes('not found') || lower.includes('cannot put')
 }
 
-function formatDuration(value: number): string {
-  return value > 0 ? `${value} min` : 'Variable'
-}

@@ -12,7 +12,7 @@ import { toErrorMessage } from '../errors'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
-import type { Drill, DrillsResponse } from '../types/api'
+import { DRILL_CATEGORIES, DRILL_CATEGORY_LABELS, type DrillCategory, type Drill, type DrillsResponse } from '../types/api'
 import './Drills.css'
 
 const DRILLS_PAGE_LIMIT = 40
@@ -30,7 +30,7 @@ export default function DrillsPage() {
 
   // creation form state
   const [newTitle, setNewTitle] = useState('')
-  const [newCategory, setNewCategory] = useState('')
+  const [newCategory, setNewCategory] = useState<DrillCategory>('autres')
   const [newDescription, setNewDescription] = useState('')
   const [newDiagramData, setNewDiagramData] = useState<DiagramData>(createEmptyDiagramData())
   const [creating, setCreating] = useState(false)
@@ -70,7 +70,7 @@ export default function DrillsPage() {
     return items
   }, [data.items, q, requiresSelection, selectedCategories, selectedTeamId])
 
-  const categories = useMemo(() => data.categories, [data.categories])
+  const categories = DRILL_CATEGORIES
 
   function toggleCategory(category: string) {
     setSelectedCategories((prev) => {
@@ -91,9 +91,7 @@ export default function DrillsPage() {
       setCreating(true)
       const payload = {
         title: newTitle.trim(),
-        category: newCategory.trim(),
-        duration: 1,
-        players: 'Variable',
+        category: newCategory,
         description: newDescription.trim(),
         tags: [],
         teamId: selectedTeamId || undefined,
@@ -110,7 +108,7 @@ export default function DrillsPage() {
       setData(res)
       setDrillsPagination(res.pagination)
       setNewTitle('')
-      setNewCategory('')
+      setNewCategory('autres')
       setNewDescription('')
       setNewDiagramData(createEmptyDiagramData())
       setShowCreateModal(false)
@@ -169,13 +167,13 @@ export default function DrillsPage() {
               const active = selectedCategories.includes(cat)
               return (
                 <button
-                  key={cat}
+                  key={DRILL_CATEGORY_LABELS[cat]}
                   type="button"
                   className={`drills-category-tag ${active ? 'is-active' : ''}`}
                   aria-pressed={active}
                   onClick={() => toggleCategory(cat)}
                 >
-                  {cat}
+                  {DRILL_CATEGORY_LABELS[cat]}
                 </button>
               )
             })}
@@ -196,7 +194,7 @@ export default function DrillsPage() {
             onClick={() => navigate(`/exercices/${d.id}`)}
             style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, background: '#fff', cursor: 'pointer', boxShadow: '0 4px 12px rgba(15,23,42,0.05)' }}
           >
-            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{d.category}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{DRILL_CATEGORY_LABELS[d.category]}</div>
             <header>
               <strong>{d.title}</strong>
             </header>
@@ -273,12 +271,14 @@ export default function DrillsPage() {
                 onChange={e => setNewTitle(e.target.value)}
                 style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
               />
-              <input
-                placeholder="Catégorie *"
+              <select
+                aria-label="Catégorie"
                 value={newCategory}
-                onChange={e => setNewCategory(e.target.value)}
+                onChange={e => setNewCategory(e.target.value as DrillCategory)}
                 style={{ width: '100%', padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 8 }}
-              />
+              >
+                {DRILL_CATEGORIES.map(category => <option key={category} value={category}>{DRILL_CATEGORY_LABELS[category]}</option>)}
+              </select>
               <textarea
                 placeholder="Description (optionnel)"
                 rows={4}

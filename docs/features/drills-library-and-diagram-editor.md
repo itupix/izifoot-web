@@ -81,6 +81,9 @@ Constraints: backend ownership/scope.
 
 ## 9. Business Rules
 - Drill creation can include seed diagram.
+- Drill categories are the closed API values `collectif`, `technique`, `jeu`, `autres`, displayed as Collectif, Technique, Jeu, Autres in that order. Creation defaults to Autres; editing uses the same select.
+- Existing drills are migrated by the backend to `autres`. Drill and training-drill metadata have no duration or player-count fields; forms, details, session selection and generated drill models omit them.
+- Training session duration and diagram animation timings remain separate and unchanged.
 - Diagram API path depends on source context (drill vs trainingDrill).
 - AI generation output is persisted as regular diagrams.
 

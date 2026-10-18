@@ -17,6 +17,7 @@ import { useAsyncLoader } from '../hooks/useAsyncLoader'
 import { useAuth } from '../useAuth'
 import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
+import { DRILL_CATEGORY_LABELS } from '../types/api'
 import type { AttendanceRow, Drill, GenerateTrainingDrillsResponse, Player, Training, TrainingDrill, TrainingRolesResponse } from '../types/api'
 import './TrainingDetailsPage.css'
 
@@ -880,7 +881,7 @@ export default function TrainingDetailsPage() {
                                 <CloseIcon size={16} />
                               </RoundIconButton>
                             </div>
-                            {meta?.category && <small>{meta.category}</small>}
+                            {meta?.category && <small>{DRILL_CATEGORY_LABELS[meta.category]}</small>}
                             {!!intro && <p className="drill-card-description">{intro}</p>}
                           </article>
                         )
@@ -1087,7 +1088,7 @@ export default function TrainingDetailsPage() {
                   onClick={(event) => event.stopPropagation()}
                   onChange={(event) => { void toggleCatalogDrillSelection(item.id, event.target.checked) }}
                 />
-                <small>{item.category || '—'} · {item.duration ?? '—'} min</small>
+                <small>{DRILL_CATEGORY_LABELS[item.category]}</small>
               </article>
             )
           })}

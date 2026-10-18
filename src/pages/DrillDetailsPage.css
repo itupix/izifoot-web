@@ -568,6 +568,7 @@
 }
 
 .drill-form-field input,
+.drill-form-field select,
 .drill-form-field textarea {
   width: 100%;
   border-radius: 14px;

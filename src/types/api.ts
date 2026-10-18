@@ -179,12 +179,16 @@ export interface AttendanceRow {
   present: boolean
 }
 
+export const DRILL_CATEGORIES = ['collectif', 'technique', 'jeu', 'autres'] as const
+export type DrillCategory = typeof DRILL_CATEGORIES[number]
+export const DRILL_CATEGORY_LABELS: Record<DrillCategory, string> = {
+  collectif: 'Collectif', technique: 'Technique', jeu: 'Jeu', autres: 'Autres',
+}
+
 export interface Drill {
   id: string
   title: string
-  category: string
-  duration: number
-  players: string
+  category: DrillCategory
   description: string
   descriptionHtml?: string | null
   tags: string[]
@@ -203,7 +207,6 @@ export interface TrainingDrill {
   trainingId: string
   drillId: string
   order: number
-  duration?: number | null
   notes?: string | null
   meta?: Drill | null
 }
