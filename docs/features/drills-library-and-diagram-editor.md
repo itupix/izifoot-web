@@ -64,7 +64,10 @@ Restrictions: depends on backend schema stability.
 - Edge cases: diagram orphaned from deleted drill.
 
 ## 7. Functional Behavior
-- UI behavior: pagination + filtering in list, form editing in detail.
+- UI behavior: pagination + filtering in list, form editing in detail. The detail uses a restrained multiline title, category badge and secondary tags, with a visible edit action and deletion in the secondary menu.
+- Reading order is Description, Diagram, Materials on mobile and in the DOM; desktop places description alongside diagram/materials. Materials are compact below the diagram and hidden when no diagram exists.
+- Diagram actions distinguish manual creation/editing and AI creation of a new proposal; AI never claims to replace an existing diagram. Failed diagram loading has its own retry state and hides creation actions until the absence of a diagram is confirmed. Drill load failures also offer retry.
+- Deletion confirmation explicitly includes training attachments and associated diagrams.
 - Actions: mutate drill metadata and diagram canvas payload.
 - States: loading, saving, generated preview ready.
 - Conditions: role guard for direction/coach.
@@ -159,6 +162,8 @@ Constraints: backend ownership/scope.
 - Permissions: player denied route.
 - Errors: save invalid diagram payload.
 - Edge cases: trainingDrill-linked diagram generation after training deletion.
+- Diagram loading regression tests distinguish confirmed empty arrays, supported list envelopes, network failures and malformed responses.
+- Local fixture browser QA: 320/390/1280px widths have no horizontal overflow; headings remain Description → Diagramme → Matériel. Confirmed empty state allows creation, load failure hides creation and offers retry, and retry recovery and existing detail editing both succeed.
 
 ## 22. Technical References
 - `src/pages/Drills.tsx`

@@ -10,6 +10,7 @@ import { apiRoutes } from '../apiRoutes'
 import { createEmptyDiagramData, normalizeDiagramData, summarizeDiagramMaterials, type DiagramData } from '../components/diagramShared'
 import { canWrite } from '../authz'
 import { toErrorMessage } from '../errors'
+import { loadDrillDiagrams } from '../features/drillDetails'
 import { updateDrillDetails } from '../features/drillEditing'
 import { mapTrainingAiError } from '../features/trainingAi'
 import { useAsyncLoader } from '../hooks/useAsyncLoader'
@@ -111,9 +112,11 @@ export default function DrillDetailsPage() {
   const fromTrainingId = searchParams.get('fromTraining')
   const fromTrainingDrillId = searchParams.get('fromTrainingDrill')
   const backTarget = fromTrainingId ? `/training/${fromTrainingId}` : '/exercices'
-  const backLabel = fromTrainingId ? "Retour a l'entrainement" : 'Retour aux exercices'
+  const backLabel = fromTrainingId ? "Retour à l’entraînement" : 'Retour aux exercices'
   const [drill, setDrill] = useState<Drill | null>(null)
   const [diagram, setDiagram] = useState<Diagram | null>(null)
+  const [diagramError, setDiagramError] = useState<string | null>(null)
+  const [loadRevision, setLoadRevision] = useState(0)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const saveInFlight = useRef(false)
@@ -137,16 +140,15 @@ export default function DrillDetailsPage() {
     const diagramsPath = fromTrainingDrillId
       ? apiRoutes.trainingDrills.diagrams(fromTrainingDrillId)
       : apiRoutes.drills.diagrams(drillId)
-    const [rows, diagramRows] = await Promise.all([
+    const [rows, diagramsResult] = await Promise.all([
       apiGetAllItems<Drill>(apiRoutes.drills.list),
-      apiGet<unknown>(diagramsPath).catch(() => []),
+      loadDrillDiagrams(diagramsPath),
     ])
     if (isCancelled()) return
-    const found = rows.find((item) => item.id === drillId) ?? null
-    setDrill(found)
-    const diagrams = normalizeDiagramList(diagramRows)
-    setDiagram(diagrams[0] ?? null)
-  }, [drillId, fromTrainingDrillId])
+    setDrill(rows.find((item) => item.id === drillId) ?? null)
+    setDiagram(diagramsResult.diagram)
+    setDiagramError(diagramsResult.error)
+  }, [drillId, fromTrainingDrillId, loadRevision])
 
   const { loading, error } = useAsyncLoader(loadDrill)
 
@@ -202,7 +204,7 @@ export default function DrillDetailsPage() {
     if (!writable) return
     if (!drill || deleting) return
     setActionsMenuOpen(false)
-    if (!window.confirm('Supprimer cet exercice ?')) return
+    if (!window.confirm('Supprimer cet exercice ? Ses rattachements aux séances et ses diagrammes seront également supprimés.')) return
     try {
       setDeleting(true)
       await apiDelete(apiRoutes.drills.byId(drill.id))
@@ -216,7 +218,7 @@ export default function DrillDetailsPage() {
 
   async function generateAiDiagram() {
     if (!writable) return
-    if (!drill || generatingDiagram) return
+    if (!drill || generatingDiagram || diagramError) return
     try {
       setGeneratingDiagram(true)
       const objective = drill.description?.trim()
@@ -238,7 +240,7 @@ export default function DrillDetailsPage() {
   }
 
   function openDiagramModal() {
-    if (!writable) return
+    if (!writable || diagramError) return
     setManualDiagramData(diagram ? normalizeDiagramData(diagram.data) : createEmptyDiagramData())
     setManualDiagramError(null)
     setManualDiagramOpen(true)
@@ -281,7 +283,6 @@ export default function DrillDetailsPage() {
         <section className="drill-state-card">
           <span className="drill-state-kicker">Exercice</span>
           <h1>Chargement…</h1>
-          <p>La fiche de l&apos;exercice est en cours de préparation.</p>
         </section>
       </div>
     )
@@ -292,7 +293,8 @@ export default function DrillDetailsPage() {
         <section className="drill-state-card drill-state-card--error">
           <span className="drill-state-kicker">Exercice</span>
           <h1>Impossible de charger la fiche</h1>
-          <p>{error}</p>
+          <p role="alert">{error}</p>
+          <button type="button" className="drill-secondary-button" onClick={() => setLoadRevision(value => value + 1)}>Réessayer</button>
         </section>
       </div>
     )
@@ -314,20 +316,13 @@ export default function DrillDetailsPage() {
     ? drill.descriptionHtml
     : markdownToHtml(drill.description || '')
   const tags = drill.tags.filter((tag) => tag.trim().length > 0)
-  const diagramLabel = diagram ? 'Diagramme disponible' : 'Diagramme à créer'
   const diagramActionLabel = diagram ? 'Modifier le diagramme' : 'Créer un diagramme'
   const diagramAiLabel = generatingDiagram
     ? 'Génération…'
     : diagram
-      ? 'Régénérer avec l’IA'
+      ? 'Générer une nouvelle proposition'
       : 'Générer avec l’IA'
-  const contextLabel = fromTrainingId ? 'Exercice lié à un entraînement' : 'Bibliothèque d’exercices'
-  const materialsEmptyMessage = diagram
-    ? 'Aucun matériel détecté dans ce diagramme.'
-    : 'Le matériel sera proposé automatiquement dès qu’un diagramme sera ajouté.'
-  const diagramEmptyMessage = writable
-    ? 'Ajoutez un diagramme manuel ou générez une première proposition avec l’IA.'
-    : 'Aucun diagramme disponible pour cet exercice.'
+  const diagramEmptyMessage = 'Aucun diagramme pour cet exercice.'
 
   return (
     <div className="drill-details-page">
@@ -338,14 +333,9 @@ export default function DrillDetailsPage() {
         </button>
         <div className="drill-details-mainrow drill-hero-mainrow">
           <div className="drill-details-title-wrap drill-hero-copy">
-            <span className="drill-hero-kicker">{contextLabel}</span>
             <h1 className="drill-details-title">{drill.title}</h1>
             <div className="drill-summary-row">
               <span className="drill-category-badge">{DRILL_CATEGORY_LABELS[drill.category]}</span>
-              <div className="drill-summary-chip">
-                <span>Statut</span>
-                <strong>{diagramLabel}</strong>
-              </div>
             </div>
             {tags.length > 0 && (
               <div className="drill-tags-row" aria-label="Tags de l'exercice">
@@ -365,6 +355,9 @@ export default function DrillDetailsPage() {
                   <RoundIconButton
                     ariaLabel="Ouvrir le menu d'actions"
                     className="drill-menu-button"
+                    size={44}
+                    aria-expanded={actionsMenuOpen}
+                    aria-controls="drill-actions"
                     onClick={() => setActionsMenuOpen((prev) => !prev)}
                   >
                     <DotsHorizontalIcon size={18} />
@@ -377,7 +370,7 @@ export default function DrillDetailsPage() {
                         aria-label="Fermer le menu"
                         onClick={() => setActionsMenuOpen(false)}
                       />
-                      <div className="drill-floating-menu">
+                      <div id="drill-actions" className="drill-floating-menu">
                         <button type="button" className="danger" onClick={() => void deleteDrill()} disabled={deleting}>
                           {deleting ? 'Suppression…' : "Supprimer l'exercice"}
                         </button>
@@ -391,7 +384,7 @@ export default function DrillDetailsPage() {
         </div>
       </header>
 
-      <div className="drill-status-stack">
+      {(missingActiveTeam || readOnly || (editError && !editing)) && <div className="drill-status-stack">
         {missingActiveTeam && (
           <section className="drill-notice drill-notice--warning">
             <p>Sélectionnez une équipe active pour modifier la fiche et le diagramme de cet exercice.</p>
@@ -403,7 +396,7 @@ export default function DrillDetailsPage() {
           </section>
         )}
         {editError && !editing && <section className="drill-notice drill-notice--danger"><p>{editError}</p></section>}
-      </div>
+      </div>}
 
       <div className="drill-details-layout">
         <div className="drill-details-main">
@@ -411,31 +404,12 @@ export default function DrillDetailsPage() {
             <div className="drill-card-head">
               <div>
                 <h2>Description</h2>
-                <p>Objectif, consignes et déroulé de l&apos;exercice.</p>
               </div>
             </div>
           {!!drillDescriptionHtml && (
             <div className="drill-description-text" dangerouslySetInnerHTML={{ __html: drillDescriptionHtml }} />
           )}
           {!drillDescriptionHtml && <p className="drill-empty-text">Aucune description renseignée.</p>}
-          </section>
-
-          <section className="drill-card">
-            <div className="drill-card-head">
-              <div>
-                <h2>Matériel</h2>
-                <p>Déduit automatiquement à partir du diagramme.</p>
-              </div>
-            </div>
-          {materials.length > 0 ? (
-            <ul className="drill-materials-list">
-              {materials.map((material) => (
-                <li key={material}>{material}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="drill-empty-text">{materialsEmptyMessage}</p>
-          )}
           </section>
         </div>
 
@@ -444,18 +418,23 @@ export default function DrillDetailsPage() {
             <div className="drill-card-head">
               <div>
                 <h2>Diagramme</h2>
-                <p>Visualisation tactique et placement du matériel.</p>
               </div>
             </div>
             <div className="drill-diagram-content">
-              {diagram ? <DiagramPlayer data={diagram.data} /> : <p className="drill-empty-text">{diagramEmptyMessage}</p>}
+              {diagramError ? (
+                <div className="drill-diagram-error">
+                  <p role="alert">Impossible de charger le diagramme. {diagramError}</p>
+                  <button type="button" className="drill-secondary-button" onClick={() => setLoadRevision(value => value + 1)}>Réessayer</button>
+                </div>
+              ) : diagram ? <DiagramPlayer data={diagram.data} /> : <p className="drill-empty-text">{diagramEmptyMessage}</p>}
             </div>
-            {writable && (
+            {writable && !diagramError && (
               <div className="drill-diagram-actions">
                 <button
                   type="button"
                   className="drill-primary-button"
                   onClick={openDiagramModal}
+                  disabled={generatingDiagram}
                 >
                   {diagramActionLabel}
                 </button>
@@ -469,6 +448,16 @@ export default function DrillDetailsPage() {
                   <span>{diagramAiLabel}</span>
                 </button>
               </div>
+            )}
+            {diagram && !diagramError && (
+              <section className="drill-materials" aria-labelledby="drill-materials-title">
+                <h3 id="drill-materials-title">Matériel</h3>
+                {materials.length > 0 ? (
+                  <ul className="drill-materials-list">
+                    {materials.map(material => <li key={material}>{material}</li>)}
+                  </ul>
+                ) : <p className="drill-empty-text">Aucun matériel indiqué dans le diagramme.</p>}
+              </section>
             )}
           </section>
         </aside>

@@ -298,7 +298,7 @@ export default function DiagramPlayer({ data }: Props) {
       <div style={progressTrackStyle} aria-hidden="true">
         <div style={{ ...progressFillStyle, width: `${Math.round(progressRatio * 100)}%` }} />
       </div>
-      <div style={playerBarStyle}>
+      <div className="diagram-player-controls-bar" style={playerBarStyle}>
         <div style={playerControlsStyle}>
           <button type="button" onClick={restart} disabled={activeIndex === 0 && !isPlaying} style={playerButtonStyle} aria-label="Début" title="Début">
             <SkipBackIcon size={28} />

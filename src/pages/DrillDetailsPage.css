@@ -13,10 +13,10 @@
 .drill-state-card {
   width: min(560px, 100%);
   border: 1px solid #dbe5f1;
-  border-radius: 20px;
+  border-radius: 14px;
   padding: 24px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+  background: #fff;
+  box-shadow: none;
   display: grid;
   gap: 10px;
 }
@@ -35,7 +35,7 @@
 
 .drill-state-card--error {
   border-color: #fecaca;
-  background: linear-gradient(180deg, #ffffff 0%, #fff5f5 100%);
+  background: #fff5f5;
 }
 
 .drill-state-kicker {
@@ -59,12 +59,10 @@
 
 .drill-hero {
   border: 1px solid #dbe5f1;
-  border-radius: 24px;
+  border-radius: 14px;
   padding: 22px;
-  background:
-    radial-gradient(circle at top right, rgba(96, 165, 250, 0.22), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  background: #fff;
+  box-shadow: none;
 }
 
 .drill-details-mainrow {
@@ -88,23 +86,12 @@
   min-width: 0;
 }
 
-.drill-hero-kicker {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: #eef2ff;
-  color: #4338ca;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .drill-details-title {
   margin: 0;
-  font-size: clamp(32px, 5vw, 46px);
-  line-height: 0.98;
-  letter-spacing: -0.04em;
+  font-size: clamp(28px, 3vw, 36px);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  letter-spacing: -0.02em;
   color: #0f172a;
 }
 
@@ -115,6 +102,7 @@
   background: transparent;
   color: #64748b;
   padding: 0;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -148,29 +136,6 @@
   white-space: nowrap;
 }
 
-.drill-summary-chip {
-  min-width: 132px;
-  padding: 10px 12px;
-  border: 1px solid #dbe5f1;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.86);
-  display: grid;
-  gap: 4px;
-}
-
-.drill-summary-chip span {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #64748b;
-}
-
-.drill-summary-chip strong {
-  font-size: 15px;
-  color: #0f172a;
-}
-
 .drill-tags-row {
   display: flex;
   flex-wrap: wrap;
@@ -178,6 +143,8 @@
 }
 
 .drill-tag-pill {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
@@ -259,14 +226,16 @@
   font: inherit;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
+  min-height: 44px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .drill-primary-button {
   border: 1px solid #1d4ed8;
   color: #fff;
-  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
+  background: #1d4ed8;
+  box-shadow: none;
 }
 
 .drill-secondary-button {
@@ -277,7 +246,7 @@
 
 .drill-primary-button:hover,
 .drill-secondary-button:hover {
-  transform: translateY(-1px);
+  filter: brightness(0.96);
 }
 
 .drill-primary-button:disabled,
@@ -298,7 +267,7 @@
   border-radius: 16px;
   padding: 14px 16px;
   background: #fff;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  box-shadow: none;
 }
 
 .drill-notice p {
@@ -334,6 +303,7 @@
 
 .drill-details-main,
 .drill-details-aside {
+  min-width: 0;
   display: grid;
   gap: 18px;
 }
@@ -346,11 +316,6 @@
   display: grid;
   gap: 16px;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
-}
-
-.drill-card--diagram {
-  position: sticky;
-  top: 84px;
 }
 
 .drill-card-head {
@@ -367,6 +332,43 @@
 }
 
 .drill-card-head p {
+  margin: 4px 0 0;
+  color: #64748b;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.drill-details-page .drill-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid #dbe5f1;
+  border-radius: 14px;
+  background: #fff;
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+  box-shadow: none;
+}
+
+.drill-details-page .drill-card--diagram {
+  position: sticky;
+  top: 84px;
+}
+
+.drill-details-page .drill-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drill-details-page .drill-card-head h2 {
+  margin: 0;
+  font-size: 19px;
+  color: #0f172a;
+}
+
+.drill-details-page .drill-card-head p {
   margin: 4px 0 0;
   color: #64748b;
   line-height: 1.5;
@@ -425,7 +427,6 @@
 .drill-diagram-content {
   display: grid;
   gap: 12px;
-  min-height: 240px;
   align-content: start;
 }
 
@@ -438,37 +439,48 @@
 
 .drill-diagram-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
-.drill-materials-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.drill-materials {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
   display: grid;
   gap: 10px;
 }
 
-.drill-materials-list li {
-  position: relative;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 12px 14px 12px 34px;
-  color: #334155;
-  background: #f8fafc;
+.drill-materials h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
 }
 
-.drill-materials-list li::before {
-  content: '';
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #2563eb;
-  transform: translateY(-50%);
+.drill-materials-list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.drill-diagram-error p {
+  color: #b91c1c;
+  line-height: 1.5;
+}
+
+.drill-details-page button:focus-visible,
+.drill-details-page input:focus-visible,
+.drill-details-page select:focus-visible,
+.drill-details-page textarea:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.drill-floating-menu button {
+  min-height: 44px;
 }
 
 .drill-modal-overlay {
@@ -528,8 +540,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 1px solid #dbe5f1;
   border-radius: 999px;
   background: #fff;
@@ -582,7 +594,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .drill-card--diagram {
+  .drill-details-page .drill-card--diagram {
     position: static;
   }
 
@@ -600,22 +612,22 @@
 @media (max-width: 640px) {
   .drill-hero {
     padding: 18px;
-    border-radius: 20px;
+    border-radius: 14px;
   }
 
   .drill-details-title {
-    font-size: clamp(28px, 9vw, 38px);
-  }
-
-  .drill-summary-chip,
-  .drill-category-badge {
-    min-width: calc(50% - 5px);
-    justify-content: flex-start;
+    font-size: clamp(24px, 6vw, 30px);
   }
 
   .drill-primary-button,
   .drill-secondary-button {
     width: 100%;
+    min-width: 0;
+  }
+
+  .drill-hero-actions > .drill-primary-button {
+    width: auto;
+    flex: 1 1 180px;
   }
 
   .drill-diagram-actions {
@@ -633,12 +645,19 @@
 }
 
 @media (max-width: 480px) {
-  .drill-summary-chip,
-  .drill-category-badge {
-    min-width: 100%;
-  }
-
   .drill-modal-actions {
     flex-direction: column-reverse;
+  }
+}
+
+.drill-diagram-content .diagram-player-controls-bar {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .drill-diagram-content .diagram-player-controls-bar button {
+    width: 44px !important;
+    height: 44px !important;
+    flex-shrink: 0;
   }
 }
