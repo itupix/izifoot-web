@@ -166,6 +166,11 @@ Constraints: ids and scope validity from backend.
 - Coaches and direction can use “Générer le résumé de la séance” above the information panel, including cancelled sessions.
 - The authenticated `GET /trainings/:id/summary.pdf?timeZone=Europe%2FParis` request downloads `resume-seance-YYYY-MM-DD.pdf`; cookie/Bearer authentication and active team headers match other API requests.
 - The server supplies session date/times, saved actual present players, and attached drills in saved order with full title and description. Attendance intentions are not actual presence, and attached drills have no separate completion flag.
-- Export is disabled during saves, drill generation/reordering, and while time inputs differ from saved values. Save times first; failed exports show a recoverable inline error and can be retried.
+- Export is disabled during saves, drill generation/reordering, and while information inputs (times or observations) differ from saved values. Save information first; failed exports show a recoverable inline error and can be retried.
 - Permissions and errors follow the backend contract: 400 invalid timezone, 401 unauthenticated, 403 forbidden, 404 training missing, 500 PDF generation failure. PDF responses are private/no-store and never generated from local unsaved content.
 - PDF dates and times use Europe/Paris consistently with iOS. The button explicitly states Paris time; the existing editable web time fields use the browser local timezone.
+
+## Session observations
+- The information panel includes an optional multiline “Observations” field after the times. Existing information editing permissions and cancelled-session restrictions apply. Read-only users see the saved text, preserving line breaks.
+- The existing Save button sends `observations: string | null` with the times to `PUT /trainings/:id`. Empty text sends `null` to clear observations; other text is sent unchanged with line breaks and no additional length limit. Training responses expose `observations: string | null`.
+- The PDF includes saved observations through the unchanged server summary route. Export remains disabled while observations are unsaved or information is saving, with a save-first message. A failed save retains the draft for retry.

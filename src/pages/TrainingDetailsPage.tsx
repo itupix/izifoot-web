@@ -179,6 +179,7 @@ export default function TrainingDetailsPage() {
   const [sendingObjective, setSendingObjective] = useState(false)
   const [trainingTime, setTrainingTime] = useState('')
   const [trainingEndTime, setTrainingEndTime] = useState('')
+  const [trainingObservations, setTrainingObservations] = useState('')
   const [savingTrainingInfo, setSavingTrainingInfo] = useState(false)
   const [pendingSummaryChanges, setPendingSummaryChanges] = useState(0)
   const [generatingSummary, setGeneratingSummary] = useState(false)
@@ -246,6 +247,10 @@ export default function TrainingDetailsPage() {
     setTrainingTime(formatTrainingTimeInput(training?.date || null))
     setTrainingEndTime(training?.endTime || '')
   }, [training?.date, training?.endTime])
+
+  useEffect(() => {
+    setTrainingObservations(training?.observations ?? '')
+  }, [training?.id, training?.observations])
 
   const trainingDateLabel = useMemo(() => {
     if (!training?.date) return ''
@@ -353,15 +358,16 @@ export default function TrainingDetailsPage() {
     setRoleRandomOverlayName('')
   }, [roleModalOpen])
 
-  const hasUnsavedTrainingTimes = Boolean(training && (
+  const hasUnsavedTrainingInfo = Boolean(training && (
     trainingTime !== formatTrainingTimeInput(training.date)
     || trainingEndTime !== (training.endTime || '')
+    || trainingObservations !== (training.observations ?? '')
   ))
   const summaryBusy = savingTrainingInfo || savingDrillOrder || savingRoles || sendingObjective
     || pendingSummaryChanges > 0 || updatingCatalogDrillIds.size > 0 || Boolean(draggedDrillId)
 
   async function generateSummary() {
-    if (!training || !writable || summaryRequestRef.current || summaryBusy || hasUnsavedTrainingTimes) return
+    if (!training || !writable || summaryRequestRef.current || summaryBusy || hasUnsavedTrainingInfo) return
     summaryRequestRef.current = true
     setGeneratingSummary(true)
     setSummaryError(null)
@@ -458,10 +464,11 @@ export default function TrainingDetailsPage() {
       const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
         date: nextDateISO,
         endTime: trainingEndTime || null,
+        observations: trainingObservations || null,
       })
       setTraining(updated)
     } catch (err: unknown) {
-      uiAlert(`Erreur mise à jour horaire: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+      uiAlert(`Erreur mise à jour des informations: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     } finally {
       setSavingTrainingInfo(false)
     }
@@ -789,14 +796,14 @@ export default function TrainingDetailsPage() {
             type="button"
             className="add-button training-summary-button"
             onClick={() => { void generateSummary() }}
-            disabled={generatingSummary || summaryBusy || hasUnsavedTrainingTimes}
+            disabled={generatingSummary || summaryBusy || hasUnsavedTrainingInfo}
             aria-busy={generatingSummary}
-            aria-describedby={hasUnsavedTrainingTimes ? 'summary-unsaved-times' : undefined}
+            aria-describedby={hasUnsavedTrainingInfo ? 'summary-unsaved-info' : undefined}
           >
             {generatingSummary ? 'Génération du PDF…' : 'Générer le résumé de la séance'}
           </button>
           <p className="muted-line">Le PDF utilise les horaires de Paris.</p>
-          {hasUnsavedTrainingTimes && <p id="summary-unsaved-times" className="muted-line">Enregistrez les horaires avant de générer le résumé.</p>}
+          {hasUnsavedTrainingInfo && <p id="summary-unsaved-info" className="muted-line">Enregistrez les informations et les observations avant de générer le résumé.</p>}
           {summaryError && <p className="error-text" role="alert">{summaryError}</p>}
         </div>
       )}
@@ -827,6 +834,16 @@ export default function TrainingDetailsPage() {
                     disabled={isCancelled || savingTrainingInfo}
                   />
                 </label>
+                <label className="training-observations-field">
+                  <span>Observations</span>
+                  <textarea
+                    rows={4}
+                    value={trainingObservations}
+                    onChange={(event) => setTrainingObservations(event.target.value)}
+                    placeholder="Ajouter des observations (facultatif)"
+                    disabled={isCancelled || savingTrainingInfo}
+                  />
+                </label>
                 <div>
                   <button
                     type="button"
@@ -839,9 +856,13 @@ export default function TrainingDetailsPage() {
                 </div>
               </div>
             ) : (
-              <p className="muted-line">
-                Horaire: {formatTrainingTimeInput(training.date) || '—'}{training.endTime ? ` - ${training.endTime}` : ''}
-              </p>
+              <div>
+                <p className="muted-line">
+                  Horaire: {formatTrainingTimeInput(training.date) || '—'}{training.endTime ? ` - ${training.endTime}` : ''}
+                </p>
+                <p><strong>Observations</strong></p>
+                <p className="training-observations-text">{training.observations || 'Aucune observation.'}</p>
+              </div>
             )}
           </section>
 

@@ -1784,3 +1784,28 @@
 .training-summary-export { display: grid; gap: 8px; }
 .training-summary-button { width: 100%; min-height: 44px; white-space: normal; }
 .training-summary-export p { margin: 0; }
+
+.training-observations-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.training-observations-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100px;
+  padding: 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  font: inherit;
+  color: #0f172a;
+  resize: vertical;
+}
+
+.training-observations-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

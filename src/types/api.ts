@@ -72,6 +72,7 @@ export interface Player {
 }
 
 export interface Training {
+  observations: string | null
   id: string
   date: string
   seasonId?: string | null
