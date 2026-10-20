@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { HttpError } from '../api'
 import { apiGetAllItems } from '../adapters/pagination'
-import { apiDelete, apiGet, apiPost, apiPut } from '../apiClient'
+import { apiDelete, apiGet, apiGetPdf, apiPost, apiPut } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import AttendanceAccordion from '../components/AttendanceAccordion'
@@ -180,6 +180,10 @@ export default function TrainingDetailsPage() {
   const [trainingTime, setTrainingTime] = useState('')
   const [trainingEndTime, setTrainingEndTime] = useState('')
   const [savingTrainingInfo, setSavingTrainingInfo] = useState(false)
+  const [pendingSummaryChanges, setPendingSummaryChanges] = useState(0)
+  const [generatingSummary, setGeneratingSummary] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const summaryRequestRef = useRef(false)
   const [updatingCatalogDrillIds, setUpdatingCatalogDrillIds] = useState<Set<string>>(new Set())
   const [roleLines, setRoleLines] = useState<TrainingRoleLine[]>([])
   const [savingRoles, setSavingRoles] = useState(false)
@@ -349,6 +353,46 @@ export default function TrainingDetailsPage() {
     setRoleRandomOverlayName('')
   }, [roleModalOpen])
 
+  const hasUnsavedTrainingTimes = Boolean(training && (
+    trainingTime !== formatTrainingTimeInput(training.date)
+    || trainingEndTime !== (training.endTime || '')
+  ))
+  const summaryBusy = savingTrainingInfo || savingDrillOrder || savingRoles || sendingObjective
+    || pendingSummaryChanges > 0 || updatingCatalogDrillIds.size > 0 || Boolean(draggedDrillId)
+
+  async function generateSummary() {
+    if (!training || !writable || summaryRequestRef.current || summaryBusy || hasUnsavedTrainingTimes) return
+    summaryRequestRef.current = true
+    setGeneratingSummary(true)
+    setSummaryError(null)
+    try {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris'
+      const path = `${apiRoutes.trainings.byId(training.id)}/summary.pdf?timeZone=${encodeURIComponent(timeZone)}`
+      const pdf = await apiGetPdf(path)
+      const url = URL.createObjectURL(pdf)
+      const link = document.createElement('a')
+      const date = new Intl.DateTimeFormat('sv-SE', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(training.date))
+      link.href = url
+      link.download = `resume-seance-${date}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err: unknown) {
+      const message = err instanceof HttpError && err.status === 401
+        ? 'Session expirée. Veuillez vous reconnecter.'
+        : err instanceof HttpError && err.status === 403
+          ? 'Vous n’avez pas accès au résumé de cette séance.'
+          : err instanceof HttpError && err.status === 404
+            ? 'Séance introuvable.'
+            : 'Impossible de générer le PDF. Veuillez réessayer.'
+      setSummaryError(message)
+    } finally {
+      summaryRequestRef.current = false
+      setGeneratingSummary(false)
+    }
+  }
+
   async function setTrainingStatus(cancelled: boolean) {
     if (!writable) return
     if (!training) return
@@ -379,6 +423,7 @@ export default function TrainingDetailsPage() {
     if (!training) return
     const previousPresent = attendance.has(playerId)
     setAttendance((prev) => applyAttendanceValue(prev, playerId, present))
+    setPendingSummaryChanges((count) => count + 1)
     try {
       const payload = await persistAttendanceToggle(apiPost, {
         sessionType: 'TRAINING',
@@ -390,6 +435,8 @@ export default function TrainingDetailsPage() {
     } catch (err: unknown) {
       setAttendance((prev) => applyAttendanceValue(prev, playerId, previousPresent))
       uiAlert(`Erreur présence: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setPendingSummaryChanges((count) => count - 1)
     }
   }
 
@@ -417,22 +464,28 @@ export default function TrainingDetailsPage() {
   async function addDrill(drillId: string) {
     if (!writable) return
     if (!training || !drillId) return
+    setPendingSummaryChanges((count) => count + 1)
     try {
       const row = await apiPost<TrainingDrill>(apiRoutes.trainings.drills(training.id), { drillId })
       setDrills((prev) => sortTrainingDrills([...prev, row]))
     } catch (err: unknown) {
       uiAlert(`Erreur ajout exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setPendingSummaryChanges((count) => count - 1)
     }
   }
 
   async function removeDrill(trainingDrillId: string) {
     if (!writable) return
     if (!training) return
+    setPendingSummaryChanges((count) => count + 1)
     try {
       await apiDelete(apiRoutes.trainings.drillById(training.id, trainingDrillId))
       setDrills((prev) => prev.filter((d) => d.id !== trainingDrillId))
     } catch (err: unknown) {
       uiAlert(`Erreur suppression exercice: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setPendingSummaryChanges((count) => count - 1)
     }
   }
 
@@ -723,6 +776,23 @@ export default function TrainingDetailsPage() {
 
       {loading && <p>Chargement…</p>}
       {error && <p className="error-text">{error}</p>}
+
+      {training && writable && (
+        <div className="training-summary-export">
+          <button
+            type="button"
+            className="add-button training-summary-button"
+            onClick={() => { void generateSummary() }}
+            disabled={generatingSummary || summaryBusy || hasUnsavedTrainingTimes}
+            aria-busy={generatingSummary}
+            aria-describedby={hasUnsavedTrainingTimes ? 'summary-unsaved-times' : undefined}
+          >
+            {generatingSummary ? 'Génération du PDF…' : 'Générer le résumé de la séance'}
+          </button>
+          {hasUnsavedTrainingTimes && <p id="summary-unsaved-times" className="muted-line">Enregistrez les horaires avant de générer le résumé.</p>}
+          {summaryError && <p className="error-text" role="alert">{summaryError}</p>}
+        </div>
+      )}
 
       {training && (
         <div className="training-details-grid">

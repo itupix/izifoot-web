@@ -1780,3 +1780,7 @@
     grid-template-columns: 1fr;
   }
 }
+
+.training-summary-export { display: grid; gap: 8px; }
+.training-summary-button { width: 100%; min-height: 44px; white-space: normal; }
+.training-summary-export p { margin: 0; }

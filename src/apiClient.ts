@@ -115,3 +115,22 @@ export function apiPut<T>(path: string, body: unknown): Promise<T> {
 export function apiDelete<T = unknown>(path: string): Promise<T> {
   return requestJson<T>(path, { method: 'DELETE' })
 }
+
+// Binary exports use the same authentication and team scope as JSON requests.
+export async function apiGetPdf(path: string): Promise<Blob> {
+  const response = await fetch(buildUrl(path, false), {
+    credentials: 'include',
+    cache: 'no-store',
+    headers: { Accept: 'application/pdf', ...authHeaders() },
+  })
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('izifoot:unauthorized'))
+    }
+    throw new HttpError(response.status, await parseError(response))
+  }
+  if (!response.headers.get('content-type')?.includes('application/pdf')) {
+    throw new Error('Le serveur n’a pas renvoyé de PDF. Veuillez réessayer.')
+  }
+  return response.blob()
+}
