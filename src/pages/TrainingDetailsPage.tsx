@@ -396,6 +396,7 @@ export default function TrainingDetailsPage() {
   async function setTrainingStatus(cancelled: boolean) {
     if (!writable) return
     if (!training) return
+    setPendingSummaryChanges((count) => count + 1)
     try {
       const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
         status: cancelled ? 'CANCELLED' : 'PLANNED',
@@ -403,6 +404,8 @@ export default function TrainingDetailsPage() {
       setTraining(updated)
     } catch (err: unknown) {
       uiAlert(`Erreur mise à jour statut: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setPendingSummaryChanges((count) => count - 1)
     }
   }
 
@@ -410,11 +413,14 @@ export default function TrainingDetailsPage() {
     if (!writable) return
     if (!training) return
     if (!uiConfirm('Supprimer définitivement cet entraînement ?')) return
+    setPendingSummaryChanges((count) => count + 1)
     try {
       await apiDelete(apiRoutes.trainings.byId(training.id))
       navigate(backToPlanningUrl)
     } catch (err: unknown) {
       uiAlert(`Erreur suppression: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setPendingSummaryChanges((count) => count - 1)
     }
   }
 
