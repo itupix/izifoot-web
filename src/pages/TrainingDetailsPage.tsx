@@ -366,7 +366,7 @@ export default function TrainingDetailsPage() {
     setGeneratingSummary(true)
     setSummaryError(null)
     try {
-      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris'
+      const timeZone = 'Europe/Paris'
       const path = `${apiRoutes.trainings.byId(training.id)}/summary.pdf?timeZone=${encodeURIComponent(timeZone)}`
       const pdf = await apiGetPdf(path)
       const url = URL.createObjectURL(pdf)
@@ -789,6 +789,7 @@ export default function TrainingDetailsPage() {
           >
             {generatingSummary ? 'Génération du PDF…' : 'Générer le résumé de la séance'}
           </button>
+          <p className="muted-line">Le PDF utilise les horaires de Paris.</p>
           {hasUnsavedTrainingTimes && <p id="summary-unsaved-times" className="muted-line">Enregistrez les horaires avant de générer le résumé.</p>}
           {summaryError && <p className="error-text" role="alert">{summaryError}</p>}
         </div>

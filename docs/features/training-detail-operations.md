@@ -164,7 +164,8 @@ Constraints: ids and scope validity from backend.
 
 ## Training summary PDF
 - Coaches and direction can use “Générer le résumé de la séance” above the information panel, including cancelled sessions.
-- The authenticated `GET /trainings/:id/summary.pdf?timeZone=<browser IANA zone>` request downloads `resume-seance-YYYY-MM-DD.pdf`; cookie/Bearer authentication and active team headers match other API requests.
+- The authenticated `GET /trainings/:id/summary.pdf?timeZone=Europe%2FParis` request downloads `resume-seance-YYYY-MM-DD.pdf`; cookie/Bearer authentication and active team headers match other API requests.
 - The server supplies session date/times, saved actual present players, and attached drills in saved order with full title and description. Attendance intentions are not actual presence, and attached drills have no separate completion flag.
 - Export is disabled during saves, drill generation/reordering, and while time inputs differ from saved values. Save times first; failed exports show a recoverable inline error and can be retried.
 - Permissions and errors follow the backend contract: 400 invalid timezone, 401 unauthenticated, 403 forbidden, 404 training missing, 500 PDF generation failure. PDF responses are private/no-store and never generated from local unsaved content.
+- PDF dates and times use Europe/Paris consistently with iOS. The button explicitly states Paris time; the existing editable web time fields use the browser local timezone.
