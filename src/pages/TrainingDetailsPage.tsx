@@ -181,6 +181,7 @@ export default function TrainingDetailsPage() {
   const [trainingEndTime, setTrainingEndTime] = useState('')
   const [trainingObservations, setTrainingObservations] = useState('')
   const [savingTrainingInfo, setSavingTrainingInfo] = useState(false)
+  const [savingObservations, setSavingObservations] = useState(false)
   const [pendingSummaryChanges, setPendingSummaryChanges] = useState(0)
   const [generatingSummary, setGeneratingSummary] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
@@ -363,7 +364,7 @@ export default function TrainingDetailsPage() {
     || trainingEndTime !== (training.endTime || '')
     || trainingObservations !== (training.observations ?? '')
   ))
-  const summaryBusy = savingTrainingInfo || savingDrillOrder || savingRoles || sendingObjective
+  const summaryBusy = savingTrainingInfo || savingObservations || savingDrillOrder || savingRoles || sendingObjective
     || pendingSummaryChanges > 0 || updatingCatalogDrillIds.size > 0 || Boolean(draggedDrillId)
 
   async function generateSummary() {
@@ -464,13 +465,27 @@ export default function TrainingDetailsPage() {
       const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
         date: nextDateISO,
         endTime: trainingEndTime || null,
-        observations: trainingObservations || null,
       })
-      setTraining(updated)
+      setTraining((current) => current ? { ...current, date: updated.date, endTime: updated.endTime } : current)
     } catch (err: unknown) {
       uiAlert(`Erreur mise à jour des informations: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
     } finally {
       setSavingTrainingInfo(false)
+    }
+  }
+
+  async function saveObservations() {
+    if (!writable || !training || isCancelled || savingObservations) return
+    setSavingObservations(true)
+    try {
+      const updated = await apiPut<Training>(apiRoutes.trainings.byId(training.id), {
+        observations: trainingObservations || null,
+      })
+      setTraining((current) => current ? { ...current, observations: updated.observations } : current)
+    } catch (err: unknown) {
+      uiAlert(`Erreur mise à jour des observations: ${toErrorMessage(err, 'Erreur', 'Erreur serveur')}`)
+    } finally {
+      setSavingObservations(false)
     }
   }
 
@@ -810,61 +825,83 @@ export default function TrainingDetailsPage() {
 
       {training && (
         <div className="training-details-grid">
-          <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
-            <div className="card-head">
-              <h3>Informations</h3>
-            </div>
-            {writable ? (
-              <div style={{ display: 'grid', gap: 8 }}>
-                <label style={{ display: 'grid', gap: 4 }}>
-                  <span style={{ fontSize: 13, color: '#64748b' }}>Horaire</span>
-                  <input
-                    type="time"
-                    value={trainingTime}
-                    onChange={(event) => setTrainingTime(event.target.value)}
-                    disabled={isCancelled || savingTrainingInfo}
-                  />
-                </label>
-                <label style={{ display: 'grid', gap: 4 }}>
-                  <span style={{ fontSize: 13, color: '#64748b' }}>Heure de fin</span>
-                  <input
-                    type="time"
-                    value={trainingEndTime}
-                    onChange={(event) => setTrainingEndTime(event.target.value)}
-                    disabled={isCancelled || savingTrainingInfo}
-                  />
-                </label>
-                <label className="training-observations-field">
-                  <span>Observations</span>
-                  <textarea
-                    rows={4}
-                    value={trainingObservations}
-                    onChange={(event) => setTrainingObservations(event.target.value)}
-                    placeholder="Ajouter des observations (facultatif)"
-                    disabled={isCancelled || savingTrainingInfo}
-                  />
-                </label>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => { void saveTrainingInfo() }}
-                    disabled={isCancelled || savingTrainingInfo || !trainingTime}
-                    style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #dbe3ef', background: '#fff' }}
-                  >
-                    {savingTrainingInfo ? 'Enregistrement…' : 'Enregistrer'}
-                  </button>
+          <div className="training-information-column">
+            <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
+              <div className="card-head">
+                <h3>Informations</h3>
+              </div>
+              {writable ? (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontSize: 13, color: '#64748b' }}>Horaire</span>
+                    <input
+                      type="time"
+                      value={trainingTime}
+                      onChange={(event) => setTrainingTime(event.target.value)}
+                      disabled={isCancelled || savingTrainingInfo}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4 }}>
+                    <span style={{ fontSize: 13, color: '#64748b' }}>Heure de fin</span>
+                    <input
+                      type="time"
+                      value={trainingEndTime}
+                      onChange={(event) => setTrainingEndTime(event.target.value)}
+                      disabled={isCancelled || savingTrainingInfo}
+                    />
+                  </label>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => { void saveTrainingInfo() }}
+                      disabled={isCancelled || savingTrainingInfo || !trainingTime}
+                      style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #dbe3ef', background: '#fff' }}
+                    >
+                      {savingTrainingInfo ? 'Enregistrement…' : 'Enregistrer'}
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <div>
+                  <p className="muted-line">
+                    Horaire: {formatTrainingTimeInput(training.date) || '—'}{training.endTime ? ` - ${training.endTime}` : ''}
+                  </p>
+                </div>
+              )}
+            </section>
+
+            <section className={`details-card ${isCancelled ? 'is-disabled' : ''}`}>
+              <div className="card-head">
+                <h3>Observations</h3>
               </div>
-            ) : (
-              <div>
-                <p className="muted-line">
-                  Horaire: {formatTrainingTimeInput(training.date) || '—'}{training.endTime ? ` - ${training.endTime}` : ''}
-                </p>
-                <p><strong>Observations</strong></p>
+              {writable ? (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <label className="training-observations-field">
+                    <span>Notes de séance (facultatif)</span>
+                    <textarea
+                      rows={4}
+                      value={trainingObservations}
+                      onChange={(event) => setTrainingObservations(event.target.value)}
+                      placeholder="Ajouter des observations (facultatif)"
+                      disabled={isCancelled || savingObservations}
+                    />
+                  </label>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => { void saveObservations() }}
+                      disabled={isCancelled || savingObservations}
+                      style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #dbe3ef', background: '#fff' }}
+                    >
+                      {savingObservations ? 'Enregistrement…' : 'Enregistrer les observations'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <p className="training-observations-text">{training.observations || 'Aucune observation.'}</p>
-              </div>
-            )}
-          </section>
+              )}
+            </section>
+          </div>
 
           <PlayersPresenceSection
             players={players}
