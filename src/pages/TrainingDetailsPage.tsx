@@ -8,6 +8,7 @@ import { canWrite } from '../authz'
 import AttendanceAccordion from '../components/AttendanceAccordion'
 import PlayersPresenceSection from '../components/PlayersPresenceSection'
 import SelectionModal from '../components/SelectionModal'
+import TrainingMaterials from '../components/TrainingMaterials'
 import { ChevronLeftIcon, CloseIcon, DiceIcon, DotsHorizontalIcon, SparklesIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
@@ -984,6 +985,12 @@ export default function TrainingDetailsPage() {
             {!writable && <p className="muted-line">Mode lecture seule: édition des exercices désactivée.</p>}
             {drills.length > 1 && !isCancelled && savingDrillOrder && <p className="muted-line">Enregistrement du nouvel ordre…</p>}
           </section>
+
+          <TrainingMaterials
+            trainingId={training.id}
+            teamId={selectedTeamId}
+            drillRevision={JSON.stringify(drills)}
+          />
 
           <AttendanceAccordion
             title="Roles"

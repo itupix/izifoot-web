@@ -1784,3 +1784,7 @@
 .training-summary-export { display: grid; gap: 8px; }
 .training-summary-button { width: 100%; min-height: 44px; white-space: normal; }
 .training-summary-export p { margin: 0; }
+
+.training-materials-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.training-materials-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border-color, #e5e7eb); }
+.training-materials button { min-height: 44px; }

@@ -169,3 +169,11 @@ Constraints: ids and scope validity from backend.
 - Export is disabled during saves, drill generation/reordering, and while time inputs differ from saved values. Save times first; failed exports show a recoverable inline error and can be retried.
 - Permissions and errors follow the backend contract: 400 invalid timezone, 401 unauthenticated, 403 forbidden, 404 training missing, 500 PDF generation failure. PDF responses are private/no-store and never generated from local unsaved content.
 - PDF dates and times use Europe/Paris consistently with iOS. The button explicitly states Paris time; the existing editable web time fields use the browser local timezone.
+
+## Training materials
+- An always-visible “Matériel” card follows Programme, including read-only and cancelled sessions.
+- Authenticated `GET /trainings/:id/materials` returns `{ items: [{ type, label, quantity }], drillCount, missingDiagramCount }`. Types are cup/cone/ball/post/bib, in server order; labels and quantities are supplied by the backend. Null quantities (chasubles) display only the label.
+- Quantities represent maximum equipment required across selected drills, with equipment reused between exercises. No client-side diagram interpretation or quantity aggregation is performed.
+- Selected drill changes, returning from a diagram editor, browser focus and visibility refresh the list. Requests use the shared authenticated, team-scoped client. Stale responses are ignored.
+- Empty selections, no indicated equipment, partial diagrams and entirely unavailable diagrams have distinct inline states. Network/API failures show an independent retry action and do not block training details.
+- Access and error behavior follows the training-drills contract: 401 unauthenticated, 404 missing/inaccessible training, 500 server error.
