@@ -107,6 +107,7 @@ export default function TrainingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])
   const [matchdays, setMatchdays] = useState<Matchday[]>([])
+  const [championshipDates, setChampionshipDates] = useState<string[]>([])
   const [trainingsPagination, setTrainingsPagination] = useState({ limit: TRAININGS_PAGE_LIMIT, offset: 0, returned: 0 })
   const [matchdaysPagination, setMatchdaysPagination] = useState({ limit: MATCHDAYS_PAGE_LIMIT, offset: 0, returned: 0 })
   const [loadingMoreTrainings, setLoadingMoreTrainings] = useState(false)
@@ -260,8 +261,8 @@ export default function TrainingsPage() {
     return new Set(trainings.map((t) => yyyyMmDd(toDateOnly(t.date))))
   }, [trainings])
   const matchdayDayKeys = useMemo(() => {
-    return new Set(matchdays.map((p) => yyyyMmDd(toDateOnly(p.date))))
-  }, [matchdays])
+    return new Set([...matchdays.map((p) => yyyyMmDd(toDateOnly(p.date))), ...championshipDates.map(date => yyyyMmDd(toDateOnly(date)))])
+  }, [matchdays, championshipDates])
   const matchdayLocations = useMemo(() => {
     const uniqueLocations = new Set(
       matchdays
@@ -439,7 +440,7 @@ export default function TrainingsPage() {
             </div>
           </div>
         </header>
-        <ChampionshipPlanning teamId={selectedTeamId} dayKey={selectedDayKey} revision={scopeRevision} />
+        <ChampionshipPlanning teamId={selectedTeamId} dayKey={selectedDayKey} revision={scopeRevision} onDates={setChampionshipDates} />
 
 
         <section className="trainings-block">

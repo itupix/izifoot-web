@@ -13,3 +13,5 @@ Les résultats sont saisis après validation (deux entiers positifs ou nuls, ou 
 Vérification : build TypeScript/Vite et tests Vitest ; tests dédiés au maintien des positions datées pendant le réordonnancement.
 
 Le planning affiche les rencontres après l’en-tête du jour. Les scores restent limités à 999 et les champs se réinitialisent depuis la réponse serveur à chaque révision. Le badge À programmer apparaît aussi pour les gestionnaires. Sur mobile, le classement conserve visibles position, équipe, matchs joués et points, y compris pour un nom très long sans espaces.
+
+Les jours contenant une rencontre datée de championnat portent le même indicateur de compétition que les autres événements dans le calendrier mensuel. Les dates sont rechargées à chaque ouverture du planning et changement d’équipe ; revenir de Championnat recharge donc les horaires et validations enregistrés.
