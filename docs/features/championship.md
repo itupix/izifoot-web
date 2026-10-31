@@ -11,3 +11,5 @@ POST /championship/:id/validate accepte les horaires manquants. Après validatio
 Les résultats sont saisis après validation (deux entiers positifs ou nuls, ou deux champs vides pour effacer) via PUT /championship/:id/fixtures/:fixtureId/result. Le classement indicatif est fourni par le serveur, sans recalcul client : 3/1/0 points puis différence, buts marqués et nom. Les lecteurs consultent calendrier et classement sans commandes de modification.
 
 Vérification : build TypeScript/Vite et tests Vitest ; tests dédiés au maintien des positions datées pendant le réordonnancement.
+
+Le planning affiche les rencontres après l’en-tête du jour. Les scores restent limités à 999 et les champs se réinitialisent depuis la réponse serveur à chaque révision. Le badge À programmer apparaît aussi pour les gestionnaires. Sur mobile, le classement conserve visibles position, équipe, matchs joués et points, y compris pour un nom très long sans espaces.

@@ -410,7 +410,6 @@ export default function TrainingsPage() {
   return (
     <div className="trainings-page">
       <div className="trainings-main">
-        <ChampionshipPlanning teamId={selectedTeamId} dayKey={selectedDayKey} revision={scopeRevision} />
         <header className="trainings-date-header">
           <div className="trainings-date-row">
             <RoundIconButton ariaLabel="Jour précédent" onClick={() => setSelectedDay(addDays(selectedDate, -1))}>
@@ -440,6 +439,8 @@ export default function TrainingsPage() {
             </div>
           </div>
         </header>
+        <ChampionshipPlanning teamId={selectedTeamId} dayKey={selectedDayKey} revision={scopeRevision} />
+
 
         <section className="trainings-block">
           <div className="trainings-block-title">Entraînements</div>
