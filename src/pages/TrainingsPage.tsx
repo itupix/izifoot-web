@@ -5,6 +5,7 @@ import { apiGet, apiPost } from '../apiClient'
 import { apiRoutes } from '../apiRoutes'
 import { canWrite } from '../authz'
 import CtaButton from '../components/CtaButton'
+import ChampionshipPlanning from '../components/ChampionshipPlanning'
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, SoccerBallIcon, TrophyIcon } from '../components/icons'
 import RoundIconButton from '../components/RoundIconButton'
 import { toErrorMessage } from '../errors'
@@ -409,6 +410,7 @@ export default function TrainingsPage() {
   return (
     <div className="trainings-page">
       <div className="trainings-main">
+        <ChampionshipPlanning teamId={selectedTeamId} dayKey={selectedDayKey} revision={scopeRevision} />
         <header className="trainings-date-header">
           <div className="trainings-date-row">
             <RoundIconButton ariaLabel="Jour précédent" onClick={() => setSelectedDay(addDays(selectedDate, -1))}>

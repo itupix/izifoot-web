@@ -19,6 +19,7 @@ import DiagramEditor from './pages/DiagramEditor'
 import DrillDetailsPage from './pages/DrillDetailsPage'
 import DrillsPage from './pages/Drills'
 import Home from './pages/Home'
+import ChampionshipPage from './pages/ChampionshipPage'
 import MatchDay from './pages/MatchDay'
 import MatchDetailsPage from './pages/MatchDetailsPage'
 import MessagesPage from './pages/MessagesPage'
@@ -42,6 +43,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { to: '/club', label: 'Mon club', roles: ['DIRECTION'], icon: Building2 },
   { to: '/planning', label: 'Planning', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: CalendarRange },
+  { to: '/championship', label: 'Championnat', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: CalendarRange },
   { to: '/messages', label: 'Messages', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: MessageSquare },
   { to: '/account', label: 'Mon compte', roles: ['DIRECTION', 'COACH', 'PLAYER', 'PARENT'], icon: UserCircle2 },
   { to: '/exercices', label: 'Exercices', roles: ['DIRECTION', 'COACH'], icon: Dumbbell },
@@ -268,6 +270,7 @@ export default function App() {
       >
         <div style={{ width: '100%', maxWidth: pageWidth }}>
           <Routes>
+            <Route path="/championship" element={<RequireAuth><ChampionshipPage /></RequireAuth>} />
             <Route path="/" element={<Home />} />
             <Route path="/auth/mobile/start" element={<MobileAuthStartPage />} />
             <Route path="/auth/mobile" element={<MobileAuthPage />} />

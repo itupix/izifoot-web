@@ -134,3 +134,7 @@ export async function apiGetPdf(path: string): Promise<Blob> {
   }
   return response.blob()
 }
+
+export function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>(path, { method: "PATCH", body: JSON.stringify(body) })
+}
