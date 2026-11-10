@@ -4,6 +4,7 @@ import { apiRoutes } from '../apiRoutes'
 import { toErrorMessage } from '../errors'
 import { defaultMonth, monthLabel, playerName, rateLabel, statusLabels, type AttendanceReport, type AttendanceStats, type AttendanceTraining, normalizePlayerSearch } from '../features/teamAttendance'
 import './TeamAttendance.css'
+import AttendanceMonthTable from '../components/AttendanceMonthTable'
 
 function Summary({ stats, title }: { stats: AttendanceStats; title: string }) {
   return <div className="attendance-summary"><div><span>{title}</span><strong>{rateLabel(stats.attendanceRate)}</strong></div><p>{stats.presentCount} présences / {stats.recordedCount} présences et absences renseignées<br />{stats.absentCount} absences · {stats.unrecordedCount} non renseignées</p></div>
@@ -48,7 +49,7 @@ export default function TeamAttendance({ teamId }: { teamId: string | null }) {
       {mode === 'month' && current.trainings.length > 0 && <>
         <label className="attendance-field">Mois<select value={month} onChange={(e) => setMonth(e.target.value)}>{current.months.map((m) => <option key={m.month} value={m.month}>{monthLabel(m.month)}</option>)}</select></label>
         {current.months.find((m) => m.month === month) && <Summary stats={current.months.find((m) => m.month === month)!.summary} title="Présence du mois" />}
-        {current.trainings.filter((t) => t.month === month).map((t) => <details className="attendance-session" key={t.id}><summary>{trainingLabel(t)}{t.status === 'CANCELLED' ? ' · Annulé' : !t.includedInRate ? ' · À venir' : ''}</summary><ul>{current.players.map((p) => { const entry = p.attendances.find((a) => a.trainingId === t.id); return entry && <li key={p.id}><span>{playerName(p)}</span><span className={`attendance-status attendance-status--${entry.status}`}>{statusLabels[entry.status]}</span></li> })}</ul></details>)}
+        <AttendanceMonthTable month={month} trainings={current.trainings} players={current.players} />
       </>}
       {mode === 'player' && <>
         <label className="attendance-field">Rechercher un joueur<input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nom du joueur" /></label>
