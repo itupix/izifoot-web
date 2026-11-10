@@ -16,6 +16,7 @@ import { useTeamScope } from '../useTeamScope'
 import { uiAlert, uiConfirm } from '../ui'
 import type { Player } from '../types/api'
 import './PlayersPage.css'
+import TeamAttendance from './TeamAttendance'
 
 const POSITIONS = ['GARDIEN', 'DEFENSEUR', 'MILIEU', 'ATTAQUANT'] as const
 const POSITION_UNDEFINED = 'NON DEFINI'
@@ -23,7 +24,7 @@ const POSITION_FILTERS = [POSITION_UNDEFINED, ...POSITIONS] as const
 const PLAYERS_PAGE_LIMIT = 50
 
 type SortKey = 'name' | 'position'
-type TeamTab = 'EFFECTIF' | 'TACTIQUE'
+type TeamTab = 'EFFECTIF' | 'TACTIQUE' | 'PRESENCES'
 type TacticalRole = 'GARDIEN' | 'DEFENSEUR' | 'MILIEU' | 'ATTAQUANT'
 type SavedTactic = {
   name: string
@@ -582,13 +583,16 @@ export default function PlayersPage() {
         >
           Tactique
         </button>
+        <button type="button" role="tab" aria-selected={activeTab === 'PRESENCES'}
+          className={`players-tab-btn ${activeTab === 'PRESENCES' ? 'is-active' : ''}`}
+          onClick={() => setActiveTab('PRESENCES')}>Présences</button>
       </div>
 
       {activeTab === 'EFFECTIF' && writable && requiresSelection && !selectedTeamId && (
         <div className="inline-alert">Selectionnez une equipe active pour modifier les joueurs.</div>
       )}
 
-      {activeTab === 'EFFECTIF' ? (
+      {activeTab === 'PRESENCES' ? <TeamAttendance key={selectedTeamId} teamId={selectedTeamId} /> : activeTab === 'EFFECTIF' ? (
         <>
           <div className="players-search-row">
             <SearchInput
