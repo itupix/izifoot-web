@@ -5,7 +5,7 @@ import { championshipPath, localInput, reorderUndated, type ChampionshipResponse
 import './ChampionshipPage.css'
 
 export default function ChampionshipPage() {
-  const { selectedTeamId, teamOptions, scopeRevision } = useTeamScope()
+  const { selectedTeamId, teamOptions } = useTeamScope()
   const [data, setData] = useState<ChampionshipResponse | null>(null)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [tab, setTab] = useState('calendar'), [name, setName] = useState(''), [opponents, setOpponents] = useState(''), [doubleRoundRobin, setDouble] = useState(true)
@@ -16,7 +16,7 @@ export default function ChampionshipPage() {
     setData(null); setError(''); setName(''); setOpponents(''); setTab('calendar'); setDouble(true)
     if (selectedTeamId) apiGet<ChampionshipResponse>(`/championship?teamId=${encodeURIComponent(selectedTeamId)}`).then(result => { if (generation.current === current) setData(result) }).catch(err => { if (generation.current === current) setError(err.message) })
     return () => { generation.current++ }
-  }, [selectedTeamId, scopeRevision])
+  }, [selectedTeamId])
   const c = data?.championship
   async function mutate(action: () => Promise<ChampionshipResponse>) {
     const current = generation.current

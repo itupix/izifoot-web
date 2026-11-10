@@ -4,14 +4,14 @@ import { apiGet } from '../apiClient'
 import type { ChampionshipResponse } from '../features/championship'
 import '../pages/ChampionshipPage.css'
 
-export default function ChampionshipPlanning({teamId, dayKey, revision, onDates}: {teamId: string | null; dayKey: string; revision: number; onDates: (dates: string[]) => void}) {
+export default function ChampionshipPlanning({teamId, dayKey, onDates}: {teamId: string | null; dayKey: string; onDates: (dates: string[]) => void}) {
   const [data,setData]=useState<ChampionshipResponse | null>(null)
   const [error,setError]=useState('')
   useEffect(()=>{
     let cancelled=false;setData(null);setError('');onDates([])
     if(teamId) apiGet<ChampionshipResponse>(`/championship?teamId=${encodeURIComponent(teamId)}`).then(result=>{if(!cancelled){setData(result);const championship=result.championship;const own=championship?.teams.find(team=>team.isOwnTeam)?.id;onDates(championship?.status==='VALIDATED' ? championship.fixtures.filter(f=>(f.homeTeamId===own || f.awayTeamId===own) && f.kickoffAt).map(f=>f.kickoffAt as string) : [])}}).catch(()=>{if(!cancelled)setError('Les rencontres du championnat n’ont pas pu être chargées.')})
     return ()=>{cancelled=true}
-  },[teamId,revision,onDates])
+  },[teamId,onDates])
   const c=data?.championship
   if(error) return <p role="alert">{error}</p>
   if(!c || c.status!=='VALIDATED')return null

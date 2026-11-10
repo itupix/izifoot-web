@@ -440,7 +440,7 @@ export default function TrainingsPage() {
             </div>
           </div>
         </header>
-        <ChampionshipPlanning teamId={selectedTeamId} dayKey={selectedDayKey} revision={scopeRevision} onDates={setChampionshipDates} />
+        <ChampionshipPlanning teamId={selectedTeamId} dayKey={selectedDayKey} onDates={setChampionshipDates} />
 
 
         <section className="trainings-block">
