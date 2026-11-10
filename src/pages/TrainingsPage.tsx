@@ -102,7 +102,7 @@ function competitionTypeLabel(type?: string | null) {
 
 export default function TrainingsPage() {
   const { me } = useAuth()
-  const { selectedTeamId, requiresSelection, teamOptions } = useTeamScope()
+  const { selectedTeamId, requiresSelection, teamOptions, scopeRevision } = useTeamScope()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [trainings, setTrainings] = useState<Training[]>([])

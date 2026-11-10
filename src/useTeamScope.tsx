@@ -17,6 +17,7 @@ type TeamScopeState = {
   teamOptions: TeamOption[]
   selectedTeamFormat: GameFormat | null
   loading: boolean
+  scopeRevision: number
   requiresSelection: boolean
   canSelectTeam: boolean
   refreshTeamScope: () => Promise<void>
@@ -55,6 +56,7 @@ export function TeamScopeProvider({ children }: { children: React.ReactNode }) {
   const [teamOptions, setTeamOptions] = useState<TeamOption[]>([])
   const [selectedTeamId, setSelectedTeamIdState] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [scopeRevision, setScopeRevision] = useState(0)
 
   const refreshTeamScope = useCallback(async () => {
     if (!me) {
@@ -118,6 +120,8 @@ export function TeamScopeProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.removeItem(storageKey(me.id))
       window.localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY)
     }
+    // Reload consumers after the API client can read the persisted team scope.
+    setScopeRevision((revision) => revision + 1)
   }, [me, selectedTeamId])
 
   const canSelectTeam = (me?.role === 'DIRECTION' || me?.role === 'COACH') && teamOptions.length > 0
@@ -133,11 +137,12 @@ export function TeamScopeProvider({ children }: { children: React.ReactNode }) {
       teamOptions,
       selectedTeamFormat,
       loading,
+      scopeRevision,
       requiresSelection,
       canSelectTeam,
       refreshTeamScope,
     }),
-    [selectedTeamId, teamOptions, selectedTeamFormat, loading, requiresSelection, canSelectTeam, refreshTeamScope],
+    [selectedTeamId, teamOptions, selectedTeamFormat, loading, scopeRevision, requiresSelection, canSelectTeam, refreshTeamScope],
   )
 
   return <TeamScopeCtx.Provider value={value}>{children}</TeamScopeCtx.Provider>

@@ -70,6 +70,7 @@ Restrictions: depends on auth/team hooks.
 - UI behavior: menu opens/closes, highlights active route.
 - Actions: logout, team switch, nav transitions.
 - States: menu open/closed, team loading, unread badge count.
+- `useTeamScope().scopeRevision` is a numeric invalidation counter initialized to 0. It increments after the active team is persisted for an authenticated user, so championship and planning consumers can reload with the current API scope.
 - Conditions: nav items filtered by role.
 - Validations: selected team id from known options.
 - Blocking rules: `needsClubSetup` redirects to club page.
