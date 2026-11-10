@@ -19,8 +19,8 @@ export default function AttendanceMonthTable({ month, trainings, players }: { mo
   return <div className="attendance-month-table">
     <ul className="attendance-legend" aria-label="Légende des présences">{(Object.keys(legendLabels) as AttendanceStatus[]).map((status) => <li key={status}><Indicator status={status} />{legendLabels[status]}</li>)}</ul>
     <div className="attendance-table-scroll" role="region" aria-label={`Tableau des présences de ${monthLabel(month)}, défilement horizontal`} tabIndex={0}>
-      <table className="attendance-table" style={{ width: 180 + columns.length * 76 + 100 }}>
-        <colgroup><col style={{ width: 180 }} />{columns.map((training) => <col key={training.id} style={{ width: 76 }} />)}<col style={{ width: 100 }} /></colgroup>
+      <table className="attendance-table" style={{ width: '100%', minWidth: 180 + columns.length * 76 + 120 }}>
+        <colgroup><col />{columns.map((training) => <col key={training.id} style={{ width: 76 }} />)}<col style={{ width: 120 }} /></colgroup>
         <caption className="attendance-sr-only">Présences de {monthLabel(month)} : joueurs par ordre alphabétique et entraînements par date.</caption>
         <thead><tr><th scope="col" className="attendance-name">Joueur</th>{columns.map((training) => <th scope="col" key={training.id}><span className="attendance-sr-only">{fullDate(training)}</span><span aria-hidden="true">{new Date(training.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Paris' })}</span></th>)}<th scope="col">Présence<br />du mois</th></tr></thead>
         <tbody>{rows.map((player) => <tr key={player.id}><th scope="row" className="attendance-name">{playerName(player)}</th>{columns.map((training) => {

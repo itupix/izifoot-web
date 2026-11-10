@@ -50,13 +50,17 @@ export default function TeamAttendance({ teamId }: { teamId: string | null }) {
         {current.months.find((m) => m.month === month) && <Summary stats={current.months.find((m) => m.month === month)!.summary} title="Présence du mois" />}
         <AttendanceMonthTable month={month} trainings={current.trainings} players={current.players} />
       </>}
-      {mode === 'player' && <>
+      {mode === 'player' && <div className="attendance-player-scroll"><div className="attendance-player-layout">
+        <aside className="attendance-player-sidebar" aria-label="Joueurs">
         <label className="attendance-field">Rechercher un joueur<input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nom du joueur" /></label>
         {!players.length && <p>Aucun joueur trouvé.</p>}
         <div className="attendance-roster">{players.map((p) => <button className={`attendance-player ${p.id === playerId ? 'is-selected' : ''}`} key={p.id} aria-pressed={p.id === playerId} onClick={() => setPlayerId(p.id)}><span>{playerName(p)}</span><strong>{rateLabel(p.summary.attendanceRate)}</strong></button>)}</div>
+        </aside>
+        <div className="attendance-player-content">
         {!player && players.length > 0 && <p>Sélectionnez un joueur pour voir le détail de ses présences.</p>}
-        {player && <div className="attendance-player-detail"><h2>{playerName(player)}</h2><Summary stats={player.summary} title="Présence sur la saison" />{player.months.map((m) => <section key={m.month}><h3>{monthLabel(m.month)}</h3><Summary stats={m.summary} title="Présence du mois" /><ul className="attendance-player-sessions">{current.trainings.filter((t) => t.month === m.month).map((t) => { const entry = player.attendances.find((a) => a.trainingId === t.id); return entry && <li key={t.id}><span>{trainingLabel(t)}</span><span className={`attendance-status attendance-status--${entry.status}`}>{statusLabels[entry.status]}</span></li> })}</ul></section>)}</div>}
-      </>}
+        {player && <div className="attendance-player-detail"><h2>{playerName(player)}</h2><Summary stats={player.summary} title="Présence sur la saison" />{player.months.map((m) => <section className="attendance-player-month" key={m.month}><h3>{monthLabel(m.month)}</h3><Summary stats={m.summary} title="Présence du mois" /><ul className="attendance-player-sessions">{current.trainings.filter((t) => t.month === m.month).map((t) => { const entry = player.attendances.find((a) => a.trainingId === t.id); return entry && <li key={t.id}><span>{trainingLabel(t)}</span><span className={`attendance-status attendance-status--${entry.status}`}>{statusLabels[entry.status]}</span></li> })}</ul></section>)}</div>}
+        </div>
+      </div></div>}
       </>}
     </>}
   </section>
