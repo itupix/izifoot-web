@@ -7,10 +7,10 @@ import './TeamAttendance.css'
 import AttendanceMonthTable from '../components/AttendanceMonthTable'
 
 function Summary({ stats, title }: { stats: AttendanceStats; title: string }) {
-  return <div className="attendance-summary"><div><span>{title}</span><strong>{rateLabel(stats.attendanceRate)}</strong></div><p>{stats.presentCount} présences / {stats.recordedCount} présences et absences renseignées<br />{stats.absentCount} absences · {stats.unrecordedCount} non renseignées</p></div>
+  return <div className="attendance-summary"><div><span>{title}</span><strong>{rateLabel(stats.attendanceRate)}</strong></div></div>
 }
 function trainingLabel(training: AttendanceTraining) {
-  return new Date(training.date).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' })
+  return new Date(training.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Paris' })
 }
 export default function TeamAttendance({ teamId }: { teamId: string | null }) {
   const [report, setReport] = useState<AttendanceReport | null>(null)
@@ -41,7 +41,6 @@ export default function TeamAttendance({ teamId }: { teamId: string | null }) {
     {!loading && !error && current && <>
       <p className="panel-note">Saison en cours : {current.season.label} · Effectif actuel</p>
       <Summary stats={current.summary} title="Présence de l’équipe sur la saison" />
-      <p className="panel-note">Taux = présents ÷ (présents + absents). Les présences non renseignées, séances à venir et annulées sont exclues. Les séances commencées sont prises en compte. Les intentions de présence ne comptent pas. Horaires de Paris.</p>
       {!current.players.length && <p>Aucun joueur dans l’effectif actuel.</p>}
       {current.players.length > 0 && <>
       <div className="attendance-modes" aria-label="Vue des présences"><button className={`players-tab-btn ${mode === 'month' ? 'is-active' : ''}`} aria-pressed={mode === 'month'} onClick={() => setMode('month')}>Par mois</button><button className={`players-tab-btn ${mode === 'player' ? 'is-active' : ''}`} aria-pressed={mode === 'player'} onClick={() => setMode('player')}>Par joueur</button></div>
