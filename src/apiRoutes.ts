@@ -23,6 +23,7 @@ export const apiRoutes = {
   },
   teams: {
     list: '/teams',
+    attendancePdf: (id: string, month: string) => `/teams/${enc(id)}/attendance-report/pdf?month=${enc(month)}`,
     attendanceReport: (id: string) => `/teams/${enc(id)}/attendance-report`,
     byId: (id: string) => `/teams/${enc(id)}`,
   },

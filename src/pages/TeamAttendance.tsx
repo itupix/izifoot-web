@@ -5,6 +5,7 @@ import { toErrorMessage } from '../errors'
 import { defaultMonth, monthLabel, playerName, rateLabel, statusLabels, type AttendanceReport, type AttendanceStats, type AttendanceTraining, normalizePlayerSearch } from '../features/teamAttendance'
 import './TeamAttendance.css'
 import AttendanceMonthTable from '../components/AttendanceMonthTable'
+import AttendancePdfButton from '../components/AttendancePdfButton'
 
 function Summary({ stats, title }: { stats: AttendanceStats; title: string }) {
   return <div className="attendance-summary"><div><span>{title}</span><strong>{rateLabel(stats.attendanceRate)}</strong></div></div>
@@ -46,7 +47,10 @@ export default function TeamAttendance({ teamId }: { teamId: string | null }) {
       <div className="attendance-modes" aria-label="Vue des présences"><button className={`players-tab-btn ${mode === 'month' ? 'is-active' : ''}`} aria-pressed={mode === 'month'} onClick={() => setMode('month')}>Par mois</button><button className={`players-tab-btn ${mode === 'player' ? 'is-active' : ''}`} aria-pressed={mode === 'player'} onClick={() => setMode('player')}>Par joueur</button></div>
       {!current.trainings.length && <p>Aucun entraînement pour cette saison.</p>}
       {mode === 'month' && current.trainings.length > 0 && <>
+        <div className="attendance-month-controls">
         <label className="attendance-field">Mois<select value={month} onChange={(e) => setMonth(e.target.value)}>{current.months.map((m) => <option key={m.month} value={m.month}>{monthLabel(m.month)}</option>)}</select></label>
+        <AttendancePdfButton key={`${teamId}:${month}`} teamId={teamId} month={month} />
+        </div>
         {current.months.find((m) => m.month === month) && <Summary stats={current.months.find((m) => m.month === month)!.summary} title="Présence du mois" />}
         <AttendanceMonthTable month={month} trainings={current.trainings} players={current.players} />
       </>}

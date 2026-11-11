@@ -9,3 +9,9 @@ Par mois defaults to the current Paris month when available, otherwise the lates
 Validation: `npm test` (53 tests, including null/zero distinctions, Paris month boundaries, date-only labels and preservation of more than five session columns). Production build succeeds after the separately documented baseline `scopeRevision` correction.
 
 Manual checks: switch teams during slow requests; inspect a month with cancelled/future/unrecorded sessions; verify inactive players are absent, including from totals; verify an empty current roster; verify ratios match backend; verify narrow viewport layout and error retry. Browser rendering still requires a live authenticated session.
+
+## Monthly PDF
+
+Only Par mois shows “Rapport PDF” beside the selected month. It downloads the selected team's current-season matrix using authenticated `GET /teams/:teamId/attendance-report/pdf?month=YYYY-MM`; the server returns application/pdf and the file is saved as `presences-YYYY-MM.pdf`. No report data is recomputed by the web client. The endpoint accepts a strict current-season month (400 otherwise), with the same DIRECTION/COACH/team authorization as the JSON report; 401/403/404/500 are errors, never PDF files.
+
+While generating, “Préparation…” disables repeated requests. An inline local error offers “Réessayer le PDF”. Changing month/team, leaving Par mois, or unmounting invalidates the pending download and prevents stale responses from saving the wrong report. Object URLs are revoked after download handoff. Existing summaries remain percentages only and dates contain no times. Validation includes authenticated PDF handling plus deferred stale-response/download and URL cleanup tests.

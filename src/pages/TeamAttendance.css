@@ -25,3 +25,5 @@
 .attendance-player-month{border:1px solid #e2e8f0;border-radius:12px;padding:16px}
 .attendance-player-month h3{margin:0 0 16px;font-size:19px;text-transform:capitalize;color:#0f172a}
 @media(max-width:600px){.attendance-player-layout{grid-template-columns:130px minmax(240px,1fr);gap:16px;min-width:386px}.attendance-player-sidebar .attendance-player{flex-direction:column;align-items:flex-start;gap:4px;padding:10px}.attendance-player-sidebar .attendance-field{font-size:13px}.attendance-player-sidebar .attendance-field input{padding:10px 8px}.attendance-player-month{padding:12px}}
+
+.attendance-month-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px}.attendance-month-controls .attendance-field{flex:1;min-width:180px}.attendance-pdf-action{display:flex;flex-direction:column;gap:6px}.attendance-pdf-action p{margin:0;max-width:280px;color:#b91c1c;font-size:14px}
